@@ -41,9 +41,8 @@ SLAPredictorApiResult SLALPCCalculator_CalculatePARCORCoefDouble(
     const float* data, uint32_t num_samples,
     double* parcor_coef, uint32_t order);
 
-/* PARCOR係数から残差電力を求める */
-SLAPredictorApiResult SLALPCCalculator_CalculateResidualPower(
-    const float* data, uint32_t num_samples,
+/* PARCOR係数から分散比を求める */
+SLAPredictorApiResult SLALPCCalculator_CalculateVarianceRatio(
     const double* parcor_coef, uint32_t order,
     double* residual_power);
 
