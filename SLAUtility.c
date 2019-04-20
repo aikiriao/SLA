@@ -1,0 +1,364 @@
+#include "SLAUtility.h"
+
+#include <math.h>
+#include <stddef.h>
+#include <assert.h>
+
+/* CRC16(IBM:多項式0x8005を反転した0xa001によるもの) の計算用テーブル */
+static const uint16_t CRC16_IBM_BYTE_TABLE[0x100] = { 
+	0x0000, 0xc0c1, 0xc181, 0x0140, 0xc301, 0x03c0, 0x0280, 0xc241,
+	0xc601, 0x06c0, 0x0780, 0xc741, 0x0500, 0xc5c1, 0xc481, 0x0440,
+	0xcc01, 0x0cc0, 0x0d80, 0xcd41, 0x0f00, 0xcfc1, 0xce81, 0x0e40,
+	0x0a00, 0xcac1, 0xcb81, 0x0b40, 0xc901, 0x09c0, 0x0880, 0xc841,
+	0xd801, 0x18c0, 0x1980, 0xd941, 0x1b00, 0xdbc1, 0xda81, 0x1a40,
+	0x1e00, 0xdec1, 0xdf81, 0x1f40, 0xdd01, 0x1dc0, 0x1c80, 0xdc41,
+	0x1400, 0xd4c1, 0xd581, 0x1540, 0xd701, 0x17c0, 0x1680, 0xd641,
+	0xd201, 0x12c0, 0x1380, 0xd341, 0x1100, 0xd1c1, 0xd081, 0x1040,
+	0xf001, 0x30c0, 0x3180, 0xf141, 0x3300, 0xf3c1, 0xf281, 0x3240,
+	0x3600, 0xf6c1, 0xf781, 0x3740, 0xf501, 0x35c0, 0x3480, 0xf441,
+	0x3c00, 0xfcc1, 0xfd81, 0x3d40, 0xff01, 0x3fc0, 0x3e80, 0xfe41,
+	0xfa01, 0x3ac0, 0x3b80, 0xfb41, 0x3900, 0xf9c1, 0xf881, 0x3840,
+	0x2800, 0xe8c1, 0xe981, 0x2940, 0xeb01, 0x2bc0, 0x2a80, 0xea41,
+	0xee01, 0x2ec0, 0x2f80, 0xef41, 0x2d00, 0xedc1, 0xec81, 0x2c40,
+	0xe401, 0x24c0, 0x2580, 0xe541, 0x2700, 0xe7c1, 0xe681, 0x2640,
+	0x2200, 0xe2c1, 0xe381, 0x2340, 0xe101, 0x21c0, 0x2080, 0xe041,
+	0xa001, 0x60c0, 0x6180, 0xa141, 0x6300, 0xa3c1, 0xa281, 0x6240,
+	0x6600, 0xa6c1, 0xa781, 0x6740, 0xa501, 0x65c0, 0x6480, 0xa441,
+	0x6c00, 0xacc1, 0xad81, 0x6d40, 0xaf01, 0x6fc0, 0x6e80, 0xae41,
+	0xaa01, 0x6ac0, 0x6b80, 0xab41, 0x6900, 0xa9c1, 0xa881, 0x6840,
+	0x7800, 0xb8c1, 0xb981, 0x7940, 0xbb01, 0x7bc0, 0x7a80, 0xba41,
+	0xbe01, 0x7ec0, 0x7f80, 0xbf41, 0x7d00, 0xbdc1, 0xbc81, 0x7c40,
+	0xb401, 0x74c0, 0x7580, 0xb541, 0x7700, 0xb7c1, 0xb681, 0x7640,
+	0x7200, 0xb2c1, 0xb381, 0x7340, 0xb101, 0x71c0, 0x7080, 0xb041,
+	0x5000, 0x90c1, 0x9181, 0x5140, 0x9301, 0x53c0, 0x5280, 0x9241,
+	0x9601, 0x56c0, 0x5780, 0x9741, 0x5500, 0x95c1, 0x9481, 0x5440,
+	0x9c01, 0x5cc0, 0x5d80, 0x9d41, 0x5f00, 0x9fc1, 0x9e81, 0x5e40,
+	0x5a00, 0x9ac1, 0x9b81, 0x5b40, 0x9901, 0x59c0, 0x5880, 0x9841,
+	0x8801, 0x48c0, 0x4980, 0x8941, 0x4b00, 0x8bc1, 0x8a81, 0x4a40,
+	0x4e00, 0x8ec1, 0x8f81, 0x4f40, 0x8d01, 0x4dc0, 0x4c80, 0x8c41,
+	0x4400, 0x84c1, 0x8581, 0x4540, 0x8701, 0x47c0, 0x4680, 0x8641,
+	0x8201, 0x42c0, 0x4380, 0x8341, 0x4100, 0x81c1, 0x8081, 0x4040
+};
+
+/* NLZ計算のためのテーブル */
+#define UNUSED 99
+static const uint32_t nlz10_table[64] = {
+      32,     20,     19, UNUSED, UNUSED,     18, UNUSED,      7,
+      10,     17, UNUSED, UNUSED,     14, UNUSED,      6, UNUSED,
+  UNUSED,      9, UNUSED,     16, UNUSED, UNUSED,      1,     26,
+  UNUSED,     13, UNUSED, UNUSED,     24,      5, UNUSED, UNUSED,
+  UNUSED,     21, UNUSED,      8,     11, UNUSED,     15, UNUSED,
+  UNUSED, UNUSED, UNUSED,      2,     27,      0,     25, UNUSED,
+      22, UNUSED,     12, UNUSED, UNUSED,      3,     28, UNUSED,
+      23, UNUSED,      4,     29, UNUSED, UNUSED,     30,     31
+};
+#undef UNUSED
+
+/* 窓の適用 */
+void SLAUtility_ApplyWindow(const double* window, float* data, uint32_t num_samples)
+{
+  uint32_t smpl;
+
+  assert(window != NULL && data != NULL);
+
+  for (smpl = 0; smpl < num_samples; smpl++) {
+    data[smpl] = (float)((double)data[smpl] * window[smpl]);
+  }
+}
+
+/* ハン窓を作成 */
+void SLAUtility_MakeHannWindow(double* window, uint32_t window_size)
+{
+  uint32_t  smpl;
+  double    x;
+
+  assert(window != NULL);
+
+  for (smpl = 0; smpl < window_size; smpl++) {
+    x = (double)smpl / (window_size - 1);
+    window[smpl] = 0.5f - 0.5f * cos(2.0f * SLA_PI * x);
+  }
+}
+
+/* ブラックマン窓を作成 */
+void SLAUtility_MakeBlackmanWindow(double* window, uint32_t window_size)
+{
+  uint32_t  smpl;
+  double    x;
+
+  assert(window != NULL);
+
+  for (smpl = 0; smpl < window_size; smpl++) {
+    x = (double)smpl / (window_size - 1);
+    window[smpl] = 0.42f - 0.5f * cos(2.0f * SLA_PI * x) + 0.08f * cos(4.0f * SLA_PI * x);
+  }
+}
+
+/* サイン窓を作成 */
+void SLAUtility_MakeSinWindow(double* window, uint32_t window_size)
+{
+  uint32_t  smpl;
+  double    x;
+
+  assert(window != NULL);
+
+  for (smpl = 0; smpl < window_size; smpl++) {
+    x = (double)smpl / (window_size - 1);
+    window[smpl] = sin(SLA_PI * x);
+  }
+}
+
+/* Vorbis窓を作成 */
+void SLAUtility_MakeVorbisWindow(double* window, uint32_t window_size)
+{
+  uint32_t  smpl;
+  double    x;
+
+  assert(window != NULL);
+
+  for (smpl = 0; smpl < window_size; smpl++) {
+    x = (double)smpl / (window_size - 1);
+    window[smpl] = sin((SLA_PI / 2.0f) * sin(SLA_PI * x) * sin(SLA_PI * x));
+  }
+}
+
+/* Tukey窓を作成 */
+void SLAUtility_MakeTukeyWindow(double* window, uint32_t window_size, float alpha)
+{
+  uint32_t  smpl;
+  double    x;
+
+  assert(window != NULL);
+
+  for (smpl = 0; smpl < window_size; smpl++) {
+    x = (double)smpl / (window_size - 1);
+    if (x < alpha / 2) {
+      window[smpl] = 0.5f * (1.0f + cos(SLA_PI * ((2.0f / alpha) * x - 1)));
+    } else if (x > (1 - alpha / 2)) {
+      window[smpl] = 0.5f * (1.0f + cos(SLA_PI * ((2.0f / alpha) * x - (2.0f / alpha) + 1)));
+    } else {
+      window[smpl] = 1.0f;
+    }
+  }
+
+}
+
+/* FFTのサブルーチン */
+/* ftp://ftp.cpc.ncep.noaa.gov/wd51we/random_phase/four1.c から引用 */
+static void four1(double data[], unsigned long nn, int isign)
+{
+	unsigned long n,mmax,m,j,istep,i;
+	double wtemp,wr,wpr,wpi,wi,theta;
+	double tempr,tempi;
+
+#define SWAP(a,b) tempr=(a);(a)=(b);(b)=tempr
+
+	n=nn << 1;
+	j=1;
+	for (i=1;i<n;i+=2) {
+		if (j > i) {
+			SWAP(data[j],data[i]);
+			SWAP(data[j+1],data[i+1]);
+		}
+		m=n >> 1;
+		while (m >= 2 && j > m) {
+			j -= m;
+			m >>= 1;
+		}
+		j += m;
+	}
+	mmax=2;
+	while (n > mmax) {
+		istep=mmax << 1;
+		theta=isign*(6.28318530717959/(double)mmax);
+		wtemp=sin(0.5*theta);
+		wpr = -2.0*wtemp*wtemp;
+		wpi=sin(theta);
+		wr=1.0;
+		wi=0.0;
+		for (m=1;m<mmax;m+=2) {
+			for (i=m;i<=n;i+=istep) {
+				j=i+mmax;
+				tempr=wr*data[j]-wi*data[j+1];
+				tempi=wr*data[j+1]+wi*data[j];
+				data[j]=data[i]-tempr;
+				data[j+1]=data[i+1]-tempi;
+				data[i] += tempr;
+				data[i+1] += tempi;
+			}
+			wr=(wtemp=wr)*wpr-wi*wpi+wr;
+			wi=wi*wpr+wtemp*wpi+wi;
+		}
+		mmax=istep;
+	}
+#undef SWAP
+}
+
+/* in-placeなFFTルーチン */
+/* ftp://ftp.cpc.ncep.noaa.gov/wd51we/random_phase/realft.c から引用・改変 */
+static void realft(double data[], unsigned long n, int isign)
+{
+	unsigned long i,i1,i2,i3,i4,np3;
+	double c1=0.5,c2,h1r,h1i,h2r,h2i;
+	double wr,wi,wpr,wpi,wtemp,theta;
+
+	theta=3.141592653589793/(double) (n>>1);
+	if (isign == 1) {
+		c2 = -0.5;
+		four1(data,n>>1,1);
+	} else {
+		c2=0.5;
+		theta = -theta;
+	}
+	wtemp=sin(0.5*theta);
+	wpr = -2.0*wtemp*wtemp;
+	wpi=sin(theta);
+	wr=1.0+wpr;
+	wi=wpi;
+	np3=n+3;
+	for (i=2;i<=(n>>2);i++) {
+		i4=1+(i3=np3-(i2=1+(i1=i+i-1)));
+		h1r=c1*(data[i1]+data[i3]);
+		h1i=c1*(data[i2]-data[i4]);
+		h2r = -c2*(data[i2]+data[i4]);
+		h2i=c2*(data[i1]-data[i3]);
+		data[i1]=h1r+wr*h2r-wi*h2i;
+		data[i2]=h1i+wr*h2i+wi*h2r;
+		data[i3]=h1r-wr*h2r+wi*h2i;
+		data[i4] = -h1i+wr*h2i+wi*h2r;
+		wr=(wtemp=wr)*wpr-wi*wpi+wr;
+		wi=wi*wpr+wtemp*wpi+wi;
+	}
+	if (isign == 1) {
+		data[1] = (h1r=data[1])+data[2];
+		data[2] = h1r-data[2];
+	} else {
+		data[1]=c1*((h1r=data[1])+data[2]);
+		data[2]=c1*(h1r-data[2]);
+		four1(data,n>>1,-1);
+	}
+}
+
+/* FFTハンドル: realftのインデックスのズレを補正 */
+void SLAUtility_FFT(double* data, uint32_t n, int32_t sign)
+{
+  assert(data != NULL);
+  realft(&data[-1], n, sign);
+}
+
+/* CRC16(IBM)の計算 */
+uint16_t SLAUtility_CalculateCRC16(const uint8_t* data, uint64_t data_size)
+{
+  uint16_t crc16;
+
+  /* 引数チェック */
+  assert(data != NULL);
+
+  /* 初期値 */
+  crc16 = 0x0000;
+
+  /* modulo2計算 */
+  while (data_size--) {
+    /* 補足）多項式は反転済みなので、この計算により入出力反転済みとできる */
+    crc16 = (crc16 >> 8) ^ CRC16_IBM_BYTE_TABLE[(crc16 ^ (*data++)) & 0xFF];
+  }
+
+  return crc16;
+}
+
+/* NLZ（最上位ビットから1に当たるまでのビット数）を計算する黒魔術 */
+/* ハッカーのたのしみ参照 */
+static uint32_t nlz10(uint32_t x)
+{
+  x = x | (x >> 1);
+  x = x | (x >> 2);
+  x = x | (x >> 4);
+  x = x | (x >> 8);
+  x = x & ~(x >> 16);
+  x = (x << 9) - x;
+  x = (x << 11) - x;
+  x = (x << 14) - x;
+  return nlz10_table[x >> 26];
+}
+
+/* ceil(log2(val)) を計算する */
+uint32_t SLAUtility_Log2Ceil(uint32_t val)
+{
+  assert(val != 0);
+  return 32U - nlz10(val - 1);
+}
+
+/* 2の冪乗数に切り上げる ハッカーのたのしみ参照 */
+uint32_t SLAUtility_RoundUp2Powered(uint32_t val)
+{
+  val--;
+  val |= val >> 1;
+  val |= val >> 2;
+  val |= val >> 4;
+  val |= val >> 8;
+  val |= val >> 16;
+  return val + 1;
+}
+
+/* LR -> MS（float） */
+void SLAUtility_LRtoMSFloat(float **data, uint32_t num_samples)
+{
+  uint32_t  smpl;
+  double    mid, side;
+
+  assert(data != NULL);
+  assert(data[0] != NULL);
+  assert(data[1] != NULL);
+
+  for (smpl = 0; smpl < num_samples; smpl++) {
+    mid   = (data[0][smpl] + data[1][smpl]) / 2;
+    side  = data[0][smpl] - data[1][smpl];
+    data[0][smpl] = (float)mid; 
+    data[1][smpl] = (float)side;
+  }
+}
+
+/* LR -> MS（int32_t） */
+void SLAUtility_LRtoMSInt32(int32_t **data, uint32_t num_samples)
+{
+  uint32_t  smpl;
+  int32_t   mid, side;
+
+  assert(data != NULL);
+  assert(data[0] != NULL);
+  assert(data[1] != NULL);
+
+  for (smpl = 0; smpl < num_samples; smpl++) {
+    mid   = (data[0][smpl] + data[1][smpl]) >> 1; /* 注意: 右シフト必須(/2ではだめ。0方向に丸められる) */
+    side  = data[0][smpl] - data[1][smpl];
+    /* 戻るかその場で確認 */
+    assert(data[0][smpl] == ((((mid << 1) | (side & 1)) + side) >> 1));
+    assert(data[1][smpl] == ((((mid << 1) | (side & 1)) - side) >> 1));
+    data[0][smpl] = mid; 
+    data[1][smpl] = side;
+  }
+}
+
+/* MS -> LR（int32_t） */
+void SLAUtility_MStoLRInt32(int32_t **data, uint32_t num_samples)
+{
+  uint32_t  smpl;
+  int32_t   mid, side;
+
+  assert(data != NULL);
+  assert(data[0] != NULL);
+  assert(data[1] != NULL);
+
+  for (smpl = 0; smpl < num_samples; smpl++) {
+    side  = data[1][smpl];
+    mid   = (data[0][smpl] << 1) | (side & 1);
+    data[0][smpl] = (mid + side) >> 1;
+    data[1][smpl] = (mid - side) >> 1;
+  }
+}
+
+/* round関数（C89で定義されてない） */
+double SLAUtility_Round(double d)
+{
+    return (d >= 0.0f) ? floor(d + 0.5f) : -floor(-d + 0.5f);
+}
