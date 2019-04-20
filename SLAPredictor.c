@@ -286,26 +286,60 @@ static SLAPredictorError LPC_CalculateAutoCorrelation(
 }
 
 /* PARCOR係数から分散比を求める */
-SLAPredictorApiResult SLALPCCalculator_CalculateVarianceRatio(
+static SLAPredictorApiResult SLALPCCalculator_CalculateVarianceRatio(
     const double* parcor_coef, uint32_t order,
-    double* residual_power)
+    double* variance_ratio)
 {
   uint32_t ord;
-  double tmp_res_power;
+  double tmp_var_ratio;
 
   /* 引数チェック */
-  if (parcor_coef == NULL || residual_power == NULL) {
+  if (parcor_coef == NULL || variance_ratio == NULL) {
     return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
   }
 
   /* PARCOR係数を用いて分散比を計算 */
   /* 補足）0次のPARCOR係数は0で確定だから抜かす */
-  tmp_res_power = 1.0f;
+  tmp_var_ratio = 1.0f;
   for (ord = 1; ord <= order; ord++) {
-    tmp_res_power *= (1.0f - parcor_coef[ord] * parcor_coef[ord]);
+    tmp_var_ratio *= (1.0f - parcor_coef[ord] * parcor_coef[ord]);
   }
 
   /* 成功終了 */
+  *variance_ratio = tmp_var_ratio;
+  return SLAPREDICTOR_APIRESULT_OK;
+}
+
+/* 入力データとPARCOR係数から残差パワーを求める */
+SLAPredictorApiResult SLALPCCalculator_CalculateResidualPower(
+    const float* data, uint32_t num_samples,
+    const double* parcor_coef, uint32_t order,
+    double* residual_power)
+{
+  uint32_t smpl;
+  double tmp_res_power, var_ratio;
+  SLAPredictorApiResult ret;
+
+  /* 引数チェック */
+  if (data == NULL || parcor_coef == NULL || residual_power == NULL) {
+    return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* 入力データの平均パワー（二乗平均）を求める */
+  tmp_res_power = 0.0f;
+  for (smpl = 0; smpl < num_samples; smpl++) {
+    tmp_res_power += (double)data[smpl] * data[smpl];
+  }
+  tmp_res_power /= num_samples;
+
+  /* 分散比を求める */
+  if ((ret = SLALPCCalculator_CalculateVarianceRatio(parcor_coef, order, &var_ratio))
+      != SLAPREDICTOR_APIRESULT_OK) {
+    return ret;
+  }
+
+  /* 分散比を掛けることで予測後の残差パワーが得られる */
+  tmp_res_power *= var_ratio;
   *residual_power = tmp_res_power;
   return SLAPREDICTOR_APIRESULT_OK;
 }
