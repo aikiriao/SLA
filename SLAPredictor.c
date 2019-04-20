@@ -285,6 +285,38 @@ static SLAPredictorError LPC_CalculateAutoCorrelation(
   return SLAPREDICTOR_ERROR_OK;
 }
 
+/* PARCOR係数から残差電力を求める */
+SLAPredictorApiResult SLALPCCalculator_CalculateResidualPower(
+    const float* data, uint32_t num_samples,
+    const double* parcor_coef, uint32_t order,
+    double* residual_power)
+{
+  uint32_t smpl, ord;
+  double tmp_res_power;
+
+  /* 引数チェック */
+  if (data == NULL || parcor_coef == NULL || residual_power == NULL) {
+    return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* 0次の自己相関を求める */
+  /* 補足）これがPARCOR予測を行わない場合の誤差電力 */
+  tmp_res_power = 0.0f;
+  for (smpl = 0; smpl < num_samples; smpl++) {
+    tmp_res_power += (double)data[smpl] * data[smpl];
+  }
+
+  /* PARCOR係数を用いて残差電力を計算 */
+  /* 補足）0次のPARCOR係数は0で確定だから抜かす */
+  for (ord = 1; ord <= order; ord++) {
+    tmp_res_power *= (1.0f - parcor_coef[ord] * parcor_coef[ord]);
+  }
+
+  /* 成功終了 */
+  *residual_power = tmp_res_power;
+  return SLAPREDICTOR_APIRESULT_OK;
+}
+
 /* LPC音声合成ハンドルの作成 */
 struct SLALPCSynthesizer* SLALPCSynthesizer_Create(uint32_t max_order)
 {
