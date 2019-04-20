@@ -410,10 +410,10 @@ SLAPredictorApiResult SLALPCSynthesizer_SynthesizeByParcorCoefInt32(
     for (ord = order; ord >= 1; ord--) {
       /* 前向き誤差計算 */
       mul_temp = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(parcor_coef[ord] * backward_residual[ord - 1] + half, 31);
-      forward_residual[ord - 1] = forward_residual[ord] - mul_temp;
+      forward_residual[ord - 1] = forward_residual[ord] + mul_temp;
       /* 後ろ向き誤差計算 */
       mul_temp = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(parcor_coef[ord] * forward_residual[ord - 1] + half, 31);
-      backward_residual[ord] = backward_residual[ord - 1] + mul_temp;
+      backward_residual[ord] = backward_residual[ord - 1] - mul_temp;
     }
     /* 合成信号 */
     assert((forward_residual[0] <= INT32_MAX) && (forward_residual[0] >= INT32_MIN));
