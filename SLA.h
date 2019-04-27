@@ -18,7 +18,7 @@
 
 /* ブロックエンコード/デコードに十分なブロックサイズ */
 #define SLA_CalculateSufficientBlockSize(num_channels, num_samples, bit_per_sample)	\
-	(2 * (num_channels) * (num_samples) * (bit_per_sample))
+	(2 * (num_channels) * (num_samples) * ((bit_per_sample) / 8))
 
 /* API結果型 */
 typedef enum SLAApiResultTag {
