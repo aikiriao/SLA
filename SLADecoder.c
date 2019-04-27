@@ -100,7 +100,6 @@ void SLADecoder_Destroy(struct SLADecoder* decoder)
     NULLCHECK_AND_FREE(decoder->is_silence_block);
     SLALPCSynthesizer_Destroy(decoder->lpcs);
     SLANLMSCalculator_Destroy(decoder->nlmsc);
-    SLABitStream_Close(decoder->strm);
     NULLCHECK_AND_FREE(decoder->strm_work);
     free(decoder);
   }
@@ -197,7 +196,7 @@ SLAApiResult SLADecoder_DecodeHeader(
   /* ヘッダサイズチェック */
   assert((data_pos - data) == SLA_HEADER_SIZE);
 
-  /* 成功終了 */
+  /* 出力に書き込むが、ステータスは破壊検知の場合もある */
   *header_info = tmp_header;
   return ret;
 }
@@ -259,7 +258,8 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
   uint16_t crc16;
 
   /* 引数チェック */
-  if (data == NULL || buffer == NULL || output_num_samples == NULL) {
+  if (decoder == NULL || data == NULL || buffer == NULL
+      || output_block_size == NULL || output_num_samples == NULL) {
     return SLA_APIRESULT_INVALID_ARGUMENT;
   }
 
