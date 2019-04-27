@@ -16,6 +16,10 @@ struct SLAEncoderConfig {
 	uint32_t max_nlms_order;				  /* 最大NLMS次数 */
 };
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* エンコーダハンドルの作成 */
 struct SLAEncoder* SLAEncoder_Create(const struct SLAEncoderConfig* config);
 
@@ -43,5 +47,9 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
 SLAApiResult SLAEncoder_EncodeWhole(struct SLAEncoder* encoder,
     const int32_t* const* input, uint32_t num_samples,
     uint8_t* data, uint32_t data_size, uint32_t* output_size);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SLA_ENCODER_H_INCLUDED */

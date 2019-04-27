@@ -17,6 +17,10 @@ struct SLADecoderConfig {
   uint8_t   enable_crc_check;         /* CRCチェックを有効にするか */
 };
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* デコーダハンドルの作成 */
 struct SLADecoder* SLADecoder_Create(const struct SLADecoderConfig* condig);
 
@@ -45,5 +49,9 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
 SLAApiResult SLADecoder_DecodeWhole(struct SLADecoder* decoder,
     const uint8_t* data, uint32_t data_size,
     int32_t** buffer, uint32_t buffer_num_samples, uint32_t* output_num_samples);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SLA_DECODER_H_INCLUDED */
