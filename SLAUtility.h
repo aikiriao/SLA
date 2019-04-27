@@ -72,6 +72,9 @@ void SLAUtility_MStoLRInt32(int32_t **data, uint32_t num_samples);
 /* round関数（C89で定義されてない） */
 double SLAUtility_Round(double d);
 
+/* log2関数（C89で定義されていない） */
+double SLAUtility_Log2(double x);
+
 #ifdef __cplusplus
 }
 #endif

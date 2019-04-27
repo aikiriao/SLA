@@ -66,7 +66,7 @@ struct SLAEncodeParameter {
 	uint32_t                nlms_order;			        /* NLMS次数 */
 	SLAChannelProcessMethod	ch_process_method;	    /* マルチチャンネル処理法 */
   SLAWindowFunctionType   window_function_type;   /* 窓関数の種類 */
-	uint32_t                num_block_samples;	    /* ブロックあたりサンプル数 */
+	uint32_t                max_num_block_samples;  /* ブロックあたりサンプル数 */
 };
 
 /* SLAヘッダ情報 */
@@ -74,6 +74,7 @@ struct SLAHeaderInfo {
 	struct SLAWaveFormat      wave_format;	    /* 波形フォーマット */
   struct SLAEncodeParameter encode_param;     /* エンコードパラメータ */
 	uint32_t                  num_samples;			/* 全サンプル数 */
+  uint32_t                  num_blocks;       /* ブロック数 */
 	uint32_t                  max_block_size;		/* 最大ブロックサイズ[byte] */
 };
 

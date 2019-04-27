@@ -94,7 +94,7 @@ struct SLAEncoder* SLAEncoder_Create(const struct SLAEncoderConfig* config)
   /* ハンドル領域作成 */
   encoder->lpcc   = SLALPCCalculator_Create(config->max_parcor_order);
   encoder->lpcs   = SLALPCSynthesizer_Create(config->max_parcor_order);
-  encoder->ltc    = SLALongTermCalculator_Create(SLALONGTERM_FFT_SIZE, SLALONGTERM_MAX_PERIOD, SLALONGTERM_NUM_PITCH_CANDIDATES);
+  encoder->ltc    = SLALongTermCalculator_Create(SLAUtility_RoundUp2Powered(config->max_num_block_samples * 2), SLALONGTERM_MAX_PERIOD, SLALONGTERM_NUM_PITCH_CANDIDATES);
   encoder->nlmsc  = SLANLMSCalculator_Create(config->max_nlms_order);
 
   return encoder;
@@ -167,7 +167,8 @@ SLAApiResult SLAEncoder_SetEncodeParameter(struct SLAEncoder* encoder,
   if ((encode_param->parcor_order > encoder->max_parcor_order)
       || (encode_param->longterm_order > encoder->max_longterm_order)
       || (encode_param->nlms_order > encoder->max_nlms_order)
-      || (encode_param->num_block_samples > encoder->max_num_block_samples)) {
+      || (encode_param->max_num_block_samples > encoder->max_num_block_samples)
+      || (encode_param->max_num_block_samples < SLA_MIN_BLOCK_NUM_SAMPLES)) {
     return SLA_APIRESULT_EXCEED_HANDLE_CAPACITY;
   }
 
@@ -222,9 +223,9 @@ SLAApiResult SLAEncoder_EncodeHeader(
   /* チャンネル毎の処理法 */
   SLAByteArray_PutUint8(data_pos,  (uint8_t)header->encode_param.ch_process_method);
   /* SLAブロック数 */
-  SLAByteArray_PutUint32(data_pos, SLA_CALCULATE_NUM_SLABLOCK(header->num_samples, header->encode_param.num_block_samples));
+  SLAByteArray_PutUint32(data_pos, header->num_blocks);
   /* SLAブロックあたりサンプル数 */
-  SLAByteArray_PutUint16(data_pos, (uint16_t)header->encode_param.num_block_samples);
+  SLAByteArray_PutUint16(data_pos, (uint16_t)header->encode_param.max_num_block_samples);
   /* 最大ブロックサイズ */
   SLAByteArray_PutUint32(data_pos, header->max_block_size);
 
@@ -240,46 +241,13 @@ SLAApiResult SLAEncoder_EncodeHeader(
   return SLA_APIRESULT_OK;
 }
 
-/* 1ブロックエンコード */
-SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
-    const int32_t* const* input, uint32_t num_samples,
-    uint8_t* data, uint32_t data_size, uint32_t* output_size)
+/* 指定されたサンプル数で窓を作成 */
+/* TODO:よくない。エンコーダで隠蔽しないで必要なものは全て引数で渡すように */
+static SLAApiResult SLAEncoder_MakeWindow(struct SLAEncoder* encoder, uint32_t num_samples)
 {
-  uint32_t ch, smpl, ord;
-  uint32_t num_channels, parcor_order, longterm_order;
-  uint16_t crc16;
-  SLAPredictorApiResult predictor_ret;
+  assert(encoder != NULL);
+  assert(num_samples <= encoder->encode_param.max_num_block_samples);
 
-  /* 引数チェック */
-  if (encoder == NULL || input == NULL
-      || data == NULL || output_size == NULL) {
-    return SLA_APIRESULT_INVALID_ARGUMENT;
-  }
-
-  /* 許容サンプル数を超えている */
-  if (num_samples > encoder->max_num_block_samples) {
-    return SLA_APIRESULT_EXCEED_HANDLE_CAPACITY;
-  }
-
-  /* 頻繁に参照する変数をオート変数に受ける */
-  num_channels    = encoder->wave_format.num_channels;
-  parcor_order    = encoder->encode_param.parcor_order;
-  longterm_order  = encoder->encode_param.longterm_order;
-
-  /* チャンネル毎の処理が行えるかチェック */
-  switch (encoder->encode_param.ch_process_method) {
-    case SLA_CHPROCESSMETHOD_STEREO_MS:
-      /* MS処理 */
-      if (encoder->wave_format.num_channels != 2) {
-        return SLA_APIRESULT_INVAILD_CHPROCESSMETHOD;
-      }
-      break;
-    default:
-      break;
-  }
-
-  /* 窓関数の作成 */
-  /* memo:最大サイズで作っておいて、最大サイズと異なるサンプルのときだけ変えれば良いかも */
   switch (encoder->encode_param.window_function_type) {
     case SLA_WINDOWFUNCTIONTYPE_RECTANGULAR:
       break;
@@ -297,6 +265,160 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
       break;
   }
 
+  return SLA_APIRESULT_OK;
+}
+
+/* チャンネル毎の処理を実行 */
+/* TODO:よくない。エンコーダで隠蔽しないで必要なものは全て引数で渡すように */
+static SLAApiResult SLAEncoder_ApplyChProcessing(struct SLAEncoder* encoder, uint32_t num_samples)
+{
+  assert(encoder != NULL);
+  assert(num_samples <= encoder->encode_param.max_num_block_samples);
+
+  /* チャンネル毎の処理が行えるかチェック */
+  switch (encoder->encode_param.ch_process_method) {
+    case SLA_CHPROCESSMETHOD_STEREO_MS:
+      /* MS処理 */
+      if (encoder->wave_format.num_channels != 2) {
+        return SLA_APIRESULT_INVAILD_CHPROCESSMETHOD;
+      }
+      break;
+    default:
+      break;
+  }
+
+  switch (encoder->encode_param.ch_process_method) {
+    case SLA_CHPROCESSMETHOD_STEREO_MS:
+      /* MS処理 */
+      SLAUtility_LRtoMSFloat(encoder->input_float, num_samples);
+      SLAUtility_LRtoMSInt32(encoder->input_int32, num_samples);
+      break;
+    default:
+      break;
+  }
+
+  return SLA_APIRESULT_OK;
+}
+
+/* 最適なブロックサイズの探索 */
+static SLAApiResult SLAEncoder_SearchOptimalBlockNumSamples(struct SLAEncoder* encoder,
+    const int32_t* const* input, 
+    uint32_t min_num_samples, uint32_t delta_num_samples, 
+    uint32_t max_num_samples, uint32_t *optimal_num_samples)
+{
+  uint32_t ch, smpl;
+  uint32_t num_channels, num_samples, parcor_order;
+  uint32_t tmp_optimal_num_samples;
+  double   min_code_length, mean_code_length, code_length;
+
+  /* 引数チェック */
+  if (encoder == NULL || input == NULL || optimal_num_samples == NULL) {
+    return SLA_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* 最大サンプル数が最小サンプル数より小さい */
+  if (max_num_samples < min_num_samples) {
+    return SLA_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* 頻繁に参照する変数をオート変数に受ける */
+  num_channels  = encoder->wave_format.num_channels;
+  parcor_order  = encoder->encode_param.parcor_order;
+
+  /* データを設定 */
+  for (ch = 0; ch < num_channels; ch++) {
+    for (smpl = 0; smpl < max_num_samples; smpl++) {
+      encoder->input_float[ch][smpl]  = (float)((double)input[ch][smpl] * pow(2, -31));
+      encoder->input_int32[ch][smpl]  = input[ch][smpl] >> (32 - encoder->wave_format.bit_per_sample);
+    }
+  }
+  /* チャンネル毎の処理実行 */
+  SLAEncoder_ApplyChProcessing(encoder, max_num_samples);
+
+  /* 無音判定 */
+  for (smpl = 0; smpl < max_num_samples; smpl++) {
+    for (ch = 0; ch < num_channels; ch++) {
+      if (encoder->input_int32[ch][smpl] != 0) {
+        goto DETECT_NOT_SILENCE;
+      }
+    }
+  }
+
+DETECT_NOT_SILENCE:
+  /* 最小ブロックサイズ以上の無音が見られたらそれを最適なブロックサイズとする */
+  if (smpl >= min_num_samples) {
+    *optimal_num_samples = smpl;
+    return SLA_APIRESULT_OK;
+  }
+
+  /* 最小ブロックサイズを倍々で増やしながら探す */
+  min_code_length = 64;  /* 64bitは無いだろうという仮定 */
+  for (num_samples = min_num_samples;
+       num_samples <= max_num_samples;
+       num_samples += delta_num_samples) {
+    mean_code_length = 0.0f;
+    for (ch = 0; ch < num_channels; ch++) {
+      /* PARCOR係数を求める */
+      if (SLALPCCalculator_CalculatePARCORCoefDouble(encoder->lpcc, 
+            encoder->input_float[ch], num_samples,
+            encoder->parcor_coef[ch], parcor_order) != SLAPREDICTOR_APIRESULT_OK) {
+        return SLA_APIRESULT_FAILED_TO_CALCULATE_COEF;
+      }
+      /* 推定符号長の計算 */
+      if (SLALPCCalculator_EstimateCodeLength(
+            encoder->input_float[ch], num_samples,
+            encoder->parcor_coef[ch], parcor_order,
+            &code_length) != SLAPREDICTOR_APIRESULT_OK) {
+        return SLA_APIRESULT_FAILED_TO_CALCULATE_COEF;
+      }
+      mean_code_length += code_length;
+    }
+    /* 全チャンネルで平均を取る */
+    mean_code_length /= num_channels;
+    /* 最小符号長の更新 */
+    if (mean_code_length < min_code_length) {
+      min_code_length         = mean_code_length;
+      tmp_optimal_num_samples = num_samples;
+    }
+  }
+
+  /* 最小の符号長を与えるサンプル数を記録 */
+  *optimal_num_samples = tmp_optimal_num_samples;
+  return SLA_APIRESULT_OK;
+}
+
+/* 1ブロックエンコード */
+SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
+    const int32_t* const* input, uint32_t num_samples,
+    uint8_t* data, uint32_t data_size, uint32_t* output_size)
+{
+  uint32_t ch, smpl, ord;
+  uint32_t num_channels, parcor_order, longterm_order;
+  uint16_t crc16;
+  SLAPredictorApiResult predictor_ret;
+  SLAApiResult          api_ret;
+
+  /* 引数チェック */
+  if (encoder == NULL || input == NULL
+      || data == NULL || output_size == NULL) {
+    return SLA_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* 許容サンプル数を超えている */
+  if (num_samples > encoder->max_num_block_samples) {
+    return SLA_APIRESULT_EXCEED_HANDLE_CAPACITY;
+  }
+
+  /* 頻繁に参照する変数をオート変数に受ける */
+  num_channels    = encoder->wave_format.num_channels;
+  parcor_order    = encoder->encode_param.parcor_order;
+  longterm_order  = encoder->encode_param.longterm_order;
+
+  /* 窓関数の作成 */
+  if ((api_ret = SLAEncoder_MakeWindow(encoder, num_samples)) != SLA_APIRESULT_OK) {
+    return api_ret;
+  }
+
   /* 入力をdouble化/情報が失われない程度に右シフト */
   for (ch = 0; ch < num_channels; ch++) {
     for (smpl = 0; smpl < num_samples; smpl++) {
@@ -306,14 +428,8 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
   }
 
   /* チャンネル毎の処理 */
-  switch (encoder->encode_param.ch_process_method) {
-    case SLA_CHPROCESSMETHOD_STEREO_MS:
-      /* MS処理 */
-      SLAUtility_LRtoMSFloat(encoder->input_float, num_samples);
-      SLAUtility_LRtoMSInt32(encoder->input_int32, num_samples);
-      break;
-    default:
-      break;
+  if ((api_ret = SLAEncoder_ApplyChProcessing(encoder, num_samples)) != SLA_APIRESULT_OK) {
+    return api_ret;
   }
 
   /* 無音ブロック判定 */
@@ -418,6 +534,7 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
     } else {
       return SLA_APIRESULT_FAILED_TO_PREDICT;
     }
+
   }
 
   /* 符号化 */
@@ -513,8 +630,8 @@ SLAApiResult SLAEncoder_EncodeWhole(struct SLAEncoder* encoder,
     uint8_t* data, uint32_t data_size, uint32_t* output_size)
 {
   uint32_t              ch;
-  uint32_t              num_encode_samples, encode_offset_sample;
-  uint32_t              cur_output_size, block_size, max_block_size;
+  uint32_t              num_encode_samples, encode_offset_sample, num_remain_samples;
+  uint32_t              cur_output_size, block_size, max_block_size, num_blocks;
   const int32_t*        input_ptr[SLA_MAX_CHANNELS];
   struct SLAHeaderInfo  header;
   SLAApiResult          api_ret;
@@ -540,10 +657,8 @@ SLAApiResult SLAEncoder_EncodeWhole(struct SLAEncoder* encoder,
   cur_output_size = SLA_HEADER_SIZE;
   max_block_size = 0;
   encode_offset_sample = 0;
+  num_blocks = 0;
   while (encode_offset_sample < num_samples) {
-    /* エンコードサンプル数の確定 */
-    num_encode_samples = SLAUTILITY_MIN(encoder->max_num_block_samples, num_samples - encode_offset_sample);
-
     /* 出力バッファサイズが足らない */
     if (cur_output_size > data_size) {
       return SLA_APIRESULT_INSUFFICIENT_BUFFER_SIZE;
@@ -552,6 +667,17 @@ SLAApiResult SLAEncoder_EncodeWhole(struct SLAEncoder* encoder,
     /* 入力信号のポインタをセット */
     for (ch = 0; ch < encoder->wave_format.num_channels; ch++) {
       input_ptr[ch] = &input[ch][encode_offset_sample];
+    }
+
+    /* エンコードサンプル数の確定 */
+    num_remain_samples = num_samples - encode_offset_sample;
+    if ((api_ret = SLAEncoder_SearchOptimalBlockNumSamples(encoder,
+            input_ptr,
+            SLAUTILITY_MIN(SLA_MIN_BLOCK_NUM_SAMPLES, num_remain_samples),
+            SLA_SEARCH_BLOCK_NUM_SAMPLES_DELTA,
+            SLAUTILITY_MIN(encoder->encode_param.max_num_block_samples, num_remain_samples),
+            &num_encode_samples)) != SLA_APIRESULT_OK) {
+      return api_ret;
     }
 
     /* ブロックエンコード */
@@ -570,11 +696,12 @@ SLAApiResult SLAEncoder_EncodeWhole(struct SLAEncoder* encoder,
       max_block_size = block_size;
     }
 
-    printf("sample:%d / %d \r", 
-        encode_offset_sample, num_samples);
+    num_blocks++;
+    printf("sample:%d / %d \r", encode_offset_sample, num_samples);
   }
 
-  /* 最大ブロックサイズを反映（ヘッダの再度書き込み） */
+  /* 最大ブロックサイズとブロック数を反映（ヘッダの再度書き込み） */
+  header.num_blocks     = num_blocks;
   header.max_block_size = max_block_size;
   if ((api_ret = SLAEncoder_EncodeHeader(&header, data, data_size))
       != SLA_APIRESULT_OK) {

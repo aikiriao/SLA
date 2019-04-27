@@ -187,9 +187,10 @@ SLAApiResult SLADecoder_DecodeHeader(
   tmp_header.encode_param.ch_process_method = (uint32_t)u8buf;
   /* SLAブロック数 */
   SLAByteArray_GetUint32(data_pos, &u32buf);
-  /* SLAブロックあたりサンプル数 */
+  tmp_header.num_blocks = u32buf;
+  /* SLAブロックあたり最大サンプル数 */
   SLAByteArray_GetUint16(data_pos, &u16buf);
-  tmp_header.encode_param.num_block_samples = (uint32_t)u16buf;
+  tmp_header.encode_param.max_num_block_samples = (uint32_t)u16buf;
   /* 最大ブロックサイズ */
   SLAByteArray_GetUint32(data_pos, &tmp_header.max_block_size);
 
@@ -234,7 +235,8 @@ SLAApiResult SLADecoder_SetEncodeParameter(struct SLADecoder* decoder,
   if ((encode_param->parcor_order > decoder->max_parcor_order)
       || (encode_param->longterm_order > decoder->max_longterm_order)
       || (encode_param->nlms_order > decoder->max_nlms_order)
-      || (encode_param->num_block_samples > decoder->max_num_block_samples)) {
+      || (encode_param->max_num_block_samples > decoder->max_num_block_samples)
+      || (encode_param->max_num_block_samples < SLA_MIN_BLOCK_NUM_SAMPLES)) {
     return SLA_APIRESULT_EXCEED_HANDLE_CAPACITY;
   }
 

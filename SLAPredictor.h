@@ -41,6 +41,12 @@ SLAPredictorApiResult SLALPCCalculator_CalculatePARCORCoefDouble(
     const float* data, uint32_t num_samples,
     double* parcor_coef, uint32_t order);
 
+/* 入力データとPARCOR係数からサンプルあたりの推定符号長を求める */
+SLAPredictorApiResult SLALPCCalculator_EstimateCodeLength(
+    const float* data, uint32_t num_samples,
+    const double* parcor_coef, uint32_t order,
+    double* length_per_sample);
+
 /* 入力データとPARCOR係数から残差パワーを求める */
 SLAPredictorApiResult SLALPCCalculator_CalculateResidualPower(
     const float* data, uint32_t num_samples,

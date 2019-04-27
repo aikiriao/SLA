@@ -362,3 +362,10 @@ double SLAUtility_Round(double d)
 {
     return (d >= 0.0f) ? floor(d + 0.5f) : -floor(-d + 0.5f);
 }
+
+/* log2関数（C89で定義されていない） */
+double SLAUtility_Log2(double x)
+{
+#define INV_LOGE2 (1.4426950408889634)  /* 1 / log(2) */
+  return log(x) * INV_LOGE2;
+}

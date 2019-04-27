@@ -310,6 +310,45 @@ static SLAPredictorApiResult SLALPCCalculator_CalculateVarianceRatio(
   return SLAPREDICTOR_APIRESULT_OK;
 }
 
+/* 入力データとPARCOR係数からサンプルあたりの推定符号長を求める */
+SLAPredictorApiResult SLALPCCalculator_EstimateCodeLength(
+    const float* data, uint32_t num_samples,
+    const double* parcor_coef, uint32_t order,
+    double* length_per_sample)
+{
+  uint32_t smpl, ord;
+  double log2_mean_res_power, log2_var_ratio;
+
+  /* 定数値 */
+#define BETA_CONST_FOR_LAPLACE_DIST   (1.9426950408889634)  /* sqrt(2 * E * E) */
+#define BETA_CONST_FOR_GAUSS_DIST     (2.047095585180641)   /* sqrt(2 * E * PI) */
+  /* 引数チェック */
+  if (data == NULL || parcor_coef == NULL || length_per_sample == NULL) {
+    return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* log2(パワー平均)の計算 */
+  log2_mean_res_power = 0.0f;
+  for (smpl = 0; smpl < num_samples; smpl++) {
+    log2_mean_res_power += (double)data[smpl] * data[smpl];
+  }
+  log2_mean_res_power = SLAUtility_Log2(log2_mean_res_power / num_samples);
+
+  /* sum(log2(1-parcor * parcor))の計算 */
+  /* 1次の係数は0で確定だから飛ばす */
+  log2_var_ratio = 0.0f;
+  for (ord = 1; ord <= order; ord++) {
+    log2_var_ratio += SLAUtility_Log2(1.0f - parcor_coef[ord] * parcor_coef[ord]);
+  }
+
+  /* エントロピー計算 */
+  /* →サンプルあたりの最小のビット数が得られる */
+  *length_per_sample
+    = BETA_CONST_FOR_LAPLACE_DIST + 0.5f * (log2_mean_res_power + log2_var_ratio);
+
+  return SLAPREDICTOR_APIRESULT_OK;
+}
+
 /* 入力データとPARCOR係数から残差パワーを求める */
 SLAPredictorApiResult SLALPCCalculator_CalculateResidualPower(
     const float* data, uint32_t num_samples,

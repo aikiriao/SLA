@@ -24,7 +24,7 @@ int encode(const char* in_filename, const char* out_filename)
 
   /* エンコーダハンドルの作成 */
   config.max_num_channels       = 2;
-  config.max_num_block_samples  = 4096;
+  config.max_num_block_samples  = 16384;
   config.max_parcor_order       = 48;
   config.max_longterm_order     = 1;    /* 現在1以外対応していない... */
   config.max_nlms_order         = 32;
@@ -58,7 +58,7 @@ int encode(const char* in_filename, const char* out_filename)
     enc_param.ch_process_method = SLA_CHPROCESSMETHOD_NONE;
   }
   enc_param.window_function_type  = SLA_WINDOWFUNCTIONTYPE_SIN;
-  enc_param.num_block_samples     = 4096;
+  enc_param.max_num_block_samples = 10240;
   if ((ret = SLAEncoder_SetEncodeParameter(encoder, &enc_param)) != SLA_APIRESULT_OK) {
     fprintf(stderr, "Failed to set encode parameter: %d \n", ret);
     return 1;
@@ -109,7 +109,7 @@ int decode(const char* in_filename, const char* out_filename)
 
   /* エンコーダハンドルの作成 */
   config.max_num_channels       = 2;
-  config.max_num_block_samples  = 4096;
+  config.max_num_block_samples  = 16384;
   config.max_parcor_order       = 48;
   config.max_longterm_order     = 1;
   config.max_nlms_order         = 32;
@@ -137,16 +137,17 @@ int decode(const char* in_filename, const char* out_filename)
   }
 
   /* ヘッダから得られた情報を表示 */
-  printf("Num Channels:            %d \n", header.wave_format.num_channels);
-  printf("Bit Per Sample:          %d \n", header.wave_format.bit_per_sample);
-  printf("Sampling Rate:           %d \n", header.wave_format.sampling_rate);
-  printf("PARCOR Order:            %d \n", header.encode_param.parcor_order);
-  printf("Longterm Order:          %d \n", header.encode_param.longterm_order);
-  printf("NLMS Order:              %d \n", header.encode_param.nlms_order);
-  printf("Channel Process Method:  %d \n", header.encode_param.ch_process_method);
-  printf("Number of Block Samples: %d \n", header.encode_param.num_block_samples);
-  printf("Number of Samples:       %d \n", header.num_samples);
-  printf("Max Block Size:          %d \n", header.max_block_size);
+  printf("Num Channels:                %d \n", header.wave_format.num_channels);
+  printf("Bit Per Sample:              %d \n", header.wave_format.bit_per_sample);
+  printf("Sampling Rate:               %d \n", header.wave_format.sampling_rate);
+  printf("PARCOR Order:                %d \n", header.encode_param.parcor_order);
+  printf("Longterm Order:              %d \n", header.encode_param.longterm_order);
+  printf("NLMS Order:                  %d \n", header.encode_param.nlms_order);
+  printf("Channel Process Method:      %d \n", header.encode_param.ch_process_method);
+  printf("Max Number of Block Samples: %d \n", header.encode_param.max_num_block_samples);
+  printf("Number of Samples:           %d \n", header.num_samples);
+  printf("Number of Blocks:            %d \n", header.num_blocks);
+  printf("Max Block Size:              %d \n", header.max_block_size);
 
   /* 出力wavハンドルの生成 */
   wav_format.data_format     = WAV_DATA_FORMAT_PCM;
