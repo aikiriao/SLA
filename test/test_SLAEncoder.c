@@ -1,45 +1,9 @@
 #include "test.h"
 
+#include "SLA_TestUtility.h"
+
 /* テスト対象のモジュール */
 #include "../SLAEncoder.c"
-
-/* デフォルトのコンフィグをセット */
-/* （将来的にSLAEncoder.hに公開予定） */
-#define SLAEncoder_SetDefaultConfig(p_config) { \
-  (p_config)->max_num_channels      = 6;        \
-  (p_config)->max_num_block_samples = 8192;     \
-  (p_config)->max_parcor_order      = 64;       \
-  (p_config)->max_longterm_order    = 5;        \
-  (p_config)->max_nlms_order        = 64;       \
-}
-
-/* ひとまず有効な波形情報を設定 */
-#define SLAEncoder_SetValidWaveFormat(p_format) {   \
-    (p_format)->num_channels           = 2;         \
-    (p_format)->bit_per_sample         = 8;         \
-    (p_format)->sampling_rate          = 8000;      \
-}
-
-/* ひとまず有効なエンコードパラメータを設定 */
-#define SLAEncoder_SetValidEncodeParameter(p_param) { \
-    (p_param)->parcor_order          = 10;            \
-    (p_param)->longterm_order        = 1;             \
-    (p_param)->nlms_order            = 10;            \
-    (p_param)->ch_process_method                      \
-      = SLA_CHPROCESSMETHOD_NONE;                     \
-    (p_param)->window_function_type                   \
-      = SLA_WINDOWFUNCTIONTYPE_RECTANGULAR;           \
-    (p_param)->num_block_samples     = 4096;          \
-}
-
-/* ひとまず有効なヘッダ情報を設定 */
-#define SLAEncoder_SetValidHeaderInfo(p_header) {                   \
-    SLAEncoder_SetValidWaveFormat(&((p_header)->wave_format));      \
-    SLAEncoder_SetValidEncodeParameter(&((p_header)->encode_param)) \
-    (p_header)->num_samples    = 8000 * 10;                         \
-    (p_header)->max_block_size = 4096;                              \
-}
-
 
 int testSLAEncoder_Initialize(void *obj)
 {
@@ -71,7 +35,7 @@ static void testSLAEncoder_EncodeHeaderTest(void *obj)
     data = malloc(SLA_HEADER_SIZE);
 
     /* ヘッダ構造体に有効な情報を設定 */
-    SLAEncoder_SetValidHeaderInfo(&header);
+    SLATestUtility_SetValidHeaderInfo(&header);
 
     /* 書いてみる */
     Test_AssertEqual(
@@ -128,12 +92,10 @@ static void testSLAEncoder_EncodeHeaderTest(void *obj)
     Test_AssertEqual(u8buf, header.encode_param.ch_process_method);
     /* SLAブロック数 */
     SLAByteArray_GetUint32(data_ptr, &u32buf);
-    Test_AssertEqual(u32buf, 
-        SLA_CALCULATE_NUM_SLABLOCK(header.num_samples,
-          header.encode_param.num_block_samples));
+    Test_AssertEqual(u32buf, header.num_blocks);
     /* SLAブロックあたりサンプル数 */
     SLAByteArray_GetUint16(data_ptr, &u16buf);
-    Test_AssertEqual(u16buf, header.encode_param.num_block_samples);
+    Test_AssertEqual(u16buf, header.encode_param.max_num_block_samples);
     /* 最大ブロックサイズ */
     SLAByteArray_GetUint32(data_ptr, &u32buf);
     Test_AssertEqual(u32buf, header.max_block_size);
@@ -152,7 +114,7 @@ static void testSLAEncoder_EncodeHeaderTest(void *obj)
     /* ヘッダ書き込み領域の確保 */
     data = malloc(SLA_HEADER_SIZE);
     /* ヘッダに情報をセット */
-    SLAEncoder_SetValidHeaderInfo(&header);
+    SLATestUtility_SetValidHeaderInfo(&header);
 
     /* 不正な引数を渡してやる */
     Test_AssertEqual(
@@ -183,11 +145,11 @@ static void testSLAEncoder_EncodeBlockTest(void *obj)
     struct SLAHeaderInfo    header;
     const int32_t**         input;
     uint8_t*                data;
-    uint32_t                suff_size, outsize, num_samples;
+    uint32_t                ch, suff_size, outsize, num_samples;
 
     SLAEncoder_SetDefaultConfig(&config);
-    SLAEncoder_SetValidHeaderInfo(&header);
-    num_samples = header.encode_param.num_block_samples;
+    SLATestUtility_SetValidHeaderInfo(&header);
+    num_samples = header.encode_param.max_num_block_samples;
     suff_size 
       = SLA_CalculateSufficientBlockSize(header.wave_format.num_channels,
         num_samples, header.wave_format.bit_per_sample);
@@ -207,6 +169,9 @@ static void testSLAEncoder_EncodeBlockTest(void *obj)
     /* 入力データ領域の確保 */
     input = (const int32_t **)malloc(sizeof(int32_t *) * header.wave_format.num_channels);
     data  = (uint8_t *)malloc(suff_size);
+    for (ch = 0; ch < header.wave_format.num_channels; ch++) {
+      input[ch] = (int32_t *)malloc(sizeof(int32_t) * header.encode_param.max_num_block_samples);
+    }
 
     /* 不正な引数を渡してやる */
     Test_AssertEqual(
@@ -236,8 +201,8 @@ static void testSLAEncoder_EncodeBlockTest(void *obj)
           num_samples, data, suff_size, &outsize),
         SLA_APIRESULT_INVAILD_CHPROCESSMETHOD);
     /* 設定を元に戻す */
-    SLAEncoder_SetValidWaveFormat(&(encoder->wave_format));
-    SLAEncoder_SetValidEncodeParameter(&(encoder->encode_param));
+    SLATestUtility_SetValidWaveFormat(&(encoder->wave_format));
+    SLATestUtility_SetValidEncodeParameter(&(encoder->encode_param));
 
     /* 不正な窓関数タイプを指定 */
     encoder->encode_param.window_function_type = -1;
@@ -246,9 +211,12 @@ static void testSLAEncoder_EncodeBlockTest(void *obj)
           num_samples, data, suff_size, &outsize),
         SLA_APIRESULT_INVALID_WINDOWFUNCTION_TYPE);
     /* 設定を元に戻す */
-    SLAEncoder_SetValidEncodeParameter(&(encoder->encode_param));
+    SLATestUtility_SetValidEncodeParameter(&(encoder->encode_param));
 
     /* 領域の開放 */
+    for (ch = 0; ch < header.wave_format.num_channels; ch++) {
+      free((void *)input[ch]);
+    }
     free(input);
     free(data);
     SLAEncoder_Destroy(encoder);
@@ -268,8 +236,8 @@ static void testSLAEncoder_EncodeBlockTest(void *obj)
     uint8_t                 u8buf;
 
     SLAEncoder_SetDefaultConfig(&config);
-    SLAEncoder_SetValidHeaderInfo(&header);
-    num_samples = header.encode_param.num_block_samples;
+    SLATestUtility_SetValidHeaderInfo(&header);
+    num_samples = header.encode_param.max_num_block_samples;
     suff_size 
       = SLA_CalculateSufficientBlockSize(header.wave_format.num_channels,
         num_samples, header.wave_format.bit_per_sample);
