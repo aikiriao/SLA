@@ -107,7 +107,7 @@ int decode(const char* in_filename, const char* out_filename)
   uint32_t                  buffer_size, decode_num_samples;
   SLAApiResult              ret;
 
-  /* エンコーダハンドルの作成 */
+  /* デコーダハンドルの作成 */
   config.max_num_channels       = 2;
   config.max_num_block_samples  = 16384;
   config.max_parcor_order       = 48;
