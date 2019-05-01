@@ -19,13 +19,13 @@ struct SLAEncoder {
   uint32_t                      max_num_block_samples;
   uint32_t                      max_parcor_order;
   uint32_t                      max_longterm_order;
-  uint32_t                      max_nlms_order;
+  uint32_t                      max_lms_order_par_filter;
   struct SLABitStream*          strm;
   void*                         strm_work;
   struct SLALPCCalculator*      lpcc;   
   struct SLALPCSynthesizer*     lpcs;
   struct SLALongTermCalculator* ltc;
-  struct SLANLMSCalculator*     nlmsc;
+  struct SLALMSCalculator*     nlmsc;
   SLAChannelProcessMethod	      ch_proc_method;
   SLAWindowFunctionType         window_type;
   float**                       input_float;
@@ -58,11 +58,11 @@ struct SLAEncoder* SLAEncoder_Create(const struct SLAEncoderConfig* config)
   max_num_block_samples = config->max_num_block_samples;
 
   encoder = malloc(sizeof(struct SLAEncoder));
-  encoder->max_num_channels       = max_num_channels;
-  encoder->max_num_block_samples  = max_num_block_samples;
-  encoder->max_parcor_order       = config->max_parcor_order;
-  encoder->max_longterm_order     = config->max_longterm_order;
-  encoder->max_nlms_order         = config->max_nlms_order;
+  encoder->max_num_channels         = max_num_channels;
+  encoder->max_num_block_samples    = max_num_block_samples;
+  encoder->max_parcor_order         = config->max_parcor_order;
+  encoder->max_longterm_order       = config->max_longterm_order;
+  encoder->max_lms_order_par_filter = config->max_lms_order_par_filter;
   
 
   /* 各種領域割当て */
@@ -95,7 +95,7 @@ struct SLAEncoder* SLAEncoder_Create(const struct SLAEncoderConfig* config)
   encoder->lpcc   = SLALPCCalculator_Create(config->max_parcor_order);
   encoder->lpcs   = SLALPCSynthesizer_Create(config->max_parcor_order);
   encoder->ltc    = SLALongTermCalculator_Create(SLAUtility_RoundUp2Powered(config->max_num_block_samples * 2), SLALONGTERM_MAX_PERIOD, SLALONGTERM_NUM_PITCH_CANDIDATES);
-  encoder->nlmsc  = SLANLMSCalculator_Create(config->max_nlms_order);
+  encoder->nlmsc  = SLALMSCalculator_Create(config->max_lms_order_par_filter);
 
   return encoder;
 }
@@ -127,7 +127,7 @@ void SLAEncoder_Destroy(struct SLAEncoder* encoder)
     SLALPCCalculator_Destroy(encoder->lpcc);
     SLALPCSynthesizer_Destroy(encoder->lpcs);
     SLALongTermCalculator_Destroy(encoder->ltc);
-    SLANLMSCalculator_Destroy(encoder->nlmsc);
+    SLALMSCalculator_Destroy(encoder->nlmsc);
     /* Closeを呼ぶと意図せずFlushされるのでメモリ領域だけ開放する */
     NULLCHECK_AND_FREE(encoder->strm_work);
     free(encoder);
@@ -166,7 +166,7 @@ SLAApiResult SLAEncoder_SetEncodeParameter(struct SLAEncoder* encoder,
   /* エンコーダの許容範囲か？ */
   if ((encode_param->parcor_order > encoder->max_parcor_order)
       || (encode_param->longterm_order > encoder->max_longterm_order)
-      || (encode_param->nlms_order > encoder->max_nlms_order)
+      || (encode_param->lms_order_par_filter > encoder->max_lms_order_par_filter)
       || (encode_param->max_num_block_samples > encoder->max_num_block_samples)
       || (encode_param->max_num_block_samples < SLA_MIN_BLOCK_NUM_SAMPLES)) {
     return SLA_APIRESULT_EXCEED_HANDLE_CAPACITY;
@@ -218,8 +218,10 @@ SLAApiResult SLAEncoder_EncodeHeader(
   SLAByteArray_PutUint8(data_pos,  (uint8_t)header->encode_param.parcor_order);
   /* ロングターム係数次数 */
   SLAByteArray_PutUint8(data_pos,  (uint8_t)header->encode_param.longterm_order);
-  /* NLMS次数 */
-  SLAByteArray_PutUint8(data_pos,  (uint8_t)header->encode_param.nlms_order);
+  /* LMS次数 */
+  SLAByteArray_PutUint8(data_pos,  (uint8_t)header->encode_param.lms_order_par_filter);
+  /* LMSカスケード数 */
+  SLAByteArray_PutUint8(data_pos,  (uint8_t)header->encode_param.num_lms_filter_cascade);
   /* チャンネル毎の処理法 */
   SLAByteArray_PutUint8(data_pos,  (uint8_t)header->encode_param.ch_process_method);
   /* SLAブロック数 */
@@ -528,16 +530,18 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
           encoder->tmp_residual[ch], sizeof(int32_t) * num_samples);
     }
 
-    /* NLMSで残差計算 */
-    if (SLANLMSCalculator_PredictInt32(encoder->nlmsc,
-          encoder->encode_param.nlms_order,
-          encoder->residual[ch], num_samples,
-          encoder->tmp_residual[ch]) == SLAPREDICTOR_APIRESULT_OK) {
-      /* 残差をNLMSによる残差に差し替え */
-      memcpy(encoder->residual[ch],
-          encoder->tmp_residual[ch], sizeof(int32_t) * num_samples);
-    } else {
-      return SLA_APIRESULT_FAILED_TO_PREDICT;
+    /* LMSで残差計算 - カスケード数だけ回す */
+    for (ord = 0; ord < encoder->encode_param.num_lms_filter_cascade; ord++) {
+      if (SLALMSCalculator_PredictInt32(encoder->nlmsc,
+            encoder->encode_param.lms_order_par_filter,
+            encoder->residual[ch], num_samples,
+            encoder->tmp_residual[ch]) == SLAPREDICTOR_APIRESULT_OK) {
+        /* 残差をLMSによる残差に差し替え */
+        memcpy(encoder->residual[ch],
+            encoder->tmp_residual[ch], sizeof(int32_t) * num_samples);
+      } else {
+        return SLA_APIRESULT_FAILED_TO_PREDICT;
+      }
     }
 
   }

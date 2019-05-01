@@ -49,7 +49,7 @@ static void testSLADecoder_DecodeHeaderTest(void *obj)
     Test_AssertEqual(write_header.wave_format.sampling_rate,      get_header.wave_format.sampling_rate);
     Test_AssertEqual(write_header.encode_param.parcor_order,      get_header.encode_param.parcor_order);
     Test_AssertEqual(write_header.encode_param.longterm_order,    get_header.encode_param.longterm_order);
-    Test_AssertEqual(write_header.encode_param.nlms_order,        get_header.encode_param.nlms_order);
+    Test_AssertEqual(write_header.encode_param.lms_order_par_filter,  get_header.encode_param.lms_order_par_filter);
     Test_AssertEqual(write_header.encode_param.ch_process_method, get_header.encode_param.ch_process_method);
     Test_AssertEqual(
         write_header.encode_param.max_num_block_samples, get_header.encode_param.max_num_block_samples);

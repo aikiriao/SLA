@@ -1,5 +1,7 @@
 #include "SLAPredictor.h"
 #include "SLAUtility.h"
+#include "SLAInternal.h"
+
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
@@ -66,8 +68,8 @@ struct SLALongTermCalculator {
   uint32_t* pitch_candidate;          /* ピッチ候補配列     */
 };
 
-/* NLMS計算ハンドル */
-struct SLANLMSCalculator {
+/* LMS計算ハンドル */
+struct SLALMSCalculator {
 	int64_t   alpha;			    /* ステップサイズ（現在未使用） */
 	int64_t* 	coef;			      /* 係数 */
 	uint32_t	max_num_coef;	  /* 最大の係数個数 */
@@ -778,12 +780,12 @@ SLAPredictorApiResult SLALongTerm_SynthesizeInt32(
   return SLAPREDICTOR_APIRESULT_OK;
 }
 
-/* NLMS計算ハンドルの作成 */
-struct SLANLMSCalculator* SLANLMSCalculator_Create(uint32_t max_num_coef)
+/* LMS計算ハンドルの作成 */
+struct SLALMSCalculator* SLALMSCalculator_Create(uint32_t max_num_coef)
 {
-  struct SLANLMSCalculator* nlms;
+  struct SLALMSCalculator* nlms;
 
-  nlms = malloc(sizeof(struct SLANLMSCalculator));
+  nlms = malloc(sizeof(struct SLALMSCalculator));
   nlms->max_num_coef  = max_num_coef;
 
   nlms->coef = malloc(sizeof(int64_t) * max_num_coef);
@@ -791,8 +793,8 @@ struct SLANLMSCalculator* SLANLMSCalculator_Create(uint32_t max_num_coef)
   return nlms;
 }
 
-/* NLMS計算ハンドルの破棄 */
-void SLANLMSCalculator_Destroy(struct SLANLMSCalculator* nlms)
+/* LMS計算ハンドルの破棄 */
+void SLALMSCalculator_Destroy(struct SLALMSCalculator* nlms)
 {
   if (nlms != NULL) {
     NULLCHECK_AND_FREE(nlms->coef);
@@ -800,14 +802,14 @@ void SLANLMSCalculator_Destroy(struct SLANLMSCalculator* nlms)
   }
 }
 
-/* NLMS処理のコア処理 */
-static SLAPredictorApiResult SLANLMSCalculator_ProcessCore(
-    struct SLANLMSCalculator* nlms, uint32_t num_coef,
+/* LMS処理のコア処理 */
+static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
+    struct SLALMSCalculator* nlms, uint32_t num_coef,
     int32_t* original_signal, int32_t* residual,
     uint32_t num_samples, uint8_t is_predict)
 {
   uint32_t smpl, i;
-  int64_t predict, input_power, mul_const;
+  int64_t predict;
 
   /* 引数チェック */
   if (nlms == NULL || original_signal == NULL || residual == NULL) {
@@ -831,21 +833,15 @@ static SLAPredictorApiResult SLANLMSCalculator_ProcessCore(
   }
 
   for (smpl = num_coef; smpl < num_samples; smpl++) {
-    /* 予測（同時に入力パワーを計算） */
-    input_power   = (1UL << 31);  /* 最低でも1を保証 */
+    /* 予測 */
     predict       = (1UL << 30);  /* 丸め誤差回避 */
     for (i = 0; i < num_coef; i++) {
-      const int64_t signal = original_signal[smpl - i - 1];
-      predict     += nlms->coef[i] * signal;
-      input_power += signal * signal;
+      predict     += nlms->coef[i] * original_signal[smpl - i - 1];
       /* 値域チェック */
       assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31) <= (int64_t)INT32_MAX);
       assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31) >= (int64_t)INT32_MIN);
-      assert((input_power  >> 31) <= (int64_t)INT32_MAX);
-      assert((input_power  >> 31) >= (int64_t)INT32_MIN);
     }
     predict = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31);
-    input_power >>= 31; /* 必ず正になるので何も考えず右シフトでOK */
 
     if (is_predict == 1) {
       /* 残差出力 */
@@ -857,31 +853,28 @@ static SLAPredictorApiResult SLANLMSCalculator_ProcessCore(
     /* printf("%8d, %8d, %8d \n", residual[smpl], original_signal[smpl], (int32_t)predict); */
 
     /* 係数更新 */
-    /* 除算の負荷が高いため、係数更新は乗算のみに変形 */
-    mul_const = ((int64_t)residual[smpl] << 31) / input_power;
     for (i = 0; i < num_coef; i++) {
-      /* 補足）mul_coefを展開すると定義式通りになるので、右シフト時の丸めは考慮不要。 */
-      nlms->coef[i] += SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(mul_const * original_signal[smpl - i - 1], 31);
+      nlms->coef[i] += (SLAUTILITY_SIGN(original_signal[smpl - i - 1]) * SLAUTILITY_SIGN(residual[smpl])) << (31 - SLALMS_DELTA_WEIGHT_SHIFT);
     }
   }
 
   return SLAPREDICTOR_APIRESULT_OK;
 }
 
-/* NLMS予測 */
-SLAPredictorApiResult SLANLMSCalculator_PredictInt32(
-    struct SLANLMSCalculator* nlms, uint32_t num_coef,
+/* LMS予測 */
+SLAPredictorApiResult SLALMSCalculator_PredictInt32(
+    struct SLALMSCalculator* nlms, uint32_t num_coef,
     const int32_t* data, uint32_t num_samples, int32_t* residual)
 {
-  return SLANLMSCalculator_ProcessCore(nlms,
+  return SLALMSCalculator_ProcessCore(nlms,
       num_coef, (int32_t *)data, residual, num_samples, 1);
 }
     
-/* NLMS合成 */
-SLAPredictorApiResult SLANLMSCalculator_SynthesizeInt32(
-    struct SLANLMSCalculator* nlms, uint32_t num_coef,
+/* LMS合成 */
+SLAPredictorApiResult SLALMSCalculator_SynthesizeInt32(
+    struct SLALMSCalculator* nlms, uint32_t num_coef,
     const int32_t* residual, uint32_t num_samples, int32_t* output)
 {
-  return SLANLMSCalculator_ProcessCore(nlms,
+  return SLALMSCalculator_ProcessCore(nlms,
       num_coef, output, (int32_t *)residual, num_samples, 0);
 }

@@ -12,8 +12,8 @@ struct SLALPCSynthesizer;
 /* ロングターム計算ハンドル */
 struct SLALongTermCalculator;
 
-/* NLMS計算ハンドル */
-struct SLANLMSCalculator;
+/* LMS計算ハンドル */
+struct SLALMSCalculator;
 
 /* API結果型 */
 typedef enum SLAPredictorApiResultTag {
@@ -101,20 +101,20 @@ SLAPredictorApiResult SLALongTerm_SynthesizeInt32(
 	uint32_t pitch_period,
 	const int32_t* ltm_coef, uint32_t num_taps, int32_t* output);
 
-/* NLMS計算ハンドルの作成 */
-struct SLANLMSCalculator* SLANLMSCalculator_Create(uint32_t max_num_coef);
+/* LMS計算ハンドルの作成 */
+struct SLALMSCalculator* SLALMSCalculator_Create(uint32_t max_num_coef);
 
-/* NLMS計算ハンドルの破棄 */
-void SLANLMSCalculator_Destroy(struct SLANLMSCalculator* nlms);
+/* LMS計算ハンドルの破棄 */
+void SLALMSCalculator_Destroy(struct SLALMSCalculator* nlms);
 
-/* NLMS予測 */
-SLAPredictorApiResult SLANLMSCalculator_PredictInt32(
-    struct SLANLMSCalculator* nlms, uint32_t num_coef,
+/* LMS予測 */
+SLAPredictorApiResult SLALMSCalculator_PredictInt32(
+    struct SLALMSCalculator* nlms, uint32_t num_coef,
     const int32_t* data, uint32_t num_samples, int32_t* residual);
 
-/* NLMS合成 */
-SLAPredictorApiResult SLANLMSCalculator_SynthesizeInt32(
-    struct SLANLMSCalculator* nlms, uint32_t num_coef,
+/* LMS合成 */
+SLAPredictorApiResult SLALMSCalculator_SynthesizeInt32(
+    struct SLALMSCalculator* nlms, uint32_t num_coef,
     const int32_t* residual, uint32_t num_samples, int32_t* output);
 
 #ifdef __cplusplus

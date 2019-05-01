@@ -9,12 +9,12 @@ struct SLADecoder;
 
 /* デコーダコンフィグ */
 struct SLADecoderConfig {
-	uint32_t  max_num_channels;			    /* エンコード可能な最大チャンネル数 */
-	uint32_t  max_num_block_samples;		/* ブロックあたり最大サンプル数 */
-	uint32_t  max_parcor_order;				  /* 最大PARCOR係数次数 */
-	uint32_t  max_longterm_order;		    /* 最大ロングターム次数 */
-	uint32_t  max_nlms_order;				    /* 最大NLMS次数 */
-  uint8_t   enable_crc_check;         /* CRCチェックを有効にするか */
+	uint32_t  max_num_channels;			      /* エンコード可能な最大チャンネル数 */
+	uint32_t  max_num_block_samples;		  /* ブロックあたり最大サンプル数 */
+	uint32_t  max_parcor_order;				    /* 最大PARCOR係数次数 */
+	uint32_t  max_longterm_order;		      /* 最大ロングターム次数 */
+	uint32_t  max_lms_order_par_filter;   /* 最大LMS次数 */
+  uint8_t   enable_crc_check;           /* CRCチェックを有効にするか */
 };
 
 #ifdef __cplusplus

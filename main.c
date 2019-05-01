@@ -23,11 +23,11 @@ int encode(const char* in_filename, const char* out_filename)
   SLAApiResult              ret;
 
   /* エンコーダハンドルの作成 */
-  config.max_num_channels       = 2;
-  config.max_num_block_samples  = 16384;
-  config.max_parcor_order       = 48;
-  config.max_longterm_order     = 1;    /* 現在1以外対応していない... */
-  config.max_nlms_order         = 32;
+  config.max_num_channels         = 2;
+  config.max_num_block_samples    = 16384;
+  config.max_parcor_order         = 48;
+  config.max_longterm_order       = 1;    /* 現在1以外対応していない... */
+  config.max_lms_order_par_filter = 100;
   if ((encoder = SLAEncoder_Create(&config)) == NULL) {
     fprintf(stderr, "Failed to create encoder handle. \n");
     return 1;
@@ -49,9 +49,10 @@ int encode(const char* in_filename, const char* out_filename)
   }
 
   /* エンコードパラメータの設定 */
-  enc_param.parcor_order          = 10;
-  enc_param.longterm_order        = 1;
-  enc_param.nlms_order            = 10;
+  enc_param.parcor_order            = 10;
+  enc_param.longterm_order          = 1;
+  enc_param.lms_order_par_filter    = 10;
+  enc_param.num_lms_filter_cascade  = 1;
   if (in_wav->format.num_channels == 2) {
     enc_param.ch_process_method = SLA_CHPROCESSMETHOD_STEREO_MS;
   } else {
@@ -108,12 +109,12 @@ int decode(const char* in_filename, const char* out_filename)
   SLAApiResult              ret;
 
   /* デコーダハンドルの作成 */
-  config.max_num_channels       = 2;
-  config.max_num_block_samples  = 16384;
-  config.max_parcor_order       = 48;
-  config.max_longterm_order     = 1;
-  config.max_nlms_order         = 32;
-  config.enable_crc_check       = 1;
+  config.max_num_channels         = 2;
+  config.max_num_block_samples    = 16384;
+  config.max_parcor_order         = 48;
+  config.max_longterm_order       = 1;
+  config.max_lms_order_par_filter = 32;
+  config.enable_crc_check         = 1;
   if ((decoder = SLADecoder_Create(&config)) == NULL) {
     fprintf(stderr, "Failed to create decoder handle. \n");
     return 1;
@@ -142,7 +143,8 @@ int decode(const char* in_filename, const char* out_filename)
   printf("Sampling Rate:               %d \n", header.wave_format.sampling_rate);
   printf("PARCOR Order:                %d \n", header.encode_param.parcor_order);
   printf("Longterm Order:              %d \n", header.encode_param.longterm_order);
-  printf("NLMS Order:                  %d \n", header.encode_param.nlms_order);
+  printf("LMS Order Par Filter:        %d \n", header.encode_param.lms_order_par_filter);
+  printf("LMS Num Filter Cascades:     %d \n", header.encode_param.num_lms_filter_cascade);
   printf("Channel Process Method:      %d \n", header.encode_param.ch_process_method);
   printf("Max Number of Block Samples: %d \n", header.encode_param.max_num_block_samples);
   printf("Number of Samples:           %d \n", header.num_samples);

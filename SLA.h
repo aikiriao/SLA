@@ -6,7 +6,7 @@
 /* フォーマットバージョン */
 #define SLA_FORMAT_VERSION			    1
 /* ヘッダのサイズ */
-#define SLA_HEADER_SIZE			        38
+#define SLA_HEADER_SIZE			        39
 /* 処理可能な最大チャンネル数（撤廃予定） */
 #define SLA_MAX_CHANNELS            8 
 /* サンプル数の無効値 */
@@ -61,12 +61,13 @@ struct SLAWaveFormat {
 
 /* エンコードパラメータ */
 struct SLAEncodeParameter {
-	uint32_t                parcor_order;			      /* PARCOR係数次数 */
-	uint32_t                longterm_order;		      /* ロングターム次数 */
-	uint32_t                nlms_order;			        /* NLMS次数 */
-	SLAChannelProcessMethod	ch_process_method;	    /* マルチチャンネル処理法 */
-  SLAWindowFunctionType   window_function_type;   /* 窓関数の種類 */
-	uint32_t                max_num_block_samples;  /* ブロックあたりサンプル数 */
+	uint32_t                parcor_order;			        /* PARCOR係数次数 */
+	uint32_t                longterm_order;		        /* ロングターム次数 */
+	uint32_t                lms_order_par_filter;	    /* LMS1フィルタあたりの次数 */
+  uint32_t                num_lms_filter_cascade;   /* NLMSフィルタの直列接続数 */
+	SLAChannelProcessMethod	ch_process_method;	      /* マルチチャンネル処理法 */
+  SLAWindowFunctionType   window_function_type;     /* 窓関数の種類 */
+	uint32_t                max_num_block_samples;    /* ブロックあたりサンプル数 */
 };
 
 /* SLAヘッダ情報 */

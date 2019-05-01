@@ -258,38 +258,38 @@ static void testLPCUtility_SynthesizeInt32ByParcor(
   SLALPCSynthesizer_Destroy(lpcs);
 }
 
-/* NLMS係数による予測(int32_t) */
-static void testLPCUtility_PredictInt32ByNLMS(
+/* LMS係数による予測(int32_t) */
+static void testLPCUtility_PredictInt32ByLMS(
   const int32_t* data, uint32_t num_samples,
   const int32_t* coef, uint32_t order, int32_t* residual)
 {
-  struct SLANLMSCalculator* nlms;
+  struct SLALMSCalculator* nlms;
 
   TEST_UNUSED_PARAMETER(coef);
   
-  nlms = SLANLMSCalculator_Create(order);
+  nlms = SLALMSCalculator_Create(order);
 
-  assert(SLANLMSCalculator_PredictInt32(
+  assert(SLALMSCalculator_PredictInt32(
         nlms, order, data, num_samples, residual) == SLAPREDICTOR_APIRESULT_OK);
 
-  SLANLMSCalculator_Destroy(nlms);
+  SLALMSCalculator_Destroy(nlms);
 }
 
-/* NLMS係数による合成(int32_t) */
-static void testLPCUtility_SynthesizeInt32ByNLMS(
+/* LMS係数による合成(int32_t) */
+static void testLPCUtility_SynthesizeInt32ByLMS(
     const int32_t* residual, uint32_t num_samples,
     const int32_t* coef, uint32_t order, int32_t* output)
 {
-  struct SLANLMSCalculator* nlms;
+  struct SLALMSCalculator* nlms;
 
   TEST_UNUSED_PARAMETER(coef);
 
-  nlms = SLANLMSCalculator_Create(order);
+  nlms = SLALMSCalculator_Create(order);
 
-  assert(SLANLMSCalculator_SynthesizeInt32(
+  assert(SLALMSCalculator_SynthesizeInt32(
         nlms, order, residual, num_samples, output) == SLAPREDICTOR_APIRESULT_OK);
 
-  SLANLMSCalculator_Destroy(nlms);
+  SLALMSCalculator_Destroy(nlms);
 }
 
 /* 無音の生成 */
@@ -475,53 +475,53 @@ static void testSLALPCSynthesizer_PredictSynthTest(void* obj)
     { 256, 8192, 24, testLPCUtility_GenerateNyquistOsc, testLPCUtility_CalculateParcorCoef,
       testLPCUtility_PredictInt32ByParcor, testLPCUtility_SynthesizeInt32ByParcor },
     { 5, 8192, 16, testLPCUtility_GenerateSilence, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     { 5, 8192, 16, testLPCUtility_GenerateConstant, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     { 5, 8192, 16, testLPCUtility_GenerateNegativeConstant, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     { 5, 8192, 16, testLPCUtility_GenerateSineWave, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     { 5, 8192, 16, testLPCUtility_GenerateWhiteNoize, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     { 5, 8192, 16, testLPCUtility_GenerateNyquistOsc, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     {15, 8192, 16, testLPCUtility_GenerateSilence, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     {15, 8192, 16, testLPCUtility_GenerateConstant, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     {15, 8192, 16, testLPCUtility_GenerateNegativeConstant, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     {15, 8192, 16, testLPCUtility_GenerateSineWave, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     {15, 8192, 16, testLPCUtility_GenerateWhiteNoize, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     {15, 8192, 16, testLPCUtility_GenerateNyquistOsc, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     { 5, 8192, 24, testLPCUtility_GenerateSilence, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     { 5, 8192, 24, testLPCUtility_GenerateConstant, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     { 5, 8192, 24, testLPCUtility_GenerateNegativeConstant, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     { 5, 8192, 24, testLPCUtility_GenerateSineWave, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     { 5, 8192, 24, testLPCUtility_GenerateWhiteNoize, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     { 5, 8192, 24, testLPCUtility_GenerateNyquistOsc, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     {15, 8192, 24, testLPCUtility_GenerateSilence, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     {15, 8192, 24, testLPCUtility_GenerateConstant, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     {15, 8192, 24, testLPCUtility_GenerateNegativeConstant, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     {15, 8192, 24, testLPCUtility_GenerateSineWave, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     {15, 8192, 24, testLPCUtility_GenerateWhiteNoize, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
     {15, 8192, 24, testLPCUtility_GenerateNyquistOsc, testLPCUtility_CalculateCoefDummyFunction,
-      testLPCUtility_PredictInt32ByNLMS, testLPCUtility_SynthesizeInt32ByNLMS },
+      testLPCUtility_PredictInt32ByLMS, testLPCUtility_SynthesizeInt32ByLMS },
   };
   /* int32_tテストケース数 */
   const uint32_t num_test_case_int32 = sizeof(test_case_int32) / sizeof(test_case_int32[0]);

@@ -84,9 +84,12 @@ static void testSLAEncoder_EncodeHeaderTest(void *obj)
     /* ロングターム係数次数 */
     SLAByteArray_GetUint8(data_ptr, &u8buf);
     Test_AssertEqual(u8buf, header.encode_param.longterm_order);
-    /* NLMS次数 */
+    /* LMS次数 */
     SLAByteArray_GetUint8(data_ptr, &u8buf);
-    Test_AssertEqual(u8buf, header.encode_param.nlms_order);
+    Test_AssertEqual(u8buf, header.encode_param.lms_order_par_filter);
+    /* LMSカスケード数 */
+    SLAByteArray_GetUint8(data_ptr, &u8buf);
+    Test_AssertEqual(u8buf, header.encode_param.num_lms_filter_cascade);
     /* チャンネル毎の処理法 */
     SLAByteArray_GetUint8(data_ptr, &u8buf);
     Test_AssertEqual(u8buf, header.encode_param.ch_process_method);
