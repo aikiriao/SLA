@@ -368,4 +368,61 @@ double SLAUtility_Log2(double x)
 {
 #define INV_LOGE2 (1.4426950408889634)  /* 1 / log(2) */
   return log(x) * INV_LOGE2;
+#undef INV_LOGE2
+}
+
+/* プリエンファシス(float) */
+void SLAUtility_PreEmphasisFloat(float* data, uint32_t num_samples, int32_t coef_shift)
+{
+  uint32_t  smpl;
+  float     prev_float, tmp_float;
+  double    coef;
+
+  assert(data != NULL);
+
+  /* フィルタ係数の計算 */
+  coef = (pow(2, coef_shift) - 1) * pow(2, -coef_shift);
+
+  /* フィルタ適用 */
+  prev_float = 0.0f;
+  for (smpl = 0; smpl < num_samples; smpl++) {
+    tmp_float   = data[smpl];
+    data[smpl] -= (float)(prev_float * coef);
+    prev_float  = tmp_float;
+  }
+
+}
+
+/* プリエンファシス(int32) */
+void SLAUtility_PreEmphasisInt32(int32_t* data, uint32_t num_samples, int32_t coef_shift)
+{
+  uint32_t  smpl;
+  int32_t   prev_int32, tmp_int32;
+  const int32_t coef_numer = (1 << coef_shift) - 1;
+
+  assert(data != NULL);
+
+  /* フィルタ適用 */
+  prev_int32 = 0;
+  for (smpl = 0; smpl < num_samples; smpl++) {
+    tmp_int32   = data[smpl];
+    data[smpl] -= SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(prev_int32 * coef_numer, coef_shift);
+    prev_int32  = tmp_int32;
+  }
+
+}
+
+/* デエンファシス(int32) */
+void SLAUtility_DeEmphasisInt32(int32_t* data, uint32_t num_samples, int32_t coef_shift)
+{
+  uint32_t  smpl;
+  const int32_t coef_numer = (1 << coef_shift) - 1;
+
+  assert(data != NULL);
+
+  /* フィルタ適用 */
+  for (smpl = 1; smpl < num_samples; smpl++) {
+    data[smpl] += SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(data[smpl - 1] * coef_numer, coef_shift);
+  }
+
 }

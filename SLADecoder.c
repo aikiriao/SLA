@@ -394,6 +394,8 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
       return SLA_APIRESULT_FAILED_TO_SYNTHESIZE;
     }
 
+    /* デエンファシス */
+    SLAUtility_DeEmphasisInt32(decoder->output[ch], block_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
   }
 
   /* チャンネル毎の処理をしていたら元に戻す */

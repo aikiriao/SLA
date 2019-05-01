@@ -452,7 +452,12 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
     }
 
     /* 窓掛け */
+    /* 補足）窓掛けとプリエンファシスはほぼ順不同だが、先に窓をかけたほうが僅かに性能が良い */
     SLAUtility_ApplyWindow(encoder->window, encoder->input_float[ch], num_samples); 
+
+    /* プリエンファシス */
+    SLAUtility_PreEmphasisFloat(encoder->input_float[ch], num_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
+    SLAUtility_PreEmphasisInt32(encoder->input_int32[ch], num_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
 
     /* PARCOR係数を求める */
     if (SLALPCCalculator_CalculatePARCORCoefDouble(encoder->lpcc, 

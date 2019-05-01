@@ -75,6 +75,15 @@ double SLAUtility_Round(double d);
 /* log2関数（C89で定義されていない） */
 double SLAUtility_Log2(double x);
 
+/* プリエンファシス(float) */
+void SLAUtility_PreEmphasisFloat(float* data, uint32_t num_samples, int32_t coef_shift);
+
+/* プリエンファシス(int32) */
+void SLAUtility_PreEmphasisInt32(int32_t* data, uint32_t num_samples, int32_t coef_shift);
+
+/* デエンファシス(int32) */
+void SLAUtility_DeEmphasisInt32(int32_t* data, uint32_t num_samples, int32_t coef_shift);
+
 #ifdef __cplusplus
 }
 #endif
