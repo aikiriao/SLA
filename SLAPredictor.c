@@ -332,7 +332,7 @@ SLAPredictorApiResult SLALPCCalculator_EstimateCodeLength(
   for (smpl = 0; smpl < num_samples; smpl++) {
     log2_mean_res_power += (double)data[smpl] * data[smpl];
   }
-  log2_mean_res_power = SLAUtility_Log2(log2_mean_res_power / num_samples);
+  log2_mean_res_power = SLAUtility_Log2(log2_mean_res_power) - SLAUtility_Log2(num_samples);
 
   /* sum(log2(1-parcor * parcor))の計算 */
   /* 1次の係数は0で確定だから飛ばす */
