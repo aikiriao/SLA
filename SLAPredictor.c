@@ -810,6 +810,13 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
 {
   uint32_t smpl, i;
   int64_t predict;
+  int32_t residual_sign_index;
+  /* Sign-Sign LMSの係数更新量テーブル */
+  static const int32_t sslms_delta_table[3][3] = {
+    { /* -1 * -1 */    1 << (31 - SLALMS_DELTA_WEIGHT_SHIFT), /* -1 *  0 */ 0, /* -1 *  1 */ -(1 << (31 - SLALMS_DELTA_WEIGHT_SHIFT)) },
+    { /*  0 * -1 */                                        0, /*  0 *  0 */ 0, /*  0 *  1 */                                        0 },
+    { /*  1 * -1 */ -(1 << (31 - SLALMS_DELTA_WEIGHT_SHIFT)), /*  1 *  0 */ 0, /*  1 *  1 */    1 << (31 - SLALMS_DELTA_WEIGHT_SHIFT) }
+  };
 
   /* 引数チェック */
   if (nlms == NULL || original_signal == NULL || residual == NULL) {
@@ -853,8 +860,10 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
     /* printf("%8d, %8d, %8d \n", residual[smpl], original_signal[smpl], (int32_t)predict); */
 
     /* 係数更新 */
+    /* TODO:負荷はまだ高い。入力信号の符号の列をバッファに持つ等の工夫が考えられる */
+    residual_sign_index = SLAUTILITY_SIGN(residual[smpl]) + 1;
     for (i = 0; i < num_coef; i++) {
-      nlms->coef[i] += (SLAUTILITY_SIGN(original_signal[smpl - i - 1]) * SLAUTILITY_SIGN(residual[smpl])) << (31 - SLALMS_DELTA_WEIGHT_SHIFT);
+      nlms->coef[i] += sslms_delta_table[residual_sign_index][SLAUTILITY_SIGN(original_signal[smpl - i - 1]) + 1];
     }
   }
 
