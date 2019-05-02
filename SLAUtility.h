@@ -11,11 +11,11 @@
 /* 算術右シフトが有効な環境では、そのまま右シフト */
 #define SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(sint32, rshift) ((int64_t)(sint32) >> (rshift))
 #else
-/* 算術右シフトが無効な環境では、自分で定義する */
+/* 算術右シフトが無効な環境では、自分で定義する ハッカーのたのしみのより引用 */
 /* 注意）有効範囲:0 <= rshift <= 32 */
 #define SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(sint32, rshift) ((((uint64_t)(sint32) + 0x80000000UL) >> (rshift)) - (0x80000000UL >> (rshift)))
 #endif
-/* 符号関数 補足）val==0の時は0を返す */
+/* 符号関数 ハッカーのたのしみより引用 補足）val==0の時は0を返す */
 #define SLAUTILITY_SIGN(val)  (int32_t)((-(((uint32_t)(val)) >> 31)) | (((uint32_t)-(val)) >> 31))
 /* 最大値の取得 */
 #define SLAUTILITY_MAX(a,b) (((a) > (b)) ? (a) : (b))
