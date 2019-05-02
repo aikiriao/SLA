@@ -70,9 +70,11 @@ struct SLALongTermCalculator {
 
 /* LMS計算ハンドル */
 struct SLALMSCalculator {
-	int64_t   alpha;			    /* ステップサイズ（現在未使用） */
-	int64_t* 	coef;			      /* 係数 */
-	uint32_t	max_num_coef;	  /* 最大の係数個数 */
+	int64_t* 	coef;			                /* 係数 */
+	uint32_t	max_num_coef;	            /* 最大の係数個数 */
+  int32_t*  signal_sign_buffer;       /* 信号の符号を記録したバッファ */
+  uint32_t  signal_sign_buffer_pos;   /* バッファ参照位置 */
+  uint32_t  signal_sign_buffer_size;  /* バッファサイズ（2の冪） */
 };
 
 /*（標本）自己相関の計算 */
@@ -787,8 +789,10 @@ struct SLALMSCalculator* SLALMSCalculator_Create(uint32_t max_num_coef)
 
   nlms = malloc(sizeof(struct SLALMSCalculator));
   nlms->max_num_coef  = max_num_coef;
+  nlms->signal_sign_buffer_size = SLAUtility_RoundUp2Powered(max_num_coef);
 
   nlms->coef = malloc(sizeof(int64_t) * max_num_coef);
+  nlms->signal_sign_buffer = malloc(sizeof(int32_t) * SLAUtility_RoundUp2Powered(max_num_coef));
 
   return nlms;
 }
@@ -798,6 +802,7 @@ void SLALMSCalculator_Destroy(struct SLALMSCalculator* nlms)
 {
   if (nlms != NULL) {
     NULLCHECK_AND_FREE(nlms->coef);
+    NULLCHECK_AND_FREE(nlms->signal_sign_buffer);
     free(nlms);
   }
 }
@@ -809,14 +814,29 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
     uint32_t num_samples, uint8_t is_predict)
 {
   uint32_t smpl, i;
+  uint32_t signal_sign_buffer_mask;
   int64_t predict;
   int32_t residual_sign_index;
   /* Sign-Sign LMSの係数更新量テーブル */
+  /* 補足）残差と入力信号の符号から更新量が決まるので更新量を全てキャッシュしておく */
   static const int32_t sslms_delta_table[3][3] = {
     { /* -1 * -1 */    1 << (31 - SLALMS_DELTA_WEIGHT_SHIFT), /* -1 *  0 */ 0, /* -1 *  1 */ -(1 << (31 - SLALMS_DELTA_WEIGHT_SHIFT)) },
     { /*  0 * -1 */                                        0, /*  0 *  0 */ 0, /*  0 *  1 */                                        0 },
     { /*  1 * -1 */ -(1 << (31 - SLALMS_DELTA_WEIGHT_SHIFT)), /*  1 *  0 */ 0, /*  1 *  1 */    1 << (31 - SLALMS_DELTA_WEIGHT_SHIFT) }
   };
+
+  /* 符号バッファの初期化 */
+  for (smpl = 0; smpl < num_coef; smpl++) {
+    if (is_predict == 1) {
+      nlms->signal_sign_buffer[smpl] = SLAUTILITY_SIGN(original_signal[smpl]) + 1;
+    } else {
+      /* 合成時は残差に符号情報が入っている */
+      nlms->signal_sign_buffer[smpl] = SLAUTILITY_SIGN(residual[smpl]) + 1;
+    }
+  }
+  nlms->signal_sign_buffer_pos  = num_coef;
+  /* バッファサイズは2の冪なので-1してマスクを作る */
+  signal_sign_buffer_mask       = nlms->signal_sign_buffer_size - 1;
 
   /* 引数チェック */
   if (nlms == NULL || original_signal == NULL || residual == NULL) {
@@ -841,7 +861,7 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
 
   for (smpl = num_coef; smpl < num_samples; smpl++) {
     /* 予測 */
-    predict       = (1UL << 30);  /* 丸め誤差回避 */
+    predict = (1UL << 30);  /* 丸め誤差回避 */
     for (i = 0; i < num_coef; i++) {
       predict     += nlms->coef[i] * original_signal[smpl - i - 1];
       /* 値域チェック */
@@ -860,11 +880,15 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
     /* printf("%8d, %8d, %8d \n", residual[smpl], original_signal[smpl], (int32_t)predict); */
 
     /* 係数更新 */
-    /* TODO:負荷はまだ高い。入力信号の符号の列をバッファに持つ等の工夫が考えられる */
-    residual_sign_index = SLAUTILITY_SIGN(residual[smpl]) + 1;
+    nlms->signal_sign_buffer[nlms->signal_sign_buffer_pos]  = SLAUTILITY_SIGN(original_signal[smpl]) + 1;
+    residual_sign_index                                     = SLAUTILITY_SIGN(residual[smpl]) + 1;
     for (i = 0; i < num_coef; i++) {
-      nlms->coef[i] += sslms_delta_table[residual_sign_index][SLAUTILITY_SIGN(original_signal[smpl - i - 1]) + 1];
+      int32_t signal_sign_index = nlms->signal_sign_buffer[(nlms->signal_sign_buffer_pos - i - 1) & signal_sign_buffer_mask];
+      nlms->coef[i] += sslms_delta_table[residual_sign_index][signal_sign_index];
     }
+
+    /* バッファ参照位置更新 */
+    nlms->signal_sign_buffer_pos = (nlms->signal_sign_buffer_pos + 1) & signal_sign_buffer_mask;
   }
 
   return SLAPREDICTOR_APIRESULT_OK;
