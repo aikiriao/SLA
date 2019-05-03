@@ -79,7 +79,7 @@ struct SLALMSCalculator {
 
 /*（標本）自己相関の計算 */
 static SLAPredictorError LPC_CalculateAutoCorrelation(
-    const float* data, uint32_t num_sample,
+    const double* data, uint32_t num_sample,
     double* auto_corr, uint32_t order);
 
 /* Levinson-Durbin再帰計算 */
@@ -90,7 +90,7 @@ static SLAPredictorError LPC_LevinsonDurbinRecursion(
 /* 係数計算の共通関数 */
 static SLAPredictorError LPC_CalculateCoef(
     struct SLALPCCalculator* lpc, 
-    const float* data, uint32_t num_samples, uint32_t order);
+    const double* data, uint32_t num_samples, uint32_t order);
 
 /* LPC係数計算ハンドルの作成 */
 struct SLALPCCalculator* SLALPCCalculator_Create(uint32_t max_order)
@@ -136,7 +136,7 @@ void SLALPCCalculator_Destroy(struct SLALPCCalculator* lpcc)
 /* 係数parcor_coefはorder+1個の配列 */
 SLAPredictorApiResult SLALPCCalculator_CalculatePARCORCoefDouble(
     struct SLALPCCalculator* lpc,
-    const float* data, uint32_t num_samples,
+    const double* data, uint32_t num_samples,
     double* parcor_coef, uint32_t order)
 {
   /* 引数チェック */
@@ -163,7 +163,7 @@ SLAPredictorApiResult SLALPCCalculator_CalculatePARCORCoefDouble(
 /* 係数計算の共通関数 */
 static SLAPredictorError LPC_CalculateCoef(
     struct SLALPCCalculator* lpc, 
-    const float* data, uint32_t num_samples, uint32_t order)
+    const double* data, uint32_t num_samples, uint32_t order)
 {
   /* 引数チェック */
   if (lpc == NULL) {
@@ -266,7 +266,7 @@ static SLAPredictorError LPC_LevinsonDurbinRecursion(
 
 /*（標本）自己相関の計算 */
 static SLAPredictorError LPC_CalculateAutoCorrelation(
-    const float* data, uint32_t num_sample,
+    const double* data, uint32_t num_sample,
     double* auto_corr, uint32_t order)
 {
   uint32_t i_sample, delay_time;
@@ -281,7 +281,7 @@ static SLAPredictorError LPC_CalculateAutoCorrelation(
     auto_corr[delay_time] = 0.0f;
     /* 係数が0以上の時のみ和を取る */
     for (i_sample = delay_time; i_sample < num_sample; i_sample++) {
-      auto_corr[delay_time] += (double)data[i_sample] * data[i_sample - delay_time];
+      auto_corr[delay_time] += data[i_sample] * data[i_sample - delay_time];
     }
     /* 平均を取ってはいけない */
   }
@@ -316,7 +316,7 @@ static SLAPredictorApiResult SLALPCCalculator_CalculateVarianceRatio(
 
 /* 入力データとPARCOR係数からサンプルあたりの推定符号長を求める */
 SLAPredictorApiResult SLALPCCalculator_EstimateCodeLength(
-    const float* data, uint32_t num_samples,
+    const double* data, uint32_t num_samples,
     const double* parcor_coef, uint32_t order,
     double* length_per_sample)
 {
@@ -355,7 +355,7 @@ SLAPredictorApiResult SLALPCCalculator_EstimateCodeLength(
 
 /* 入力データとPARCOR係数から残差パワーを求める */
 SLAPredictorApiResult SLALPCCalculator_CalculateResidualPower(
-    const float* data, uint32_t num_samples,
+    const double* data, uint32_t num_samples,
     const double* parcor_coef, uint32_t order,
     double* residual_power)
 {

@@ -28,7 +28,7 @@ struct SLAEncoder {
   struct SLALMSCalculator*     nlmsc;
   SLAChannelProcessMethod	      ch_proc_method;
   SLAWindowFunctionType         window_type;
-  float**                       input_float;
+  double**                      input_double;
   int32_t**                     input_int32;
   double**                      parcor_coef;
   int32_t**                     parcor_coef_int32;
@@ -67,7 +67,7 @@ struct SLAEncoder* SLAEncoder_Create(const struct SLAEncoderConfig* config)
 
   /* 各種領域割当て */
   encoder->strm_work              = malloc((size_t)SLABitStream_CalculateWorkSize());
-  encoder->input_float            = (float **)malloc(sizeof(float *) * max_num_channels);
+  encoder->input_double           = (double **)malloc(sizeof(double *) * max_num_channels);
   encoder->input_int32            = (int32_t **)malloc(sizeof(int32_t *) * max_num_channels);
   encoder->residual               = (int32_t **)malloc(sizeof(int32_t *) * max_num_channels);
   encoder->tmp_residual           = (int32_t **)malloc(sizeof(int32_t *) * max_num_channels);
@@ -77,7 +77,7 @@ struct SLAEncoder* SLAEncoder_Create(const struct SLAEncoderConfig* config)
   encoder->longterm_coef_int32    = (int32_t **)malloc(sizeof(int32_t *) * max_num_channels);
 
   for (ch = 0; ch < max_num_channels; ch++) {
-    encoder->input_float[ch]          = (float *)malloc(sizeof(float) * max_num_block_samples);
+    encoder->input_double[ch]         = (double *)malloc(sizeof(double) * max_num_block_samples);
     encoder->input_int32[ch]          = (int32_t *)malloc(sizeof(int32_t) * max_num_block_samples);
     encoder->residual[ch]             = (int32_t *)malloc(sizeof(int32_t) * max_num_block_samples);
     encoder->tmp_residual[ch]         = (int32_t *)malloc(sizeof(int32_t) * max_num_block_samples);
@@ -107,7 +107,7 @@ void SLAEncoder_Destroy(struct SLAEncoder* encoder)
 
   if (encoder != NULL) {
     for (ch = 0; ch < encoder->max_num_channels; ch++) {
-      NULLCHECK_AND_FREE(encoder->input_float[ch]);
+      NULLCHECK_AND_FREE(encoder->input_double[ch]);
       NULLCHECK_AND_FREE(encoder->input_int32[ch]);
       NULLCHECK_AND_FREE(encoder->residual[ch]);
       NULLCHECK_AND_FREE(encoder->tmp_residual[ch]);
@@ -116,7 +116,7 @@ void SLAEncoder_Destroy(struct SLAEncoder* encoder)
       NULLCHECK_AND_FREE(encoder->longterm_coef[ch]);
       NULLCHECK_AND_FREE(encoder->longterm_coef_int32[ch]);
     }
-    NULLCHECK_AND_FREE(encoder->input_float);
+    NULLCHECK_AND_FREE(encoder->input_double);
     NULLCHECK_AND_FREE(encoder->input_int32);
     NULLCHECK_AND_FREE(encoder->residual);
     NULLCHECK_AND_FREE(encoder->tmp_residual);
@@ -292,8 +292,8 @@ static SLAApiResult SLAEncoder_ApplyChProcessing(struct SLAEncoder* encoder, uin
   switch (encoder->encode_param.ch_process_method) {
     case SLA_CHPROCESSMETHOD_STEREO_MS:
       /* MS処理 */
-      SLAUtility_LRtoMSFloat(encoder->input_float, num_samples);
-      SLAUtility_LRtoMSInt32(encoder->input_int32, num_samples);
+      SLAUtility_LRtoMSDouble(encoder->input_double, encoder->wave_format.num_channels, num_samples);
+      SLAUtility_LRtoMSInt32(encoder->input_int32, encoder->wave_format.num_channels, num_samples);
       break;
     default:
       break;
@@ -330,7 +330,7 @@ static SLAApiResult SLAEncoder_SearchOptimalBlockNumSamples(struct SLAEncoder* e
   /* データを設定 */
   for (ch = 0; ch < num_channels; ch++) {
     for (smpl = 0; smpl < max_num_samples; smpl++) {
-      encoder->input_float[ch][smpl]  = (float)((double)input[ch][smpl] * pow(2, -31));
+      encoder->input_double[ch][smpl] = (double)input[ch][smpl] * pow(2, -31);
       encoder->input_int32[ch][smpl]  = input[ch][smpl] >> (32 - encoder->wave_format.bit_per_sample);
     }
   }
@@ -362,13 +362,13 @@ DETECT_NOT_SILENCE:
     for (ch = 0; ch < num_channels; ch++) {
       /* PARCOR係数を求める */
       if (SLALPCCalculator_CalculatePARCORCoefDouble(encoder->lpcc, 
-            encoder->input_float[ch], num_samples,
+            encoder->input_double[ch], num_samples,
             encoder->parcor_coef[ch], parcor_order) != SLAPREDICTOR_APIRESULT_OK) {
         return SLA_APIRESULT_FAILED_TO_CALCULATE_COEF;
       }
       /* 推定符号長の計算 */
       if (SLALPCCalculator_EstimateCodeLength(
-            encoder->input_float[ch], num_samples,
+            encoder->input_double[ch], num_samples,
             encoder->parcor_coef[ch], parcor_order,
             &code_length) != SLAPREDICTOR_APIRESULT_OK) {
         return SLA_APIRESULT_FAILED_TO_CALCULATE_COEF;
@@ -424,7 +424,7 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
   /* 入力をdouble化/情報が失われない程度に右シフト */
   for (ch = 0; ch < num_channels; ch++) {
     for (smpl = 0; smpl < num_samples; smpl++) {
-      encoder->input_float[ch][smpl]  = (float)((double)input[ch][smpl] * pow(2, -31));
+      encoder->input_double[ch][smpl] = (double)input[ch][smpl] * pow(2, -31);
       encoder->input_int32[ch][smpl]  = input[ch][smpl] >> (32 - encoder->wave_format.bit_per_sample);
     }
   }
@@ -455,15 +455,15 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
 
     /* 窓掛け */
     /* 補足）窓掛けとプリエンファシスはほぼ順不同だが、先に窓をかけたほうが僅かに性能が良い */
-    SLAUtility_ApplyWindow(encoder->window, encoder->input_float[ch], num_samples); 
+    SLAUtility_ApplyWindow(encoder->window, encoder->input_double[ch], num_samples); 
 
     /* プリエンファシス */
-    SLAUtility_PreEmphasisFloat(encoder->input_float[ch], num_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
+    SLAUtility_PreEmphasisDouble(encoder->input_double[ch], num_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
     SLAUtility_PreEmphasisInt32(encoder->input_int32[ch], num_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
 
     /* PARCOR係数を求める */
     if (SLALPCCalculator_CalculatePARCORCoefDouble(encoder->lpcc, 
-          encoder->input_float[ch], num_samples,
+          encoder->input_double[ch], num_samples,
           encoder->parcor_coef[ch], parcor_order) != SLAPREDICTOR_APIRESULT_OK) {
       return SLA_APIRESULT_FAILED_TO_CALCULATE_COEF;
     }

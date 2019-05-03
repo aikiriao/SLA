@@ -6,6 +6,8 @@
 /* 円周率 */
 #define SLA_PI              3.1415926535897932384626433832795029
 
+/* 未使用引数 */
+#define SLAUTILITY_UNUSED_ARGUMENT(arg)  ((void)(arg))
 /* 算術右シフト */
 #if ((((int32_t)-1) >> 1) == ((int32_t)-1))
 /* 算術右シフトが有効な環境では、そのまま右シフト */
@@ -33,7 +35,7 @@ extern "C" {
 #endif
 
 /* 窓の適用 */
-void SLAUtility_ApplyWindow(const double* window, float* data, uint32_t num_samples);
+void SLAUtility_ApplyWindow(const double* window, double* data, uint32_t num_samples);
 
 /* ハン窓を作成 */
 void SLAUtility_MakeHannWindow(double* window, uint32_t window_size);
@@ -48,7 +50,7 @@ void SLAUtility_MakeSinWindow(double* window, uint32_t window_size);
 void SLAUtility_MakeVorbisWindow(double* window, uint32_t window_size);
 
 /* Tukey窓を作成 */
-void SLAUtility_MakeTukeyWindow(double* window, uint32_t window_size, float alpha);
+void SLAUtility_MakeTukeyWindow(double* window, uint32_t window_size, double alpha);
 
 /* FFT */
 void SLAUtility_FFT(double* data, uint32_t n, int32_t sign);
@@ -62,14 +64,14 @@ uint32_t SLAUtility_Log2Ceil(uint32_t val);
 /* 2の冪乗に切り上げる */
 uint32_t SLAUtility_RoundUp2Powered(uint32_t val);
 
-/* LR -> MS（float） */
-void SLAUtility_LRtoMSFloat(float **data, uint32_t num_samples);
+/* LR -> MS（double） */
+void SLAUtility_LRtoMSDouble(double **data, uint32_t num_channels, uint32_t num_samples);
 
 /* LR -> MS（int32_t） */
-void SLAUtility_LRtoMSInt32(int32_t **data, uint32_t num_samples);
+void SLAUtility_LRtoMSInt32(int32_t **data, uint32_t num_channels, uint32_t num_samples);
 
 /* MS -> LR（int32_t） */
-void SLAUtility_MStoLRInt32(int32_t **data, uint32_t num_samples);
+void SLAUtility_MStoLRInt32(int32_t **data, uint32_t num_channels, uint32_t num_samples);
 
 /* round関数（C89で定義されてない） */
 double SLAUtility_Round(double d);
@@ -77,8 +79,8 @@ double SLAUtility_Round(double d);
 /* log2関数（C89で定義されていない） */
 double SLAUtility_Log2(double x);
 
-/* プリエンファシス(float) */
-void SLAUtility_PreEmphasisFloat(float* data, uint32_t num_samples, int32_t coef_shift);
+/* プリエンファシス(double) */
+void SLAUtility_PreEmphasisDouble(double* data, uint32_t num_samples, int32_t coef_shift);
 
 /* プリエンファシス(int32) */
 void SLAUtility_PreEmphasisInt32(int32_t* data, uint32_t num_samples, int32_t coef_shift);

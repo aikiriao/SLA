@@ -55,14 +55,14 @@ static const uint32_t nlz10_table[64] = {
 #undef UNUSED
 
 /* 窓の適用 */
-void SLAUtility_ApplyWindow(const double* window, float* data, uint32_t num_samples)
+void SLAUtility_ApplyWindow(const double* window, double* data, uint32_t num_samples)
 {
   uint32_t smpl;
 
   assert(window != NULL && data != NULL);
 
   for (smpl = 0; smpl < num_samples; smpl++) {
-    data[smpl] = (float)((double)data[smpl] * window[smpl]);
+    data[smpl] *= window[smpl];
   }
 }
 
@@ -123,7 +123,7 @@ void SLAUtility_MakeVorbisWindow(double* window, uint32_t window_size)
 }
 
 /* Tukey窓を作成 */
-void SLAUtility_MakeTukeyWindow(double* window, uint32_t window_size, float alpha)
+void SLAUtility_MakeTukeyWindow(double* window, uint32_t window_size, double alpha)
 {
   uint32_t  smpl;
   double    x;
@@ -300,8 +300,9 @@ uint32_t SLAUtility_RoundUp2Powered(uint32_t val)
   return val + 1;
 }
 
-/* LR -> MS（float） */
-void SLAUtility_LRtoMSFloat(float **data, uint32_t num_samples)
+/* LR -> MS（double） */
+void SLAUtility_LRtoMSDouble(double **data,
+    uint32_t num_channels, uint32_t num_samples)
 {
   uint32_t  smpl;
   double    mid, side;
@@ -309,17 +310,20 @@ void SLAUtility_LRtoMSFloat(float **data, uint32_t num_samples)
   assert(data != NULL);
   assert(data[0] != NULL);
   assert(data[1] != NULL);
+  assert(num_channels >= 2);
+  SLAUTILITY_UNUSED_ARGUMENT(num_channels);
 
   for (smpl = 0; smpl < num_samples; smpl++) {
     mid   = (data[0][smpl] + data[1][smpl]) / 2;
     side  = data[0][smpl] - data[1][smpl];
-    data[0][smpl] = (float)mid; 
-    data[1][smpl] = (float)side;
+    data[0][smpl] = mid; 
+    data[1][smpl] = side;
   }
 }
 
 /* LR -> MS（int32_t） */
-void SLAUtility_LRtoMSInt32(int32_t **data, uint32_t num_samples)
+void SLAUtility_LRtoMSInt32(int32_t **data, 
+    uint32_t num_channels, uint32_t num_samples)
 {
   uint32_t  smpl;
   int32_t   mid, side;
@@ -327,6 +331,8 @@ void SLAUtility_LRtoMSInt32(int32_t **data, uint32_t num_samples)
   assert(data != NULL);
   assert(data[0] != NULL);
   assert(data[1] != NULL);
+  assert(num_channels >= 2);
+  SLAUTILITY_UNUSED_ARGUMENT(num_channels); 
 
   for (smpl = 0; smpl < num_samples; smpl++) {
     mid   = (data[0][smpl] + data[1][smpl]) >> 1; /* 注意: 右シフト必須(/2ではだめ。0方向に丸められる) */
@@ -340,7 +346,8 @@ void SLAUtility_LRtoMSInt32(int32_t **data, uint32_t num_samples)
 }
 
 /* MS -> LR（int32_t） */
-void SLAUtility_MStoLRInt32(int32_t **data, uint32_t num_samples)
+void SLAUtility_MStoLRInt32(int32_t **data, 
+    uint32_t num_channels, uint32_t num_samples)
 {
   uint32_t  smpl;
   int32_t   mid, side;
@@ -348,6 +355,8 @@ void SLAUtility_MStoLRInt32(int32_t **data, uint32_t num_samples)
   assert(data != NULL);
   assert(data[0] != NULL);
   assert(data[1] != NULL);
+  assert(num_channels >= 2);
+  SLAUTILITY_UNUSED_ARGUMENT(num_channels);
 
   for (smpl = 0; smpl < num_samples; smpl++) {
     side  = data[1][smpl];
@@ -371,24 +380,24 @@ double SLAUtility_Log2(double x)
 #undef INV_LOGE2
 }
 
-/* プリエンファシス(float) */
-void SLAUtility_PreEmphasisFloat(float* data, uint32_t num_samples, int32_t coef_shift)
+/* プリエンファシス(double) */
+void SLAUtility_PreEmphasisDouble(double* data, uint32_t num_samples, int32_t coef_shift)
 {
   uint32_t  smpl;
-  float     prev_float, tmp_float;
+  double    prev, tmp;
   double    coef;
 
   assert(data != NULL);
 
   /* フィルタ係数の計算 */
-  coef = (pow(2, coef_shift) - 1) * pow(2, -coef_shift);
+  coef = (pow(2, coef_shift) - 1.0f) * pow(2, -coef_shift);
 
   /* フィルタ適用 */
-  prev_float = 0.0f;
+  prev = 0.0f;
   for (smpl = 0; smpl < num_samples; smpl++) {
-    tmp_float   = data[smpl];
-    data[smpl] -= (float)(prev_float * coef);
-    prev_float  = tmp_float;
+    tmp         = data[smpl];
+    data[smpl] -= prev * coef;
+    prev        = tmp;
   }
 
 }

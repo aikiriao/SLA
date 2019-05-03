@@ -406,7 +406,7 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
   /* チャンネル毎の処理をしていたら元に戻す */
   switch (decoder->encode_param.ch_process_method) {
     case SLA_CHPROCESSMETHOD_STEREO_MS:
-      SLAUtility_MStoLRInt32(decoder->output, block_samples);
+      SLAUtility_MStoLRInt32(decoder->output, decoder->wave_format.num_channels, block_samples);
       break;
     default:
       break;

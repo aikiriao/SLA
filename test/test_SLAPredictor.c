@@ -7,27 +7,27 @@
 #include "../SLAPredictor.c"
 
 /* 係数計算関数 */
-typedef void (*CalculateCoefFunction)(const float* data, uint32_t num_samples, float* coef, uint32_t order);
-/* 予測関数(float) */
-typedef void (*PredictFloatFunction)(const float* data, uint32_t num_samples, const float* coef, uint32_t order, float* residual);
-/* 合成関数(float) */
-typedef void (*SynthesizeFloatFunction)(const float* residual, uint32_t num_samples, const float* coef, uint32_t order, float* output);
+typedef void (*CalculateCoefFunction)(const double* data, uint32_t num_samples, double* coef, uint32_t order);
+/* 予測関数(double) */
+typedef void (*PredictFloatFunction)(const double* data, uint32_t num_samples, const double* coef, uint32_t order, double* residual);
+/* 合成関数(double) */
+typedef void (*SynthesizeFloatFunction)(const double* residual, uint32_t num_samples, const double* coef, uint32_t order, double* output);
 /* 予測関数(int32_t) */
 typedef void (*PredictInt32Function)(const int32_t* data, uint32_t num_samples, const int32_t* coef, uint32_t order, int32_t* residual);
 /* 合成関数(int32_t) */
 typedef void (*SynthesizeInt32Function)(const int32_t* residual, uint32_t num_samples, const int32_t* coef, uint32_t order, int32_t* output);
 /* 波形生成関数 */
-typedef void (*GenerateWaveFunction)(float* data, uint32_t num_samples);
+typedef void (*GenerateWaveFunction)(double* data, uint32_t num_samples);
 
-/* 予測合成(float)テストのテストケース */
-typedef struct LPCPredictSynthFloatTestCaseTag {
+/* 予測合成(double)テストのテストケース */
+typedef struct LPCPredictSynthDoubleTestCaseTag {
   uint32_t                  order;            /* 次数 */
   uint32_t                  num_samples;      /* サンプル数 */
   GenerateWaveFunction      gen_wave_func;    /* 波形生成関数 */
   CalculateCoefFunction     calc_coef_func;   /* 係数計算関数 */
   PredictFloatFunction      predict_func;     /* 予測関数 */
   SynthesizeFloatFunction   synth_func;       /* 合成関数 */
-} LPCPredictSynthFloatTestCase;
+} LPCPredictSynthDoubleTestCase;
 
 /* 予測合成(int32_t)テストのテストケース */
 typedef struct LPCPredictSynthInt32TestCaseTag {
@@ -91,7 +91,7 @@ static void testLPC_CalculateCoefTest(void *obj)
 #define NUM_SAMPLES 128
     struct SLALPCCalculator* lpc;
     uint32_t  ord, is_ok;
-    float     test_data[NUM_SAMPLES];
+    double    test_data[NUM_SAMPLES];
 
     /* 無音作成 */
     for (ord = 0; ord < NUM_SAMPLES; ord++) {
@@ -125,7 +125,7 @@ static void testLPC_CalculateCoefTest(void *obj)
 #define NUM_SAMPLES 128
     struct SLALPCCalculator* lpc;
     uint32_t  ord, is_ok;
-    float     test_data[NUM_SAMPLES];
+    double    test_data[NUM_SAMPLES];
 
     /* 定数入力作成 */
     for (ord = 0; ord < NUM_SAMPLES; ord++) {
@@ -165,7 +165,7 @@ static void testLPC_CalculateCoefTest(void *obj)
 #define NUM_SAMPLES 128
     struct SLALPCCalculator* lpc;
     uint32_t  ord, is_ok;
-    float     test_data[NUM_SAMPLES];
+    double    test_data[NUM_SAMPLES];
 
     /* 1サンプル単位で揺れる入力 */
     for (ord = 0; ord < NUM_SAMPLES; ord++) {
@@ -202,29 +202,21 @@ static void testLPC_CalculateCoefTest(void *obj)
 
 /* データに対してPARCOR係数を計算するユーティリティ関数 */
 static void testLPCUtility_CalculateParcorCoef(
-    const float* data, uint32_t num_samples, float* parcor_coef, uint32_t order)
+    const double* data, uint32_t num_samples, double* parcor_coef, uint32_t order)
 {
   struct SLALPCCalculator* lpcc;
-  uint32_t ord;
-  double* double_coef = (double *)malloc(sizeof(double) * (order + 1));
 
   assert(data != NULL && parcor_coef != NULL);
 
   lpcc = SLALPCCalculator_Create(order);
   assert(SLALPCCalculator_CalculatePARCORCoefDouble(lpcc,
-        data, num_samples, double_coef, order) == SLAPREDICTOR_APIRESULT_OK);
+        data, num_samples, parcor_coef, order) == SLAPREDICTOR_APIRESULT_OK);
   SLALPCCalculator_Destroy(lpcc);
-
-  for (ord = 0; ord < order + 1; ord++) {
-    parcor_coef[ord] = (float)double_coef[ord];
-  }
-
-  free(double_coef);
 }
 
 /* 係数計算のダミー関数 */
 static void testLPCUtility_CalculateCoefDummyFunction(
-    const float* data, uint32_t num_samples, float* coef, uint32_t order)
+    const double* data, uint32_t num_samples, double* coef, uint32_t order)
 {
   TEST_UNUSED_PARAMETER(data);
   TEST_UNUSED_PARAMETER(num_samples);
@@ -293,7 +285,7 @@ static void testLPCUtility_SynthesizeInt32ByLMS(
 }
 
 /* 無音の生成 */
-static void testLPCUtility_GenerateSilence(float* data, uint32_t num_samples)
+static void testLPCUtility_GenerateSilence(double* data, uint32_t num_samples)
 {
   uint32_t smpl;
 
@@ -303,7 +295,7 @@ static void testLPCUtility_GenerateSilence(float* data, uint32_t num_samples)
 }
 
 /* 定数音源の生成 */
-static void testLPCUtility_GenerateConstant(float* data, uint32_t num_samples)
+static void testLPCUtility_GenerateConstant(double* data, uint32_t num_samples)
 {
   uint32_t smpl;
 
@@ -313,7 +305,7 @@ static void testLPCUtility_GenerateConstant(float* data, uint32_t num_samples)
 }
 
 /* 負値定数音源の生成 */
-static void testLPCUtility_GenerateNegativeConstant(float* data, uint32_t num_samples)
+static void testLPCUtility_GenerateNegativeConstant(double* data, uint32_t num_samples)
 {
   uint32_t smpl;
 
@@ -323,7 +315,7 @@ static void testLPCUtility_GenerateNegativeConstant(float* data, uint32_t num_sa
 }
 
 /* 正弦波の生成 */
-static void testLPCUtility_GenerateSineWave(float* data, uint32_t num_samples)
+static void testLPCUtility_GenerateSineWave(double* data, uint32_t num_samples)
 {
   uint32_t smpl;
 
@@ -333,18 +325,18 @@ static void testLPCUtility_GenerateSineWave(float* data, uint32_t num_samples)
 }
 
 /* 白色雑音の生成 */
-static void testLPCUtility_GenerateWhiteNoize(float* data, uint32_t num_samples)
+static void testLPCUtility_GenerateWhiteNoize(double* data, uint32_t num_samples)
 {
   uint32_t smpl;
 
   srand(0);
   for (smpl = 0; smpl < num_samples; smpl++) {
-    data[smpl] = 2.0f * ((float)rand() / RAND_MAX - 0.5f);
+    data[smpl] = 2.0f * ((double)rand() / RAND_MAX - 0.5f);
   }
 }
 
 /* 1サンプル周期で振動する関数 */
-static void testLPCUtility_GenerateNyquistOsc(float* data, uint32_t num_samples)
+static void testLPCUtility_GenerateNyquistOsc(double* data, uint32_t num_samples)
 {
   uint32_t smpl;
 
@@ -357,7 +349,7 @@ static void testLPCUtility_GenerateNyquistOsc(float* data, uint32_t num_samples)
 static uint32_t testSLALPCSynthesizer_DoPredictSynthInt32TestCase(const LPCPredictSynthInt32TestCase* test_case)
 {
   int32_t     ret;
-  float       *data, *coef;
+  double      *data, *coef;
   int32_t     *int32_data, *int32_coef, *residual, *output;
   uint32_t    num_samples, order, smpl, ord;
 
@@ -367,8 +359,8 @@ static uint32_t testSLALPCSynthesizer_DoPredictSynthInt32TestCase(const LPCPredi
   order             = test_case->order;
 
   /* データの領域割当 */
-  data        = (float *)malloc(sizeof(float) * num_samples);
-  coef        = (float *)malloc(sizeof(float) * (order + 1));
+  data        = (double *)malloc(sizeof(double) * num_samples);
+  coef        = (double *)malloc(sizeof(double) * (order + 1));
   int32_data  = (int32_t *)malloc(sizeof(int32_t) * num_samples);
   int32_coef  = (int32_t *)malloc(sizeof(int32_t) * (order + 1));
   residual    = (int32_t *)malloc(sizeof(int32_t) * num_samples);
@@ -546,7 +538,7 @@ static void testLPCLongTermCalculator_CalculateCoefTest(void* obj)
   struct SLALongTermCalculator* lpcltmc;
   double*                       ltm_coef;
   int32_t*                      int32_ltm_coef;
-  float*                        data;
+  double*                       data;
   int32_t*                      int32_data;
   int32_t*                      residual;
   int32_t*                      output;
@@ -581,7 +573,7 @@ static void testLPCLongTermCalculator_CalculateCoefTest(void* obj)
                     test_case->fft_size, test_case_p->max_pitch_num_samples, test_case_p->num_taps);
     ltm_coef        = (double *)malloc(sizeof(double) * test_case_p->num_taps);
     int32_ltm_coef  = (int32_t *)malloc(sizeof(int32_t) * test_case_p->num_taps);
-    data            = (float *)malloc(sizeof(float) * test_case_p->num_samples);
+    data            = (double *)malloc(sizeof(double) * test_case_p->num_samples);
     int32_data      = (int32_t *)malloc(sizeof(int32_t) * test_case_p->num_samples);
     residual        = (int32_t *)malloc(sizeof(int32_t) * test_case_p->num_samples);
     output          = (int32_t *)malloc(sizeof(int32_t) * test_case_p->num_samples);
