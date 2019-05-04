@@ -27,7 +27,7 @@ int encode(const char* in_filename, const char* out_filename)
   config.max_num_block_samples    = 16384;
   config.max_parcor_order         = 48;
   config.max_longterm_order       = 1;    /* 現在1以外対応していない... */
-  config.max_lms_order_par_filter = 100;
+  config.max_lms_order_par_filter = 20;
   if ((encoder = SLAEncoder_Create(&config)) == NULL) {
     fprintf(stderr, "Failed to create encoder handle. \n");
     return 1;
@@ -59,7 +59,7 @@ int encode(const char* in_filename, const char* out_filename)
     enc_param.ch_process_method = SLA_CHPROCESSMETHOD_NONE;
   }
   enc_param.window_function_type  = SLA_WINDOWFUNCTIONTYPE_SIN;
-  enc_param.max_num_block_samples = 10240;
+  enc_param.max_num_block_samples = 1024 * 12;
   if ((ret = SLAEncoder_SetEncodeParameter(encoder, &enc_param)) != SLA_APIRESULT_OK) {
     fprintf(stderr, "Failed to set encode parameter: %d \n", ret);
     return 1;

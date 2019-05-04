@@ -14,7 +14,19 @@
 
 /* 最大自己相関値からどの比率のピークをピッチとして採用するか */
 /* TODO:ピッチが取りたいのではなく純粋に相関除去したいから1.0fでいいかも */
-#define LPC_LONGTERM_PITCH_RATIO_VS_MAX_THRESHOULD  (1.0f)
+#define LPC_LONGTERM_PITCH_RATIO_VS_MAX_THRESHOULD    (1.0f)
+
+/* ダイクストラ法使用時の巨大な重み */
+#define SLAOPTIMALENCODEESTIMATOR_DIJKSTRA_BIGWEIGHT  (1UL << 24)
+
+/* ブロックヘッダサイズの推定値 */
+/* TODO:真値に置き換える */
+#define SLAOPTIMALENCODEESTIMATOR_ESTIMATE_BLOCK_SIZE (50)
+
+/* ブロック探索に必要なノード数の計算 */
+#define SLAOPTIMALENCODEESTIMATOR_CALCULATE_NUM_NODES(num_samples, delta_num_samples) \
+  ((((num_samples) + ((delta_num_samples) - 1)) / (delta_num_samples)) + 1)
+
 
 /* NULLチェックと領域解放 */
 #define NULLCHECK_AND_FREE(ptr) { \
@@ -75,6 +87,15 @@ struct SLALMSCalculator {
   int32_t*  signal_sign_buffer;       /* 信号の符号を記録したバッファ */
   uint32_t  signal_sign_buffer_pos;   /* バッファ参照位置 */
   uint32_t  signal_sign_buffer_size;  /* バッファサイズ（2の冪） */
+};
+
+/* 最適ブロック分割探索ハンドル */
+struct SLAOptimalBlockPartitionEstimator {
+  uint32_t  max_num_nodes;      /* ノード数                 */
+  double**  adjacency_matrix;   /* 隣接行列                 */
+  double*   cost;               /* 最小コスト               */
+  uint32_t* path;               /* パス経路                 */
+  uint8_t*  used_flag;          /* 各ノードの使用状態フラグ */
 };
 
 /*（標本）自己相関の計算 */
@@ -155,7 +176,8 @@ SLAPredictorApiResult SLALPCCalculator_CalculatePARCORCoefDouble(
   }
 
   /* 計算成功時は結果をコピー */
-  memcpy(parcor_coef, lpc->parcor_coef, sizeof(double) * (order + 1));
+  /* parcor_coef と lpc->parcor_coef が同じ場所を指しているときもあるのでmemmove */
+  memmove(parcor_coef, lpc->parcor_coef, sizeof(double) * (order + 1));
 
   return SLAPREDICTOR_APIRESULT_OK;
 }
@@ -283,6 +305,8 @@ static SLAPredictorError LPC_CalculateAutoCorrelation(
     for (i_sample = delay_time; i_sample < num_sample; i_sample++) {
       auto_corr[delay_time] += data[i_sample] * data[i_sample - delay_time];
     }
+    assert(!isnan(auto_corr[delay_time]));
+    assert(!isinf(auto_corr[delay_time]));
     /* 平均を取ってはいけない */
   }
 
@@ -316,7 +340,7 @@ static SLAPredictorApiResult SLALPCCalculator_CalculateVarianceRatio(
 
 /* 入力データとPARCOR係数からサンプルあたりの推定符号長を求める */
 SLAPredictorApiResult SLALPCCalculator_EstimateCodeLength(
-    const double* data, uint32_t num_samples,
+    const double* data, uint32_t num_samples, uint32_t bits_par_sample,
     const double* parcor_coef, uint32_t order,
     double* length_per_sample)
 {
@@ -334,8 +358,20 @@ SLAPredictorApiResult SLALPCCalculator_EstimateCodeLength(
   /* log2(パワー平均)の計算 */
   log2_mean_res_power = 0.0f;
   for (smpl = 0; smpl < num_samples; smpl++) {
-    log2_mean_res_power += (double)data[smpl] * data[smpl];
+    log2_mean_res_power += data[smpl] * data[smpl];
   }
+  /* 整数PCMの振幅に変換（doubleの密度保障） */
+  log2_mean_res_power *= pow(2, 2 * (bits_par_sample - 1));
+  if (fabs(log2_mean_res_power) <= FLT_MIN) {
+    /* 無音だった場合は符号長を0とする */
+    *length_per_sample = 0.0;
+    return SLAPREDICTOR_APIRESULT_OK;
+  } else if (log2_mean_res_power < num_samples) {
+    /* 限りなく無音に近い場合は、1サンプルあたり1ビットで符号化できることを期待する */
+    *length_per_sample = 1.0f / 8;
+    return SLAPREDICTOR_APIRESULT_OK;
+  }
+  assert(log2_mean_res_power > num_samples);
   log2_mean_res_power = SLAUtility_Log2(log2_mean_res_power) - SLAUtility_Log2(num_samples);
 
   /* sum(log2(1-parcor * parcor))の計算 */
@@ -349,7 +385,11 @@ SLAPredictorApiResult SLALPCCalculator_EstimateCodeLength(
   /* →サンプルあたりの最小のビット数が得られる */
   *length_per_sample
     = BETA_CONST_FOR_LAPLACE_DIST + 0.5f * (log2_mean_res_power + log2_var_ratio);
+  /* デバッグのしやすさのため、8で割ってバイト単位に換算 */
+  *length_per_sample /= 8;
 
+  assert((*length_per_sample) > 0);
+  
   return SLAPREDICTOR_APIRESULT_OK;
 }
 
@@ -910,4 +950,283 @@ SLAPredictorApiResult SLALMSCalculator_SynthesizeInt32(
 {
   return SLALMSCalculator_ProcessCore(nlms,
       num_coef, output, (int32_t *)residual, num_samples, 0);
+}
+
+/* 最大分割数計算 */
+/* 用語 "ノード" が外に出るのを嫌ったため関数化 */
+uint32_t SLAOptimalEncodeEstimator_CalculateMaxNumPartitions(
+    uint32_t max_num_samples, uint32_t delta_num_samples)
+{
+  return SLAOPTIMALENCODEESTIMATOR_CALCULATE_NUM_NODES(max_num_samples, delta_num_samples);
+}
+
+/* 探索ハンドルの作成 */
+struct SLAOptimalBlockPartitionEstimator* SLAOptimalEncodeEstimator_Create(
+    uint32_t max_num_samples, uint32_t delta_num_samples)
+{
+  uint32_t i, tmp_max_num_nodes;
+  struct SLAOptimalBlockPartitionEstimator* oee;
+
+  /* 引数チェック */
+  if (max_num_samples < delta_num_samples) {
+    return NULL;
+  }
+
+  oee = malloc(sizeof(struct SLAOptimalBlockPartitionEstimator));
+
+  /* 最大ノード数の計算 */
+  tmp_max_num_nodes 
+    = SLAOPTIMALENCODEESTIMATOR_CALCULATE_NUM_NODES(max_num_samples, delta_num_samples);
+  oee->max_num_nodes = tmp_max_num_nodes;
+
+  /* 領域確保 */
+  oee->adjacency_matrix = (double **)malloc(sizeof(double *) * tmp_max_num_nodes);
+  oee->cost             = (double *)malloc(sizeof(double) * tmp_max_num_nodes);
+  oee->path             = (uint32_t *)malloc(sizeof(uint32_t) * tmp_max_num_nodes);
+  oee->used_flag        = (uint8_t *)malloc(sizeof(uint8_t) * tmp_max_num_nodes);
+  for (i = 0; i < tmp_max_num_nodes; i++) {
+    oee->adjacency_matrix[i] = (double *)malloc(sizeof(double) * tmp_max_num_nodes);
+  }
+
+  return oee;
+}
+
+/* 探索ハンドルの作成 */
+void SLAOptimalEncodeEstimator_Destroy(struct SLAOptimalBlockPartitionEstimator* oee)
+{
+  uint32_t i;
+  if (oee != NULL) {
+    for (i = 0; i < oee->max_num_nodes; i++) {
+      NULLCHECK_AND_FREE(oee->adjacency_matrix[i]);
+    }
+    NULLCHECK_AND_FREE(oee->adjacency_matrix);
+    NULLCHECK_AND_FREE(oee->cost);
+    NULLCHECK_AND_FREE(oee->path);
+    NULLCHECK_AND_FREE(oee->used_flag);
+    NULLCHECK_AND_FREE(oee);
+  }
+}
+
+/* ダイクストラ法により最短経路を求める */
+static SLAPredictorApiResult SLAOptimalEncodeEstimator_ApplyDijkstraMethod(
+    struct SLAOptimalBlockPartitionEstimator* oee, 
+    uint32_t num_nodes, uint32_t start_node, uint32_t goal_node,
+    double* min_cost)
+{
+  uint32_t  i;
+  double    min;
+  uint32_t  target;
+
+  /* 引数チェック */
+  if (oee == NULL || min_cost == NULL) {
+    return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
+  }
+  if (num_nodes > oee->max_num_nodes) {
+    return SLAPREDICTOR_APIRESULT_EXCEED_MAX_ORDER;
+  }
+
+  /* フラグと経路をクリア, 距離は巨大値に設定 */
+  for (i = 0; i < oee->max_num_nodes; i++) {
+    oee->used_flag[i] = 0;
+    oee->path[i]      = 0xFFFFFFFFUL;
+    oee->cost[i]      = SLAOPTIMALENCODEESTIMATOR_DIJKSTRA_BIGWEIGHT;
+  }
+
+  /* ダイクストラ法実行 */
+  oee->cost[start_node] = 0.0f;
+  while (1) {
+    /* まだ未確定のノードから最も距離（重み）が小さいノードを
+     * その地点の最小距離として確定 */
+    min = SLAOPTIMALENCODEESTIMATOR_DIJKSTRA_BIGWEIGHT;
+    for (i = 0; i < num_nodes; i++) {
+      if ((oee->used_flag[i] == 0) && (oee->cost[i] < min)) {
+        min     = oee->cost[i];
+        target  = i;
+      }
+    }
+
+    /* 最短経路が確定 */
+    if (target == goal_node) {
+      break;
+    }
+
+    /* 現在確定したノードから、直接繋がっており、かつ、未確定の
+     * ノードに対して、現在確定したノードを経由した時の距離を計算し、
+     * 今までの距離よりも小さければ距離と経路を修正 */
+    for (i = 0; i < num_nodes; i++) {
+      if (oee->cost[i] > (oee->adjacency_matrix[target][i] + oee->cost[target])) {
+        oee->cost[i]  = oee->adjacency_matrix[target][i] + oee->cost[target];
+        oee->path[i]  = target;
+      }
+    }
+
+    /* 現在注目しているノードを確定に変更 */
+    oee->used_flag[target] = 1;
+  }
+
+  /* 最小距離のセット */
+  *min_cost = oee->cost[goal_node];
+
+  return SLAPREDICTOR_APIRESULT_OK;
+}
+
+/* （デバッグ用）隣接行列と結果の表示 */
+void SLAOptimalEncodeEstimator_PrettyPrint(
+    const struct SLAOptimalBlockPartitionEstimator* oee,
+    uint32_t num_nodes, uint32_t start_node, uint32_t goal_node)
+{
+  uint32_t i, j, tmp_node;
+
+  printf("----- ");
+  for (i = 0; i < num_nodes; i++) {
+    printf("%5d ", i);
+  }
+  printf("\n");
+  for (i = 0; i < num_nodes; i++) {
+    printf("%5d ", i);
+    for (j = 0; j < num_nodes; j++) {
+      if (oee->adjacency_matrix[i][j] != SLAOPTIMALENCODEESTIMATOR_DIJKSTRA_BIGWEIGHT) {
+        printf("%5d ", (int32_t)(oee->adjacency_matrix[i][j]));
+      } else {
+        printf("----- ");
+      }
+    }
+    printf("\n");
+  }
+
+  /* 最適パスの表示 */
+  tmp_node = goal_node;
+  printf("%d ", tmp_node);
+  while (tmp_node != start_node) {
+    tmp_node = oee->path[tmp_node];
+    printf("<- %d ", tmp_node);
+  }
+  printf("\n");
+
+  /* 最小コストの表示 */
+  printf("Min Cost: %e \n", oee->cost[goal_node]);
+}
+
+/* 最適なブロック分割の探索 */
+SLAPredictorApiResult SLAOptimalEncodeEstimator_SearchOptimalBlockPartitions(
+    struct SLAOptimalBlockPartitionEstimator* oee, 
+    struct SLALPCCalculator* lpcc,
+    const double* const* data, uint32_t num_channels, uint32_t num_samples,
+    uint32_t min_num_block_samples, uint32_t delta_num_samples, uint32_t max_num_block_samples,
+    uint32_t bits_par_sample, uint32_t parcor_order, 
+    uint32_t* optimal_num_partitions, uint32_t* optimal_block_partition)
+{
+  uint32_t  i, j, ch;
+  uint32_t  num_nodes;
+  double    min_code_length;
+  uint32_t  tmp_optimal_num_partitions, tmp_node;
+
+  /* 引数チェック */
+  if (oee == NULL || lpcc == NULL || data == NULL
+      || optimal_num_partitions == NULL
+      || optimal_block_partition == NULL) {
+    return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* 隣接行列次元（ノード数）の計算 */
+  num_nodes = SLAOPTIMALENCODEESTIMATOR_CALCULATE_NUM_NODES(num_samples, delta_num_samples);
+
+  /* 最大ノード数を超えている */
+  if (num_nodes > oee->max_num_nodes) {
+    return SLAPREDICTOR_APIRESULT_EXCEED_MAX_ORDER;
+  }
+
+  /* 隣接行列のセット */
+  /* (i,j)要素は、i * delta_num_samples から j * delta_num_samples まで
+   * エンコードした時の推定符号長が入る */
+  for (i = 0; i < num_nodes; i++) {
+    for (j = 0; j < num_nodes; j++) {
+      if (j > i) {
+        double    estimated_code_length, code_length;
+        uint32_t  num_block_samples  = (j - i) * delta_num_samples;
+        uint32_t  sample_offset      = i * delta_num_samples;
+
+        /* min_num_block_samplesでは端点で飛び出る場合があるので調節 */
+        num_block_samples           = SLAUTILITY_MIN(num_block_samples, num_samples - sample_offset);
+
+        /* ブロックサイズが範囲外だった場合は巨大値をセットして次へ */
+        if ((num_block_samples < min_num_block_samples)
+            || (num_block_samples > max_num_block_samples)) {
+          oee->adjacency_matrix[i][j] = SLAOPTIMALENCODEESTIMATOR_DIJKSTRA_BIGWEIGHT;
+          continue;
+        }
+
+        /* 全チャンネルの符号長を計算 */
+        estimated_code_length = 0.0f;
+        for (ch = 0; ch < num_channels; ch++) {
+          /* PARCOR係数を求める */
+          if (SLALPCCalculator_CalculatePARCORCoefDouble(lpcc, 
+                &data[ch][sample_offset], num_block_samples,
+                lpcc->parcor_coef, parcor_order) != SLAPREDICTOR_APIRESULT_OK) {
+            return SLAPREDICTOR_APIRESULT_FAILED_TO_CALCULATION;
+          }
+          /* 1サンプルあたりの推定符号長の計算 */
+          if (SLALPCCalculator_EstimateCodeLength(
+                &data[ch][sample_offset],
+                num_block_samples, bits_par_sample,
+                lpcc->parcor_coef, parcor_order, &code_length) != SLAPREDICTOR_APIRESULT_OK) {
+            return SLAPREDICTOR_APIRESULT_FAILED_TO_CALCULATION;
+          }
+          estimated_code_length += num_block_samples * code_length;
+        }
+        /* ブロックヘッダサイズを加算 */
+        estimated_code_length += SLAOPTIMALENCODEESTIMATOR_ESTIMATE_BLOCK_SIZE;
+        /* パス増加時のペナルティを付加 */
+        /* 補足）重要。ブロックを小さく分割した場合のペナルティになる */
+        estimated_code_length += SLAOPTIMALENCODEESTIMATOR_LONGPATH_PENALTY;
+
+        /* 隣接行列にセット */
+        oee->adjacency_matrix[i][j] = estimated_code_length;
+      } else {
+        /* その他の要素は巨大値で埋める */
+        oee->adjacency_matrix[i][j] = SLAOPTIMALENCODEESTIMATOR_DIJKSTRA_BIGWEIGHT;
+      }
+    }
+  }
+
+  /* ダイクストラ法を実行 */
+  if (SLAOptimalEncodeEstimator_ApplyDijkstraMethod(oee,
+        num_nodes, 0, num_nodes - 1, &min_code_length) != SLAPREDICTOR_APIRESULT_OK) {
+    return SLAPREDICTOR_APIRESULT_FAILED_TO_CALCULATION;
+  }
+
+  /* 結果の解釈 */
+  /* ゴールから開始位置まで逆順に辿り、まずはパスの長さを求める */
+  tmp_optimal_num_partitions = 0;
+  tmp_node = num_nodes - 1;
+  while (tmp_node != 0) {
+    /* ノードの巡回順路は昇順になっているはず */
+    assert(tmp_node > oee->path[tmp_node]);
+    tmp_node = oee->path[tmp_node];
+    tmp_optimal_num_partitions++;
+  }
+
+  /* 再度辿り、分割サイズ情報をセットしていく */
+  tmp_node = num_nodes - 1;
+  for (i = 0; i < tmp_optimal_num_partitions; i++) {
+    uint32_t  num_block_samples = (tmp_node - oee->path[tmp_node]) * delta_num_samples;
+    uint32_t  sample_offset = oee->path[tmp_node] * delta_num_samples;
+    num_block_samples = SLAUTILITY_MIN(num_block_samples, num_samples - sample_offset);
+
+    /* クリッピングしたブロックサンプル数をセット */
+    optimal_block_partition[tmp_optimal_num_partitions - i - 1] = num_block_samples;
+    tmp_node = oee->path[tmp_node];
+  }
+
+  /* 分割数の設定 */
+  *optimal_num_partitions = tmp_optimal_num_partitions;
+
+  /*
+  for (i = 0; i < *optimal_num_partitions; i++) {
+    printf("%d: %d \n", i, optimal_block_partition[i]);
+  }
+  printf("Estimated length: %e \n", min_code_length);
+  */
+
+  return SLAPREDICTOR_APIRESULT_OK;
 }

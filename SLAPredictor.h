@@ -15,6 +15,9 @@ struct SLALongTermCalculator;
 /* LMS計算ハンドル */
 struct SLALMSCalculator;
 
+/* 最適ブロック分割探索ハンドル */
+struct SLAOptimalBlockPartitionEstimator;
+
 /* API結果型 */
 typedef enum SLAPredictorApiResultTag {
   SLAPREDICTOR_APIRESULT_OK,                     /* OK */
@@ -43,8 +46,8 @@ SLAPredictorApiResult SLALPCCalculator_CalculatePARCORCoefDouble(
 
 /* 入力データとPARCOR係数からサンプルあたりの推定符号長を求める */
 SLAPredictorApiResult SLALPCCalculator_EstimateCodeLength(
-    const double* data, uint32_t num_samples,
-    const double* parcor_coef, uint32_t order,
+    const double* data, uint32_t num_samples, uint32_t bits_par_sample,
+    const double* parcor_coef, uint32_t order, 
     double* length_per_sample);
 
 /* 入力データとPARCOR係数から残差パワーを求める */
@@ -116,6 +119,26 @@ SLAPredictorApiResult SLALMSCalculator_PredictInt32(
 SLAPredictorApiResult SLALMSCalculator_SynthesizeInt32(
     struct SLALMSCalculator* nlms, uint32_t num_coef,
     const int32_t* residual, uint32_t num_samples, int32_t* output);
+
+/* 探索ハンドルの作成 */
+struct SLAOptimalBlockPartitionEstimator* SLAOptimalEncodeEstimator_Create(
+    uint32_t max_num_samples, uint32_t delta_num_samples);
+
+/* 最適なブロック分割の探索ハンドルの作成 */
+void SLAOptimalEncodeEstimator_Destroy(struct SLAOptimalBlockPartitionEstimator* oee);
+
+/* 最適なブロック分割の探索 */
+SLAPredictorApiResult SLAOptimalEncodeEstimator_SearchOptimalBlockPartitions(
+    struct SLAOptimalBlockPartitionEstimator* oee, 
+    struct SLALPCCalculator* lpcc,
+    const double* const* data, uint32_t num_channels, uint32_t num_samples,
+    uint32_t min_num_block_samples, uint32_t delta_num_samples, uint32_t max_num_block_samples,
+    uint32_t bits_par_sample, uint32_t parcor_order, 
+    uint32_t* optimal_num_partitions, uint32_t* optimal_block_partition);
+
+/* 最大分割数の取得 */
+uint32_t SLAOptimalEncodeEstimator_CalculateMaxNumPartitions(
+    uint32_t max_num_samples, uint32_t delta_num_samples);
 
 #ifdef __cplusplus
 }
