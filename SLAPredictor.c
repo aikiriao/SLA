@@ -291,23 +291,32 @@ static SLAPredictorError LPC_CalculateAutoCorrelation(
     const double* data, uint32_t num_sample,
     double* auto_corr, uint32_t order)
 {
-  uint32_t i_sample, delay_time;
+  uint32_t smpl, lag;
+  double   tmp;
 
   /* 引数チェック */
   if (data == NULL || auto_corr == NULL) {
     return SLAPREDICTOR_ERROR_INVALID_ARGUMENT;
   }
 
-  /* （標本）自己相関の計算 */
-  for (delay_time = 0; delay_time < order; delay_time++) {
-    auto_corr[delay_time] = 0.0f;
-    /* 係数が0以上の時のみ和を取る */
-    for (i_sample = delay_time; i_sample < num_sample; i_sample++) {
-      auto_corr[delay_time] += data[i_sample] * data[i_sample - delay_time];
+  /* 係数初期化 */
+  for (lag = 0; lag < order; lag++) {
+    auto_corr[lag] = 0.0f;
+  }
+
+  /* 次数の代わりにデータ側のラグに注目した自己相関係数計算 */
+  for (smpl = 0; smpl <= num_sample - order; smpl++) {
+    tmp = data[smpl];
+    /* 同じラグを持ったデータ積和を取る */
+    for (lag = 0; lag < order; lag++) {
+      auto_corr[lag] += tmp * data[smpl + lag];
     }
-    assert(!isnan(auto_corr[delay_time]));
-    assert(!isinf(auto_corr[delay_time]));
-    /* 平均を取ってはいけない */
+  }
+  for (; smpl < num_sample; smpl++) {
+    tmp = data[smpl];
+    for (lag = 0; lag < num_sample - smpl; lag++) {
+      auto_corr[lag] += tmp * data[smpl + lag];
+    }
   }
 
   return SLAPREDICTOR_ERROR_OK;
