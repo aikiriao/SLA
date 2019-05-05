@@ -862,10 +862,10 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
     int32_t* original_signal, int32_t* residual,
     uint32_t num_samples, uint8_t is_predict)
 {
-  uint32_t smpl, i;
-  uint32_t signal_sign_buffer_mask;
-  int64_t predict;
-  int32_t residual_sign_index;
+  uint32_t  smpl, i;
+  uint32_t  signal_sign_buffer_mask;
+  int64_t   predict;
+  int32_t   residual_sign_index;
   /* Sign-Sign LMSの係数更新量テーブル */
   /* 補足）残差と入力信号の符号から更新量が決まるので更新量を全てキャッシュしておく */
   static const int32_t sslms_delta_table[3][3] = {
@@ -873,6 +873,11 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
     { /*  0 * -1 */                                        0, /*  0 *  0 */ 0, /*  0 *  1 */                                        0 },
     { /*  1 * -1 */ -(1 << (31 - SLALMS_DELTA_WEIGHT_SHIFT)), /*  1 *  0 */ 0, /*  1 *  1 */    1 << (31 - SLALMS_DELTA_WEIGHT_SHIFT) }
   };
+
+  /* 引数チェック */
+  if (nlms == NULL || original_signal == NULL || residual == NULL) {
+    return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
+  }
 
   /* 符号バッファの初期化 */
   for (smpl = 0; smpl < num_coef; smpl++) {
@@ -886,11 +891,6 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
   nlms->signal_sign_buffer_pos  = num_coef;
   /* バッファサイズは2の冪なので-1してマスクを作る */
   signal_sign_buffer_mask       = nlms->signal_sign_buffer_size - 1;
-
-  /* 引数チェック */
-  if (nlms == NULL || original_signal == NULL || residual == NULL) {
-    return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
-  }
 
   /* 次数チェック */
   if (num_coef > nlms->max_num_coef) {
@@ -908,6 +908,7 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
     memcpy(original_signal, residual, sizeof(int32_t) * num_samples);
   }
 
+  /* フィルタ処理実行 */
   for (smpl = num_coef; smpl < num_samples; smpl++) {
     /* 予測 */
     predict = (1UL << 30);  /* 丸め誤差回避 */
@@ -932,7 +933,8 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
     nlms->signal_sign_buffer[nlms->signal_sign_buffer_pos]  = SLAUTILITY_SIGN(original_signal[smpl]) + 1;
     residual_sign_index                                     = SLAUTILITY_SIGN(residual[smpl]) + 1;
     for (i = 0; i < num_coef; i++) {
-      int32_t signal_sign_index = nlms->signal_sign_buffer[(nlms->signal_sign_buffer_pos - i - 1) & signal_sign_buffer_mask];
+      const uint32_t buffer_pos = (nlms->signal_sign_buffer_pos - i - 1) & signal_sign_buffer_mask;
+      int32_t signal_sign_index = nlms->signal_sign_buffer[buffer_pos];
       nlms->coef[i] += sslms_delta_table[residual_sign_index][signal_sign_index];
     }
 
