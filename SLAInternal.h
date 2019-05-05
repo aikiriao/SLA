@@ -10,7 +10,7 @@
 #define SLA_MIN_BLOCK_NUM_SAMPLES                   2048                    /* 最小ブロックサイズ                       */
 #define SLA_SEARCH_BLOCK_NUM_SAMPLES_DELTA          1024                    /* ブロックサイズ探索時のブロックサイズ増分 */
 #define SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT          5                       /* プレエンファシスのシフト量               */
-#define SLALMS_DELTA_WEIGHT_SHIFT                   9                       /* LMSの更新量の固定小数値の右シフト量      */
+#define SLALMS_DELTA_WEIGHT_SHIFT                   7                       /* LMSの更新量の固定小数値の右シフト量      */
 /* パスの長さに対して与えるペナルティサイズ[byte]
  * 補足）分割を増やすと以下の要因でサイズが増える
  *  1. ブロック先頭における残差の収束
