@@ -918,6 +918,92 @@ static void testSLAOptimalEncodeEstimator_DijkstraTest(void* obj)
   }
 }
 
+/* リファレンスとなる低速な自己相関計算関数 */
+static void LPC_CalculateAutoCorrelationReference(
+    const double* data, uint32_t num_sample,
+    double* auto_corr, uint32_t order)
+{
+  uint32_t smpl, lag;
+
+  /* （標本）自己相関の計算 */
+  for (lag = 0; lag < order; lag++) {
+    auto_corr[lag] = 0.0f;
+    /* 係数が0以上の時のみ和を取る */
+    for (smpl = lag; smpl < num_sample; smpl++) {
+      auto_corr[lag] += data[smpl] * data[smpl - lag];
+    }
+  }
+}
+
+/* 自己相関係数計算テスト */
+void testLPC_CalculateAutoCorrelationTest(void* obj)
+{
+  /* 判定精度 */
+#define FLOAT_ERROR_EPISILON 1.0e-8
+
+
+  TEST_UNUSED_PARAMETER(obj);
+
+  {
+    const uint32_t NUM_SAMPLES  = 256;
+    const uint32_t MAX_ORDER    = 256;
+    /* テスト対象の波形を生成する関数配列 */
+    static const GenerateWaveFunction test_waves[] = {
+      testLPCUtility_GenerateSilence,
+      testLPCUtility_GenerateConstant,
+      testLPCUtility_GenerateNegativeConstant,
+      testLPCUtility_GenerateSineWave,
+      testLPCUtility_GenerateWhiteNoize,
+      testLPCUtility_GenerateNyquistOsc,
+    };
+    const uint32_t num_test_waves = sizeof(test_waves) / sizeof(test_waves[0]);
+    uint32_t test_no, lag, is_ok;
+    double* data;
+    double* corr_ref;
+    double* corr;
+
+    /* 領域割り当て */
+    data = (double *)malloc(sizeof(double) * NUM_SAMPLES);
+    corr_ref = (double *)malloc(sizeof(double) * MAX_ORDER);
+    corr = (double *)malloc(sizeof(double) * MAX_ORDER);
+
+    /* 全波形に対してテスト */
+    for (test_no = 0; test_no < num_test_waves; test_no++) {
+      /* データ生成 */
+      test_waves[test_no](data, NUM_SAMPLES);
+
+      /* リファレンス関数で自己相関計算 */
+      LPC_CalculateAutoCorrelationReference(
+          data, NUM_SAMPLES, corr_ref, MAX_ORDER);
+
+      /* 実際に使用する関数で自己相関計算 */
+      Test_AssertEqual(
+          LPC_CalculateAutoCorrelation(
+            data, NUM_SAMPLES, corr, MAX_ORDER),
+          SLAPREDICTOR_ERROR_OK);
+
+      /* 一致確認 */
+      is_ok = 1;
+      for (lag = 0; lag < MAX_ORDER; lag++) {
+        if (fabs(corr[lag] - corr_ref[lag]) > FLOAT_ERROR_EPISILON) {
+          printf("[%d] ref:%e vs get:%e \n", lag, corr_ref[lag], corr[lag]);
+          is_ok = 0;
+          break;
+        }
+      }
+      Test_AssertEqual(is_ok, 1);
+
+    }
+
+    /* 領域開放 */
+    free(data);
+    free(corr_ref);
+    free(corr);
+  }
+
+#undef FLOAT_ERROR_EPISILON
+}
+
 void testSLAPredictor_Setup(void)
 {
   struct TestSuite *suite
@@ -929,4 +1015,5 @@ void testSLAPredictor_Setup(void)
   Test_AddTest(suite, testLPCLongTermCalculator_CalculateCoefTest);
   Test_AddTest(suite, testLPCLongTermCalculator_PitchDetectTest);
   Test_AddTest(suite, testSLAOptimalEncodeEstimator_DijkstraTest);
+  Test_AddTest(suite, testLPC_CalculateAutoCorrelationTest);
 }

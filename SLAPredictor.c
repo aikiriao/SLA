@@ -100,7 +100,7 @@ struct SLAOptimalBlockPartitionEstimator {
 
 /*（標本）自己相関の計算 */
 static SLAPredictorError LPC_CalculateAutoCorrelation(
-    const double* data, uint32_t num_sample,
+    const double* data, uint32_t num_samples,
     double* auto_corr, uint32_t order);
 
 /* Levinson-Durbin再帰計算 */
@@ -288,35 +288,63 @@ static SLAPredictorError LPC_LevinsonDurbinRecursion(
 
 /*（標本）自己相関の計算 */
 static SLAPredictorError LPC_CalculateAutoCorrelation(
-    const double* data, uint32_t num_sample,
+    const double* data, uint32_t num_samples,
     double* auto_corr, uint32_t order)
 {
-  uint32_t smpl, lag;
-  double   tmp;
+  uint32_t i, k;
 
   /* 引数チェック */
   if (data == NULL || auto_corr == NULL) {
     return SLAPREDICTOR_ERROR_INVALID_ARGUMENT;
   }
 
-  /* 係数初期化 */
-  for (lag = 0; lag < order; lag++) {
-    auto_corr[lag] = 0.0f;
+  /* 次数（最大ラグ）がサンプル数を超えている */
+  if (order > num_samples) {
+    return SLAPREDICTOR_ERROR_INVALID_ARGUMENT;
   }
 
-  /* 次数の代わりにデータ側のラグに注目した自己相関係数計算 */
-  for (smpl = 0; smpl <= num_sample - order; smpl++) {
-    tmp = data[smpl];
-    /* 同じラグを持ったデータ積和を取る */
-    for (lag = 0; lag < order; lag++) {
-      auto_corr[lag] += tmp * data[smpl + lag];
-    }
+  /* 自己相関初期化 */
+  for (i = 0; i < order; i++) {
+    auto_corr[i] = 0.0f;
   }
-  for (; smpl < num_sample; smpl++) {
-    tmp = data[smpl];
-    for (lag = 0; lag < num_sample - smpl; lag++) {
-      auto_corr[lag] += tmp * data[smpl + lag];
+
+  /* 0次は係数は単純計算 */
+  for (i = 0; i < num_samples; i++) {
+    auto_corr[0] += data[i] * data[i];
+  }
+
+  /* 1次以降の係数 */
+  for (k = 1; k < order; k++) {
+    uint32_t i, l, L;
+
+    /* 積和をまとめて行うことができる連続した項の集まりの数 */
+    if ((3 * k) < num_samples) {
+      L = 1 + (num_samples - (3 * k)) / (k << 1);
+    } else {
+      L = 0;
     }
+
+    /* printf("k:%d L:%d \n", k, L); */
+
+    /* まとめて積和を行える分を積和 */
+    for (i = 0; i < k; i++) {
+      for (l = 0; l < L; l++) {
+        /* 一般的に k < L なので、ループはこの順 */
+        const uint32_t lk2 = (l * k) << 1;
+        auto_corr[k] += data[lk2 + k + i] * (data[lk2 + i] + data[lk2 + (k << 1) + i]);
+        /* printf("l:%d A[%d] += x[%d] * (x[%d] + x[%d]) l:%d i:%d\n", l, k, lk2 + k + i, lk2 + i, lk2 + (k << 1) + i, l, i); */
+      }
+    }
+
+    /* まとめられない項を単純に積和（TODO:この中でも更にまとめることはできる...） */
+    {
+      const uint32_t Lk2 = (L * k) << 1;
+      for (i = 0; i < (num_samples - Lk2 - k); i++) {
+        auto_corr[k] += data[Lk2 + k + i] * data[Lk2 + i];
+        /* printf("l:%d A[%d] += x[%d] * x[%d] i:%d \n", l, k, Lk2 + k + i, Lk2 + i, i); */
+      }
+    }
+
   }
 
   return SLAPREDICTOR_ERROR_OK;
@@ -890,6 +918,7 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
   }
   nlms->signal_sign_buffer_pos  = num_coef;
   /* バッファサイズは2の冪なので-1してマスクを作る */
+  assert(SLAUTILITY_IS_POWERED_OF_2(nlms->signal_sign_buffer_size));
   signal_sign_buffer_mask       = nlms->signal_sign_buffer_size - 1;
 
   /* 次数チェック */
