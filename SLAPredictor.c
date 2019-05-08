@@ -316,33 +316,28 @@ static SLAPredictorError LPC_CalculateAutoCorrelation(
   /* 1次以降の係数 */
   for (k = 1; k < order; k++) {
     uint32_t i, l, L;
+    const uint32_t k2 = k << 1;
+    uint32_t Lk2;
 
-    /* 積和をまとめて行うことができる連続した項の集まりの数 */
+    /* 被乗数が重複している連続した項の集まりの数 */
     if ((3 * k) < num_samples) {
-      L = 1 + (num_samples - (3 * k)) / (k << 1);
+      L = 1 + (num_samples - (3 * k)) / k2;
     } else {
       L = 0;
     }
+    Lk2 = L * k2;
 
-    /* printf("k:%d L:%d \n", k, L); */
-
-    /* まとめて積和を行える分を積和 */
+    /* 被乗数が重複している分を積和 */
     for (i = 0; i < k; i++) {
-      for (l = 0; l < L; l++) {
+      for (l = 0; l < Lk2; l += k2) {
         /* 一般的に k < L なので、ループはこの順 */
-        const uint32_t lk2 = (l * k) << 1;
-        auto_corr[k] += data[lk2 + k + i] * (data[lk2 + i] + data[lk2 + (k << 1) + i]);
-        /* printf("l:%d A[%d] += x[%d] * (x[%d] + x[%d]) l:%d i:%d\n", l, k, lk2 + k + i, lk2 + i, lk2 + (k << 1) + i, l, i); */
+        auto_corr[k] += data[l + k + i] * (data[l + i] + data[l + k2 + i]);
       }
     }
 
-    /* まとめられない項を単純に積和（TODO:この中でも更にまとめることはできる...） */
-    {
-      const uint32_t Lk2 = (L * k) << 1;
-      for (i = 0; i < (num_samples - Lk2 - k); i++) {
-        auto_corr[k] += data[Lk2 + k + i] * data[Lk2 + i];
-        /* printf("l:%d A[%d] += x[%d] * x[%d] i:%d \n", l, k, Lk2 + k + i, Lk2 + i, i); */
-      }
+    /* 残りの項を単純に積和（TODO:この中でも更にまとめることはできる...） */
+    for (i = 0; i < (num_samples - Lk2 - k); i++) {
+      auto_corr[k] += data[Lk2 + k + i] * data[Lk2 + i];
     }
 
   }
