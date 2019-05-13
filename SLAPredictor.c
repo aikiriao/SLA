@@ -291,7 +291,7 @@ static SLAPredictorError LPC_CalculateAutoCorrelation(
     const double* data, uint32_t num_samples,
     double* auto_corr, uint32_t order)
 {
-  uint32_t i, k;
+  uint32_t i, lag;
 
   /* 引数チェック */
   if (data == NULL || auto_corr == NULL) {
@@ -314,30 +314,30 @@ static SLAPredictorError LPC_CalculateAutoCorrelation(
   }
 
   /* 1次以降の係数 */
-  for (k = 1; k < order; k++) {
+  for (lag = 1; lag < order; lag++) {
     uint32_t i, l, L;
-    const uint32_t k2 = k << 1;
-    uint32_t Lk2;
+    uint32_t Llag2;
+    const uint32_t lag2 = lag << 1;
 
     /* 被乗数が重複している連続した項の集まりの数 */
-    if ((3 * k) < num_samples) {
-      L = 1 + (num_samples - (3 * k)) / k2;
+    if ((3 * lag) < num_samples) {
+      L = 1 + (num_samples - (3 * lag)) / lag2;
     } else {
       L = 0;
     }
-    Lk2 = L * k2;
+    Llag2 = L * lag2;
 
     /* 被乗数が重複している分を積和 */
-    for (i = 0; i < k; i++) {
-      for (l = 0; l < Lk2; l += k2) {
-        /* 一般的に k < L なので、ループはこの順 */
-        auto_corr[k] += data[l + k + i] * (data[l + i] + data[l + k2 + i]);
+    for (i = 0; i < lag; i++) {
+      for (l = 0; l < Llag2; l += lag2) {
+        /* 一般的に lag < L なので、ループはこの順 */
+        auto_corr[lag] += data[l + lag + i] * (data[l + i] + data[l + lag2 + i]);
       }
     }
 
     /* 残りの項を単純に積和（TODO:この中でも更にまとめることはできる...） */
-    for (i = 0; i < (num_samples - Lk2 - k); i++) {
-      auto_corr[k] += data[Lk2 + k + i] * data[Lk2 + i];
+    for (i = 0; i < (num_samples - Llag2 - lag); i++) {
+      auto_corr[lag] += data[Llag2 + lag + i] * data[Llag2 + i];
     }
 
   }
