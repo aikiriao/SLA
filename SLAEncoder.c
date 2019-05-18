@@ -703,6 +703,7 @@ SLAApiResult SLAEncoder_EncodeWhole(struct SLAEncoder* encoder,
     }
 
     printf("sample:%d / %d \r", encode_offset_sample, num_samples);
+    fflush(stdout);
   }
 
   /* 最大ブロックサイズとブロック数を反映（ヘッダの再度書き込み） */

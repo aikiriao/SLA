@@ -495,6 +495,7 @@ SLAApiResult SLADecoder_DecodeWhole(struct SLADecoder* decoder,
     printf("size:%d / %d sample:%d / %d \r", 
         decode_offset_byte, data_size, 
         decode_offset_sample, header.num_samples);
+    fflush(stdout);
   }
 
   /* 出力サンプル数を記録 */
