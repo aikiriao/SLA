@@ -26,7 +26,7 @@ int encode(const char* in_filename, const char* out_filename)
   config.max_num_channels         = 2;
   config.max_num_block_samples    = 16384;
   config.max_parcor_order         = 48;
-  config.max_longterm_order       = 1;    /* 現在1以外対応していない... */
+  config.max_longterm_order       = 5;
   config.max_lms_order_par_filter = 20;
   if ((encoder = SLAEncoder_Create(&config)) == NULL) {
     fprintf(stderr, "Failed to create encoder handle. \n");
@@ -112,7 +112,7 @@ int decode(const char* in_filename, const char* out_filename)
   config.max_num_channels         = 2;
   config.max_num_block_samples    = 16384;
   config.max_parcor_order         = 48;
-  config.max_longterm_order       = 1;
+  config.max_longterm_order       = 5;
   config.max_lms_order_par_filter = 32;
   config.enable_crc_check         = 1;
   if ((decoder = SLADecoder_Create(&config)) == NULL) {

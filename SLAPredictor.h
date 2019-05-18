@@ -80,8 +80,8 @@ SLAPredictorApiResult SLALPCSynthesizer_SynthesizeByParcorCoefInt32(
 
 /* ロングターム計算ハンドルの作成 */
 struct SLALongTermCalculator* SLALongTermCalculator_Create(
-    uint32_t fft_size, 
-    uint32_t max_pitch_period, uint32_t max_num_pitch_candidates);
+    uint32_t fft_size, uint32_t max_pitch_period, 
+    uint32_t max_num_pitch_candidates, uint32_t max_num_taps);
 
 /* ロングターム計算ハンドルの破棄 */
 void SLALongTermCalculator_Destroy(struct SLALongTermCalculator* ltm_calculator);

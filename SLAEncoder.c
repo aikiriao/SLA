@@ -96,7 +96,7 @@ struct SLAEncoder* SLAEncoder_Create(const struct SLAEncoderConfig* config)
   /* ハンドル領域作成 */
   encoder->lpcc   = SLALPCCalculator_Create(config->max_parcor_order);
   encoder->lpcs   = SLALPCSynthesizer_Create(config->max_parcor_order);
-  encoder->ltc    = SLALongTermCalculator_Create(SLAUtility_RoundUp2Powered(config->max_num_block_samples * 2), SLALONGTERM_MAX_PERIOD, SLALONGTERM_NUM_PITCH_CANDIDATES);
+  encoder->ltc    = SLALongTermCalculator_Create(SLAUtility_RoundUp2Powered(config->max_num_block_samples * 2), SLALONGTERM_MAX_PERIOD, SLALONGTERM_NUM_PITCH_CANDIDATES, config->max_longterm_order);
   encoder->nlmsc  = SLALMSCalculator_Create(config->max_lms_order_par_filter);
   encoder->oee    = SLAOptimalEncodeEstimator_Create(config->max_num_block_samples, SLA_SEARCH_BLOCK_NUM_SAMPLES_DELTA);
   

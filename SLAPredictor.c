@@ -9,9 +9,6 @@
 #include <float.h>
 #include <assert.h>
 
-/* ロングタームの最大タップ数 */
-#define LPC_LONGTERM_MAX_NUM_TAP (1)
-
 /* 最大自己相関値からどの比率のピークをピッチとして採用するか */
 /* TODO:ピッチが取りたいのではなく純粋に相関除去したいから1.0fでいいかも */
 #define LPC_LONGTERM_PITCH_RATIO_VS_MAX_THRESHOULD    (1.0f)
@@ -72,11 +69,15 @@ struct SLALPCSynthesizer {
 
 /* ロングターム計算ハンドル */
 struct SLALongTermCalculator {
-  uint32_t  fft_size;                 /* FFTサイズ          */
-  double*   auto_corr;                /* 自己相関           */
-  uint32_t  max_num_pitch_candidates; /* 最大のピッチ候補数 */
-  uint32_t  max_pitch_period;         /* 最大ピッチ         */
-  uint32_t* pitch_candidate;          /* ピッチ候補配列     */
+  uint32_t            fft_size;                 /* FFTサイズ                */
+  uint32_t            max_num_taps;             /* 最大タップ数             */
+  double*             auto_corr;                /* 自己相関                 */
+  uint32_t            max_num_pitch_candidates; /* 最大のピッチ候補数       */
+  uint32_t            max_pitch_period;         /* 最大ピッチ               */
+  uint32_t*           pitch_candidate;          /* ピッチ候補配列           */
+  struct SLALESolver* lesolver;                 /* 連立一次方程式ソルバー   */
+  double**            R_mat;                    /* 自己相関行列             */
+  double*             ltm_coef_vec;             /* ロングターム係数ベクトル */
 };
 
 /* LMS計算ハンドル */
@@ -598,8 +599,10 @@ SLAPredictorApiResult SLALPCSynthesizer_SynthesizeByParcorCoefInt32(
 
 /* ロングターム計算ハンドルの作成 */
 struct SLALongTermCalculator* SLALongTermCalculator_Create(
-    uint32_t fft_size, uint32_t max_pitch_period, uint32_t max_num_pitch_candidates)
+    uint32_t fft_size, uint32_t max_pitch_period, 
+    uint32_t max_num_pitch_candidates, uint32_t max_num_taps)
 {
+  uint32_t dim;
   struct SLALongTermCalculator* ltm;
 
   /* 2のべき乗数になっているかチェック */
@@ -614,6 +617,13 @@ struct SLALongTermCalculator* SLALongTermCalculator_Create(
   ltm->max_num_pitch_candidates = max_num_pitch_candidates;
   ltm->max_pitch_period         = max_pitch_period;
   ltm->pitch_candidate          = (uint32_t *)malloc(sizeof(uint32_t) * max_num_pitch_candidates);
+  ltm->max_num_taps             = max_num_taps;
+  ltm->lesolver                 = SLALESolver_Create(max_num_taps);
+  ltm->ltm_coef_vec             = (double *)malloc(sizeof(double) * max_num_taps);
+  ltm->R_mat                    = (double **)malloc(sizeof(double *) * max_num_taps);
+  for (dim = 0; dim < max_num_taps; dim++) {
+    ltm->R_mat[dim] = (double *)malloc(sizeof(double) * max_num_taps);
+  }
 
   return ltm;
 }
@@ -622,8 +632,15 @@ struct SLALongTermCalculator* SLALongTermCalculator_Create(
 void SLALongTermCalculator_Destroy(struct SLALongTermCalculator* ltm_calculator)
 {
   if (ltm_calculator != NULL) {
+    uint32_t dim;
     NULLCHECK_AND_FREE(ltm_calculator->auto_corr);
     NULLCHECK_AND_FREE(ltm_calculator->pitch_candidate);
+    SLALESolver_Destroy(ltm_calculator->lesolver);
+    NULLCHECK_AND_FREE(ltm_calculator->ltm_coef_vec);
+    for (dim = 0; dim < ltm_calculator->max_num_taps; dim++) {
+      NULLCHECK_AND_FREE(ltm_calculator->R_mat[dim]);
+    }
+    NULLCHECK_AND_FREE(ltm_calculator->R_mat);
     free(ltm_calculator);
   }
 }
@@ -650,7 +667,7 @@ SLAPredictorApiResult SLALongTermCalculator_CalculateCoef(
   }
 
   /* 最大のタップ数を越えている */
-  if (num_taps > LPC_LONGTERM_MAX_NUM_TAP) {
+  if (num_taps > ltm_calculator->max_num_taps) {
     return SLAPREDICTOR_APIRESULT_EXCEED_MAX_ORDER;
   }
 
@@ -762,12 +779,54 @@ SLAPredictorApiResult SLALongTermCalculator_CalculateCoef(
     }
   }
 
-  /* 制限: 今はタップ1つのみに制限 */
-  assert(num_taps == 1);
-  /* ピッチに該当するインデックス */
-  *pitch_period = ltm_calculator->pitch_candidate[i];
-  /* ロングターム係数 */
-  ltm_coef[0]   = auto_corr[ltm_calculator->pitch_candidate[i]] / auto_corr[0];
+  /* ロングターム係数の導出 */
+  {
+    uint32_t  tmp_pitch_period = ltm_calculator->pitch_candidate[i];
+    uint32_t  j, k;
+    double    ltm_coef_sum;
+
+    /* 自己相関のギャップが対称にならんだ行列 */
+    /* (i,j)要素にギャップ|i-j|の自己相関値が入っている */
+    for (j = 0; j < num_taps; j++) {
+      for (k = 0; k < num_taps; k++) {
+        uint32_t lag = (j >= k) ? (j - k) : (k - j);
+        ltm_calculator->R_mat[j][k] = auto_corr[lag];
+      }
+    }
+
+    /* 中心においてピッチ周期の自己相関が入ったベクトル */
+    for (j = 0; j < num_taps; j++) {
+      ltm_calculator->ltm_coef_vec[j]
+        = auto_corr[j + tmp_pitch_period - num_taps / 2];
+    }
+
+    /* 求解 */
+    /* 精度を求めるため、2回反復改良 */
+    if (SLALESolver_Solve(ltm_calculator->lesolver,
+          (const double **)ltm_calculator->R_mat, ltm_calculator->ltm_coef_vec, num_taps, 2) != 0) {
+      return SLAPREDICTOR_APIRESULT_FAILED_TO_CALCULATION;
+    }
+
+    /* 得られた係数の収束条件を確認 */
+    ltm_coef_sum = 0.0f;
+    for (j = 0; j < num_taps; j++) {
+      ltm_coef_sum += fabs(ltm_calculator->ltm_coef_vec[j]);
+    }
+    if (ltm_coef_sum >= 1.0f) {
+      /* 確実に安定する係数をセット: タップ数1と同様の状態に修正 */
+      for (j = 0; j < num_taps; j++) {
+        ltm_calculator->ltm_coef_vec[j] = 0.0f;
+      }
+       ltm_calculator->ltm_coef_vec[num_taps / 2]
+         = auto_corr[tmp_pitch_period] / auto_corr[0];
+    }
+
+    /* 結果を出力にセット */
+    *pitch_period = tmp_pitch_period;
+    for (j = 0; j < num_taps; j++) {
+      ltm_coef[j] = ltm_calculator->ltm_coef_vec[j];
+    }
+  }
 
   return SLAPREDICTOR_APIRESULT_OK;
 }

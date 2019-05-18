@@ -551,15 +551,18 @@ static void testLPCLongTermCalculator_CalculateCoefTest(void* obj)
     { 1, 8192, 16, 2 * 8192, 1024, 20, testLPCUtility_GenerateSineWave },
     { 1, 8192, 16, 2 * 8192, 1024, 20, testLPCUtility_GenerateWhiteNoize },
     { 1, 8192, 16, 2 * 8192, 1024, 20, testLPCUtility_GenerateNyquistOsc },
-#if 0
-    /* 今はタップ数1のみ */
     { 3, 8192, 16, 2 * 8192, 1024, 20, testLPCUtility_GenerateSilence },
     { 3, 8192, 16, 2 * 8192, 1024, 20, testLPCUtility_GenerateConstant },
     { 3, 8192, 16, 2 * 8192, 1024, 20, testLPCUtility_GenerateNegativeConstant },
     { 3, 8192, 16, 2 * 8192, 1024, 20, testLPCUtility_GenerateSineWave },
     { 3, 8192, 16, 2 * 8192, 1024, 20, testLPCUtility_GenerateWhiteNoize },
     { 3, 8192, 16, 2 * 8192, 1024, 20, testLPCUtility_GenerateNyquistOsc },
-#endif
+    { 5, 8192, 16, 2 * 8192, 1024, 20, testLPCUtility_GenerateSilence },
+    { 5, 8192, 16, 2 * 8192, 1024, 20, testLPCUtility_GenerateConstant },
+    { 5, 8192, 16, 2 * 8192, 1024, 20, testLPCUtility_GenerateNegativeConstant },
+    { 5, 8192, 16, 2 * 8192, 1024, 20, testLPCUtility_GenerateSineWave },
+    { 5, 8192, 16, 2 * 8192, 1024, 20, testLPCUtility_GenerateWhiteNoize },
+    { 5, 8192, 16, 2 * 8192, 1024, 20, testLPCUtility_GenerateNyquistOsc },
   };
   const uint32_t num_test_case = sizeof(test_case) / sizeof(test_case[0]);
 
@@ -570,7 +573,8 @@ static void testLPCLongTermCalculator_CalculateCoefTest(void* obj)
     double ltm_coef_sum;
     test_case_p = &test_case[i];
     lpcltmc     = SLALongTermCalculator_Create(
-                    test_case->fft_size, test_case_p->max_pitch_num_samples, test_case_p->num_taps);
+                    test_case->fft_size, test_case_p->max_pitch_num_samples,
+                    test_case_p->num_taps, test_case_p->num_taps);
     ltm_coef        = (double *)malloc(sizeof(double) * test_case_p->num_taps);
     int32_ltm_coef  = (int32_t *)malloc(sizeof(int32_t) * test_case_p->num_taps);
     data            = (double *)malloc(sizeof(double) * test_case_p->num_samples);
@@ -586,6 +590,11 @@ static void testLPCLongTermCalculator_CalculateCoefTest(void* obj)
     /* 波形を固定小数化 */
     for (smpl = 0; smpl < test_case_p->num_samples; smpl++) {
       int32_data[smpl] = (int32_t)(round((double)data[smpl] * (1UL << test_case->data_bit_width)));
+    }
+
+    /* 係数をクリア */
+    for (j = 0; j < test_case_p->num_taps; j++) {
+      ltm_coef[j] = 0.0f;
     }
 
     /* 解析 */
@@ -618,7 +627,7 @@ static void testLPCLongTermCalculator_CalculateCoefTest(void* obj)
       ltm_coef_sum = 0.0f;
       for (j = 0; j < test_case_p->num_taps; j++) {
         ltm_coef_sum += fabs(ltm_coef[j]);
-        /* printf("%e, ", ltm_coef[j]); */
+        /* printf("%d %e, ", j, ltm_coef[j]); */
       }
       /* printf("Pitch:%d \n", pitch_period); */
       Test_AssertCondition(ltm_coef_sum < 1.0f);
@@ -704,7 +713,7 @@ static void testLPCLongTermCalculator_PitchDetectTest(void* obj)
 
   data        = (double *)malloc(sizeof(double) * NUM_SAMPLES);
   int32_data  = (int32_t *)malloc(sizeof(int32_t) * NUM_SAMPLES);
-  lpcltmc     = SLALongTermCalculator_Create(NUM_SAMPLES * 2, NUM_SAMPLES, 20);
+  lpcltmc     = SLALongTermCalculator_Create(NUM_SAMPLES * 2, NUM_SAMPLES, 20, 1);
 
   for (i = 0; i < num_test_case; i++) {
     /* 波形生成 */
