@@ -3,6 +3,26 @@
 #include <math.h>
 #include <stddef.h>
 #include <assert.h>
+#include <string.h>
+#include <float.h>
+
+/* NULLチェックと領域解放 */
+#define NULLCHECK_AND_FREE(ptr) { \
+  if ((ptr) != NULL) {            \
+    free(ptr);                    \
+    (ptr) = NULL;                 \
+  }                               \
+}
+
+/* 連立１次方程式ソルバー */
+struct SLALESolver {
+  uint32_t  max_dim;        /* 最大次元数 */
+  double*   row_scale;      /* 各行要素のスケール（1/行最大値） */
+  uint32_t* change_index;   /* 入れ替えインデックス */
+  double*   x_vec;          /* 解ベクトル   */
+  double*   err_vec;        /* 誤差ベクトル */
+  double**  A_lu;           /* LU分解した係数行列 */
+};
 
 /* CRC16(IBM:多項式0x8005を反転した0xa001によるもの) の計算用テーブル */
 static const uint16_t CRC16_IBM_BYTE_TABLE[0x100] = { 
@@ -434,4 +454,230 @@ void SLAUtility_DeEmphasisInt32(int32_t* data, uint32_t num_samples, int32_t coe
     data[smpl] += SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(data[smpl - 1] * coef_numer, coef_shift);
   }
 
+}
+
+/* 連立一次方程式ソルバーの作成 */
+struct SLALESolver* SLALESolver_Create(uint32_t max_dim)
+{
+  uint32_t dim;
+  struct SLALESolver* lesolver;
+
+  lesolver     = (struct SLALESolver *)malloc(sizeof(struct SLALESolver));
+  lesolver->max_dim      = max_dim;
+  lesolver->row_scale    = (double *)malloc(sizeof(double) * max_dim);
+  lesolver->change_index = (uint32_t *)malloc(sizeof(uint32_t) * max_dim);
+  lesolver->x_vec        = (double *)malloc(sizeof(double) * max_dim);
+  lesolver->err_vec      = (double *)malloc(sizeof(double) * max_dim);
+  lesolver->A_lu         = (double **)malloc(sizeof(double*) * max_dim);
+
+  for (dim = 0; dim < max_dim; dim++) {
+    lesolver->A_lu[dim] = (double *)malloc(sizeof(double) * max_dim);
+  }
+
+  return lesolver;
+}
+
+/* 連立一次方程式ソルバーの破棄 */
+void SLALESolver_Destroy(struct SLALESolver* lesolver)
+{
+  if (lesolver != NULL) {
+    uint32_t dim;
+    for (dim = 0; dim < lesolver->max_dim; dim++) {
+      NULLCHECK_AND_FREE(lesolver->A_lu[dim]);
+    }
+    NULLCHECK_AND_FREE(lesolver->A_lu);
+    NULLCHECK_AND_FREE(lesolver->row_scale);
+    NULLCHECK_AND_FREE(lesolver->change_index);
+    NULLCHECK_AND_FREE(lesolver->x_vec);
+    NULLCHECK_AND_FREE(lesolver->err_vec);
+  }
+}
+
+/* LU分解 */
+static int32_t SLALESolver_LUDecomposion(
+    double* const* A, uint32_t dim, uint32_t *change_index, double *row_scale)
+{
+  uint32_t row, col, k, max_index;
+  double max, denom_elem, sum;
+
+  assert(A != NULL);
+  assert(change_index != NULL);
+  assert(row_scale != NULL);
+
+  /* 各行のスケール（1/行最大値）を計算 */
+  for (row = 0; row < dim; row++) {
+    max = 0.0f;
+    for (col = 0; col < dim; col++) {
+      if (fabs(A[row][col]) > max) {
+        max = fabs(A[row][col]);
+      }
+    }
+    if (fabs(max) <= FLT_EPSILON) {
+      /* 行列が特異 */
+      return -1;
+    }
+    row_scale[row] = 1.0f / max;
+  }
+
+  /* Croutのアルゴリズム */
+  for (col = 0; col < dim; col++) {
+    /* β要素（L,下三角行列要素）の計算 */
+    for (row = 0; row < col; row++) {
+      sum = A[row][col];              /* Aのこの要素は1回しか参照されない */
+      for (k = 0; k < row; k++) {
+        sum -= A[row][k] * A[k][col]; /* この時Aはin-placeでα*βに置き換わっている */
+      }
+      A[row][col] = sum;
+    }
+
+    /* α（U,下三角行列要素）の計算 */
+    max = 0.0f;
+    for (row = col; row < dim; row++) {
+      sum = A[row][col];              /* Aのこの要素は1回しか参照されない */
+      for (k = 0; k < col; ++k) {
+        sum -= A[row][k] * A[k][col];
+      }
+      A[row][col] = sum;
+      
+      /* ピボットを選択 */
+      if ((row_scale[row] * fabs(sum)) >= max) {
+        max       = (row_scale[row] * fabs(sum));
+        max_index = row;
+      }
+    }
+
+    /* 行交換 
+     * 注意）これにより結果のAは求めるべき行列の行を交換したものに変化する。*/
+    if (col != max_index) {
+      for (k = 0; k < dim; k++) {
+        double tmp;
+        /* スワップ */
+        tmp = A[max_index][k];
+        A[max_index][k] = A[col][k];
+        A[col][k] = tmp;
+      }
+      /* スケールの入れ替え */
+      row_scale[max_index] = row_scale[col];
+    }
+    change_index[col] = max_index;
+
+    /* 部分ピボット選択の範囲で特異 
+     * 補足）完全にすれば改善される場合がある */
+    if (fabs(A[col][col]) <= FLT_EPSILON) {
+      /* 行列が特異 */
+      return -1;
+    }
+
+    /* ピボット要素で割り、α（U,下三角行列要素）を完成させる */
+    if (col != (dim - 1)) {
+      denom_elem = 1.0f / A[col][col];
+      for (row = col + 1; row < dim; row++) {
+        A[row][col] *= denom_elem;
+      }
+    }
+  }
+
+  return 0;
+}
+
+/* 前進代入と後退代入により求解 */
+static void SLALESolver_LUDecomposionForwardBack(
+    double const* const* A, double* b, uint32_t dim, const uint32_t* change_index)
+{
+  uint32_t  row, col, pivod, nonzero_row;
+  double    sum;
+
+  assert(A != NULL);
+  assert(b != NULL);
+  assert(change_index != NULL);
+
+  /* 前進代入 */
+  nonzero_row = 0;
+  for (row = 0; row < dim; row++) {
+    /* 交換を元に戻す */
+    pivod     = change_index[row];
+    sum       = b[pivod];
+    b[pivod]  = b[row];
+
+    if (nonzero_row != 0) {
+      /* bの非零要素から積和演算 */
+      for (col = nonzero_row; col < row; col++) {
+        sum -= A[row][col] * b[col];  /* α*b */
+      }
+    } else if (sum != 0.0f) {
+      nonzero_row = row;
+    }
+
+    b[row] = sum;
+  }
+
+  /* 後退代入 */
+  for (row = dim - 1; row < dim; row--) {
+    sum = b[row];
+    for (col = row + 1; col < dim; col++) {
+      sum -= A[row][col] * b[col];  /* β*b */
+    }
+
+    /* 解を代入 */
+    b[row] = sum / A[row][row];
+    if (row == 0) {
+      break;
+    }
+  }
+}
+
+/* LU分解（反復改良付き） */
+int32_t SLALESolver_Solve(
+    struct SLALESolver* lesolver,
+    const double** A, double* b, uint32_t dim, uint32_t itration_count)
+{
+  uint32_t row, col, count;
+  int32_t  ret;
+  long double error;  /* 残差はなるべく高精度 */
+
+  assert(lesolver != NULL);
+  assert(A != NULL);
+  assert(b != NULL);
+
+  /* LU分解用のAを作成 */
+  for (row = 0; row < dim; row++) {
+    memcpy(lesolver->A_lu[row], A[row], sizeof(double) * dim);
+  }
+
+  /* bベクトルのコピー */
+  memcpy(lesolver->x_vec, b, sizeof(double) * dim);
+
+  /* 一旦、解xを求める */
+  ret = SLALESolver_LUDecomposion(
+      lesolver->A_lu, dim, lesolver->change_index, lesolver->row_scale);
+  if (ret != 0) {
+    return -1;
+  }
+  SLALESolver_LUDecomposionForwardBack(
+      (double const* const*)lesolver->A_lu, lesolver->x_vec, dim, lesolver->change_index);
+
+  /* 反復改良 */
+  for (count = 0; count < itration_count; count++) {
+    for (row = 0; row < dim; row++) {
+      error = -b[row];
+      for (col = 0; col < dim; col++) {
+        error += A[row][col] * lesolver->x_vec[col];
+      }
+      lesolver->err_vec[row] = (double)error;
+    }
+
+    /* 残差について解く */
+    SLALESolver_LUDecomposionForwardBack(
+        (double const* const*)lesolver->A_lu, lesolver->err_vec, dim, lesolver->change_index);
+
+    /* 残差を引く */
+    for (row = 0; row < dim; row++) {
+      lesolver->x_vec[row] -= lesolver->err_vec[row];
+    }
+  }
+
+  /* 改良した結果をbにコピー */
+  memcpy(b, lesolver->x_vec, sizeof(double) * dim);
+ 
+  return 0;
 }

@@ -88,6 +88,19 @@ void SLAUtility_PreEmphasisInt32(int32_t* data, uint32_t num_samples, int32_t co
 /* デエンファシス(int32) */
 void SLAUtility_DeEmphasisInt32(int32_t* data, uint32_t num_samples, int32_t coef_shift);
 
+/* 連立一次方程式ソルバーの作成 */
+struct SLALESolver* SLALESolver_Create(uint32_t max_dim);
+
+/* 連立一次方程式ソルバーの破棄 */
+void SLALESolver_Destroy(struct SLALESolver* lesolver);
+
+/* LU分解（反復改良付き） 計算成功時は0を、失敗時はそれ以外を返す */
+/* A:係数行列(dim x dim), b:右辺ベクトル(dim) -> 出力は解ベクトル, 
+ * dim:次元, iteration_count:反復改良回数 */
+int32_t SLALESolver_Solve(
+    struct SLALESolver* lesolver,
+    const double** A, double* b, uint32_t dim, uint32_t itration_count);
+
 #ifdef __cplusplus
 }
 #endif
