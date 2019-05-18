@@ -550,7 +550,6 @@ SLAPredictorApiResult SLALPCSynthesizer_SynthesizeByParcorCoefInt32(
     const int32_t* parcor_coef, uint32_t order, int32_t* output)
 {
   uint32_t ord, samp;
-  int64_t* forward_residual;
   int64_t* backward_residual;
   int64_t  mul_temp;                /* 乗算がオーバーフローする可能性があるため */
   const int32_t half = (1UL << 30); /* 丸め誤差軽減のための加算定数 = 0.5 */
@@ -562,7 +561,6 @@ SLAPredictorApiResult SLALPCSynthesizer_SynthesizeByParcorCoefInt32(
   }
 
   /* オート変数にポインタをコピー */
-  forward_residual = (int64_t *)lpc->forward_residual_work;
   backward_residual = (int64_t *)lpc->backward_residual_work;
 
   /* 次数チェック */
@@ -572,27 +570,26 @@ SLAPredictorApiResult SLALPCSynthesizer_SynthesizeByParcorCoefInt32(
 
   /* 誤差をゼロ初期化 */
   for (ord = 0; ord < lpc->max_order + 1; ord++) {
-    forward_residual[ord] = backward_residual[ord] = 0;
+    backward_residual[ord] = 0;
   }
 
-  /* TODO: 1乗算型に変える */
   /* 格子型フィルタによる音声合成 */
   for (samp = 0; samp < num_samples; samp++) {
     /* 誤差入力 */
-    forward_residual[order] = (int64_t)residual[samp];
+    int64_t forward_residual = residual[samp];
     for (ord = order; ord >= 1; ord--) {
       /* 前向き誤差計算 */
       mul_temp = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(parcor_coef[ord] * backward_residual[ord - 1] + half, 31);
-      forward_residual[ord - 1] = forward_residual[ord] + mul_temp;
+      forward_residual += mul_temp;
       /* 後ろ向き誤差計算 */
-      mul_temp = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(parcor_coef[ord] * forward_residual[ord - 1] + half, 31);
+      mul_temp = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(parcor_coef[ord] * forward_residual + half, 31);
       backward_residual[ord] = backward_residual[ord - 1] - mul_temp;
     }
     /* 合成信号 */
-    assert((forward_residual[0] <= INT32_MAX) && (forward_residual[0] >= INT32_MIN));
-    output[samp] = (int32_t)(forward_residual[0]);
+    assert((forward_residual <= INT32_MAX) && (forward_residual >= INT32_MIN));
+    output[samp] = (int32_t)(forward_residual);
     /* 後ろ向き誤差計算部にデータ入力 */
-    backward_residual[0] = forward_residual[0];
+    backward_residual[0] = forward_residual;
     /* printf("out: %08x(%8d) \n", output[samp], output[samp]); */
   }
 
@@ -808,7 +805,7 @@ SLAPredictorApiResult SLALongTerm_PredictInt32(
       predict += (int64_t)ltm_coef[j] * data[i + j - pitch_period - num_taps / 2];
     }
     predict = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31);
-    residual[i] = data[i] - (int64_t)predict;
+    residual[i] = data[i] - (int32_t)predict;
   }
 
   return SLAPREDICTOR_APIRESULT_OK;
