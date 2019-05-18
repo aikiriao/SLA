@@ -27,7 +27,6 @@
 #define SLAOPTIMALENCODEESTIMATOR_CALCULATE_NUM_NODES(num_samples, delta_num_samples) \
   ((((num_samples) + ((delta_num_samples) - 1)) / (delta_num_samples)) + 1)
 
-
 /* NULLチェックと領域解放 */
 #define NULLCHECK_AND_FREE(ptr) { \
   if ((ptr) != NULL) {            \
@@ -784,7 +783,7 @@ SLAPredictorApiResult SLALongTerm_PredictInt32(
 {
   uint32_t      i, j;
   const int32_t half    = (1UL << 30); /* 丸め用定数(0.5) */
-  int32_t       predict;
+  int64_t       predict;
 
   /* 引数チェック */
   if ((data == NULL) || (ltm_coef == NULL) || (residual == NULL)) {
@@ -804,12 +803,12 @@ SLAPredictorApiResult SLALongTerm_PredictInt32(
 
   /* ロングターム予測 */
   for (; i < num_samples; i++) {
-    predict = 0;
+    predict = half;
     for (j = 0; j < num_taps; j++) {
-      predict += (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(
-          (int64_t)ltm_coef[j] * data[i + j - pitch_period - num_taps / 2] + half, 31);
+      predict += (int64_t)ltm_coef[j] * data[i + j - pitch_period - num_taps / 2];
     }
-    residual[i] = data[i] - predict;
+    predict = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31);
+    residual[i] = data[i] - (int64_t)predict;
   }
 
   return SLAPREDICTOR_APIRESULT_OK;
@@ -823,7 +822,7 @@ SLAPredictorApiResult SLALongTerm_SynthesizeInt32(
 {
   uint32_t      i, j;
   const int32_t half    = (1UL << 30); /* 丸め用定数(0.5) */
-  int32_t       predict;
+  int64_t       predict;
 
   /* 引数チェック */
   if ((residual == NULL) || (ltm_coef == NULL) || (output == NULL)) {
@@ -843,12 +842,12 @@ SLAPredictorApiResult SLALongTerm_SynthesizeInt32(
 
   /* ロングターム予測 */
   for (; i < num_samples; i++) {
-    predict = 0;
+    predict = half;
     for (j = 0; j < num_taps; j++) {
-      predict += (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(
-          (int64_t)ltm_coef[j] * output[i + j - pitch_period - num_taps / 2] + half, 31);
+      predict += (int64_t)ltm_coef[j] * output[i + j - pitch_period - num_taps / 2];
     }
-    output[i] = residual[i] + predict;
+    predict = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31);
+    output[i] = residual[i] + (int32_t)predict;
   }
 
   return SLAPREDICTOR_APIRESULT_OK;
