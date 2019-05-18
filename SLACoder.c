@@ -27,14 +27,15 @@
 }
 /* ゴロム符号パラメータ取得 : 1以上であることを担保 */
 #define SLACODER_PARAMETER_GET(param_array, order) \
-  (SLAUTILITY_MAX(SLACODER_FIXED_FLOAT_TO_UINT32((param_array)[(order)]), 1))
+  (SLAUTILITY_MAX(SLACODER_FIXED_FLOAT_TO_UINT32((param_array)[(order)]), 1UL))
 /* Rice符号のパラメータ更新式 */
+/* 指数平滑平均により平均値を推定 */
 #define SOLARICE_PARAMETER_UPDATE(param_array, order, code) {\
   (param_array)[(order)] = (SLARecursiveRiceParameter)(119 * (param_array)[(order)] + 9 * SLACODER_UINT32_TO_FIXED_FLOAT(code) + (1UL << 6)) >> 7; \
 }
 /* Rice符号のパラメータ計算 2 ** ceil(log2(E(x)/2)) = E(x)/2の2の冪乗切り上げ */
 #define SOLARICE_CALCULATE_RICE_PARAMETER(param_array, order) \
-  SLAUtility_RoundUp2Powered(SLAUTILITY_MAX(SLACODER_FIXED_FLOAT_TO_UINT32((param_array)[(order)] >> 1), (uint32_t)1))
+  SLAUtility_RoundUp2Powered(SLAUTILITY_MAX(SLACODER_FIXED_FLOAT_TO_UINT32((param_array)[(order)] >> 1), 1UL))
 
 /* 再帰的ライス符号パラメータ型 */
 typedef uint32_t SLARecursiveRiceParameter;
