@@ -24,8 +24,8 @@
 #define SLAOPTIMALENCODEESTIMATOR_CALCULATE_NUM_NODES(num_samples, delta_num_samples) \
   ((((num_samples) + ((delta_num_samples) - 1)) / (delta_num_samples)) + 1)
 
-/* sign(x) * log2ceil(|x|) の計算 */
-#define SLALMS_SIGNED_LOG2CEIL(x) ((x == 0) ? 0 : (SLAUTILITY_SIGN(x) * (int32_t)SLAUtility_Log2Ceil((uint32_t)SLAUTILITY_ABS(x))))
+/* sign(x) * log2ceil(|x| + 1) の計算 */
+#define SLALMS_SIGNED_LOG2CEIL(x) (SLAUTILITY_SIGN(x) * (int32_t)SLAUtility_Log2Ceil((uint32_t)SLAUTILITY_ABS(x) + 1))
 
 /* NULLチェックと領域解放 */
 #define NULLCHECK_AND_FREE(ptr) { \
@@ -969,6 +969,7 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
   uint32_t  signal_sign_buffer_mask;
   int64_t   predict;
   int32_t   log2_residual_index;
+  const int32_t*  delta_table_p;
 
   /* 引数チェック */
   if (nlms == NULL || original_signal == NULL || residual == NULL) {
@@ -1029,11 +1030,12 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
     /* 係数更新 */
     /* 更新量テーブルのインデックスを計算 */
     log2_residual_index = SLALMS_SIGNED_LOG2CEIL(residual[smpl]) + 32;
-    nlms->signal_sign_buffer[nlms->signal_sign_buffer_pos]  = SLAUTILITY_SIGN(original_signal[smpl]) + 1;
+    nlms->signal_sign_buffer[nlms->signal_sign_buffer_pos] = SLAUTILITY_SIGN(original_signal[smpl]) + 1;
+    delta_table_p = logsignlms_delta_table[log2_residual_index];
     for (i = 0; i < num_coef; i++) {
       const uint32_t buffer_pos = (nlms->signal_sign_buffer_pos - i - 1) & signal_sign_buffer_mask;
       int32_t signal_sign_index = nlms->signal_sign_buffer[buffer_pos];
-      nlms->coef[i] += logsignlms_delta_table[log2_residual_index][signal_sign_index];
+      nlms->coef[i] += delta_table_p[signal_sign_index];
     }
 
     /* バッファ参照位置更新 */
