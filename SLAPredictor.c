@@ -24,6 +24,9 @@
 #define SLAOPTIMALENCODEESTIMATOR_CALCULATE_NUM_NODES(num_samples, delta_num_samples) \
   ((((num_samples) + ((delta_num_samples) - 1)) / (delta_num_samples)) + 1)
 
+/* sign(x) * log2ceil(|x|) の計算 */
+#define SLALMS_SIGNED_LOG2CEIL(x) ((x == 0) ? 0 : (SLAUTILITY_SIGN(x) * (int32_t)SLAUtility_Log2Ceil((uint32_t)SLAUTILITY_ABS(x))))
+
 /* NULLチェックと領域解放 */
 #define NULLCHECK_AND_FREE(ptr) { \
   if ((ptr) != NULL) {            \
@@ -112,6 +115,29 @@ static SLAPredictorError LPC_LevinsonDurbinRecursion(
 static SLAPredictorError LPC_CalculateCoef(
     struct SLALPCCalculator* lpc, 
     const double* data, uint32_t num_samples, uint32_t order);
+
+/* LMSの更新量テーブル */
+/* 補足）更新量はlog2(残差), 残差符号, 入力信号符号の3つで決まるから更新量を全てキャッシュする */
+#define DEFINE_LMS_DELTA_ENTRY(log2res, signres) \
+    { -(signres) * ((log2res) << (31 - SLALMS_DELTA_WEIGHT_SHIFT)), 0, (signres) * ((log2res) << (31 - SLALMS_DELTA_WEIGHT_SHIFT)) }
+static const int32_t logsignlms_delta_table[64][3] = {
+  DEFINE_LMS_DELTA_ENTRY(32, -1), DEFINE_LMS_DELTA_ENTRY(31, -1), DEFINE_LMS_DELTA_ENTRY(30, -1), DEFINE_LMS_DELTA_ENTRY(29, -1), 
+  DEFINE_LMS_DELTA_ENTRY(28, -1), DEFINE_LMS_DELTA_ENTRY(27, -1), DEFINE_LMS_DELTA_ENTRY(26, -1), DEFINE_LMS_DELTA_ENTRY(25, -1), 
+  DEFINE_LMS_DELTA_ENTRY(24, -1), DEFINE_LMS_DELTA_ENTRY(23, -1), DEFINE_LMS_DELTA_ENTRY(22, -1), DEFINE_LMS_DELTA_ENTRY(21, -1), 
+  DEFINE_LMS_DELTA_ENTRY(20, -1), DEFINE_LMS_DELTA_ENTRY(19, -1), DEFINE_LMS_DELTA_ENTRY(18, -1), DEFINE_LMS_DELTA_ENTRY(17, -1), 
+  DEFINE_LMS_DELTA_ENTRY(16, -1), DEFINE_LMS_DELTA_ENTRY(15, -1), DEFINE_LMS_DELTA_ENTRY(14, -1), DEFINE_LMS_DELTA_ENTRY(13, -1), 
+  DEFINE_LMS_DELTA_ENTRY(12, -1), DEFINE_LMS_DELTA_ENTRY(11, -1), DEFINE_LMS_DELTA_ENTRY(10, -1), DEFINE_LMS_DELTA_ENTRY( 9, -1), 
+  DEFINE_LMS_DELTA_ENTRY( 8, -1), DEFINE_LMS_DELTA_ENTRY( 7, -1), DEFINE_LMS_DELTA_ENTRY( 6, -1), DEFINE_LMS_DELTA_ENTRY( 5, -1), 
+  DEFINE_LMS_DELTA_ENTRY( 4, -1), DEFINE_LMS_DELTA_ENTRY( 3, -1), DEFINE_LMS_DELTA_ENTRY( 2, -1), DEFINE_LMS_DELTA_ENTRY( 1, -1), 
+  DEFINE_LMS_DELTA_ENTRY( 0,  1), DEFINE_LMS_DELTA_ENTRY( 1,  1), DEFINE_LMS_DELTA_ENTRY( 2,  1), DEFINE_LMS_DELTA_ENTRY( 3,  1),
+  DEFINE_LMS_DELTA_ENTRY( 4,  1), DEFINE_LMS_DELTA_ENTRY( 5,  1), DEFINE_LMS_DELTA_ENTRY( 6,  1), DEFINE_LMS_DELTA_ENTRY( 7,  1),
+  DEFINE_LMS_DELTA_ENTRY( 8,  1), DEFINE_LMS_DELTA_ENTRY( 9,  1), DEFINE_LMS_DELTA_ENTRY(10,  1), DEFINE_LMS_DELTA_ENTRY(11,  1),
+  DEFINE_LMS_DELTA_ENTRY(12,  1), DEFINE_LMS_DELTA_ENTRY(13,  1), DEFINE_LMS_DELTA_ENTRY(14,  1), DEFINE_LMS_DELTA_ENTRY(15,  1),
+  DEFINE_LMS_DELTA_ENTRY(16,  1), DEFINE_LMS_DELTA_ENTRY(17,  1), DEFINE_LMS_DELTA_ENTRY(18,  1), DEFINE_LMS_DELTA_ENTRY(19,  1),
+  DEFINE_LMS_DELTA_ENTRY(20,  1), DEFINE_LMS_DELTA_ENTRY(21,  1), DEFINE_LMS_DELTA_ENTRY(22,  1), DEFINE_LMS_DELTA_ENTRY(23,  1),
+  DEFINE_LMS_DELTA_ENTRY(24,  1), DEFINE_LMS_DELTA_ENTRY(25,  1), DEFINE_LMS_DELTA_ENTRY(26,  1), DEFINE_LMS_DELTA_ENTRY(27,  1),
+  DEFINE_LMS_DELTA_ENTRY(28,  1), DEFINE_LMS_DELTA_ENTRY(29,  1), DEFINE_LMS_DELTA_ENTRY(30,  1), DEFINE_LMS_DELTA_ENTRY(31,  1),
+};
 
 /* LPC係数計算ハンドルの作成 */
 struct SLALPCCalculator* SLALPCCalculator_Create(uint32_t max_order)
@@ -580,8 +606,7 @@ SLAPredictorApiResult SLALPCSynthesizer_SynthesizeByParcorCoefInt32(
     int64_t forward_residual = residual[samp];
     for (ord = order; ord >= 1; ord--) {
       /* 前向き誤差計算 */
-      mul_temp = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(parcor_coef[ord] * backward_residual[ord - 1] + half, 31);
-      forward_residual += mul_temp;
+      forward_residual += SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(parcor_coef[ord] * backward_residual[ord - 1] + half, 31);
       /* 後ろ向き誤差計算 */
       mul_temp = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(parcor_coef[ord] * forward_residual + half, 31);
       backward_residual[ord] = backward_residual[ord - 1] - mul_temp;
@@ -943,14 +968,7 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
   uint32_t  smpl, i;
   uint32_t  signal_sign_buffer_mask;
   int64_t   predict;
-  int32_t   residual_sign_index;
-  /* Sign-Sign LMSの係数更新量テーブル */
-  /* 補足）残差と入力信号の符号から更新量が決まるので更新量を全てキャッシュしておく */
-  static const int32_t sslms_delta_table[3][3] = {
-    { /* -1 * -1 */    1 << (31 - SLALMS_DELTA_WEIGHT_SHIFT), /* -1 *  0 */ 0, /* -1 *  1 */ -(1 << (31 - SLALMS_DELTA_WEIGHT_SHIFT)) },
-    { /*  0 * -1 */                                        0, /*  0 *  0 */ 0, /*  0 *  1 */                                        0 },
-    { /*  1 * -1 */ -(1 << (31 - SLALMS_DELTA_WEIGHT_SHIFT)), /*  1 *  0 */ 0, /*  1 *  1 */    1 << (31 - SLALMS_DELTA_WEIGHT_SHIFT) }
-  };
+  int32_t   log2_residual_index;
 
   /* 引数チェック */
   if (nlms == NULL || original_signal == NULL || residual == NULL) {
@@ -1009,12 +1027,13 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
     /* printf("%8d, %8d, %8d \n", residual[smpl], original_signal[smpl], (int32_t)predict); */
 
     /* 係数更新 */
+    /* 更新量テーブルのインデックスを計算 */
+    log2_residual_index = SLALMS_SIGNED_LOG2CEIL(residual[smpl]) + 32;
     nlms->signal_sign_buffer[nlms->signal_sign_buffer_pos]  = SLAUTILITY_SIGN(original_signal[smpl]) + 1;
-    residual_sign_index                                     = SLAUTILITY_SIGN(residual[smpl]) + 1;
     for (i = 0; i < num_coef; i++) {
       const uint32_t buffer_pos = (nlms->signal_sign_buffer_pos - i - 1) & signal_sign_buffer_mask;
       int32_t signal_sign_index = nlms->signal_sign_buffer[buffer_pos];
-      nlms->coef[i] += sslms_delta_table[residual_sign_index][signal_sign_index];
+      nlms->coef[i] += logsignlms_delta_table[log2_residual_index][signal_sign_index];
     }
 
     /* バッファ参照位置更新 */
