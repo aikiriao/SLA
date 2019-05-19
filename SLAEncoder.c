@@ -249,7 +249,6 @@ SLAApiResult SLAEncoder_EncodeHeader(
 }
 
 /* 指定されたサンプル数で窓を作成 */
-/* TODO:よくない。エンコーダで隠蔽しないで必要なものは全て引数で渡すように */
 static SLAApiResult SLAEncoder_MakeWindow(struct SLAEncoder* encoder, uint32_t num_samples)
 {
   assert(encoder != NULL);
@@ -276,7 +275,6 @@ static SLAApiResult SLAEncoder_MakeWindow(struct SLAEncoder* encoder, uint32_t n
 }
 
 /* チャンネル毎の処理を実行 */
-/* TODO:よくない。エンコーダで隠蔽しないで必要なものは全て引数で渡すように */
 static SLAApiResult SLAEncoder_ApplyChProcessing(struct SLAEncoder* encoder, uint32_t num_samples)
 {
   assert(encoder != NULL);
