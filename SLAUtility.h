@@ -28,7 +28,7 @@
 /* 符号付き32bit数値を符号なし32bit数値に一意変換 */
 #define SLAUTILITY_SINT32_TO_UINT32(sint) (((int32_t)(sint) <= 0) ? ((uint32_t)(-((sint) << 1))) : ((uint32_t)(((sint) << 1) - 1)))
 /* 符号なし32bit数値を符号付き32bit数値に一意変換 */
-#define SLAUTILITY_UINT32_TO_SINT32(uint) (((uint32_t)(uint) & 1) ? ((int32_t)((uint) >> 1) + 1) : (-(int32_t)((uint) >> 1)))
+#define SLAUTILITY_UINT32_TO_SINT32(uint) (-(int32_t)(((uint) >> 1) ^ -((int32_t)(uint) & 1)))
 /* 絶対値の取得 */
 #define SLAUTILITY_ABS(val)               (((val) > 0) ? (val) : -(val))
 
