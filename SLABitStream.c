@@ -107,6 +107,26 @@ static const uint32_t st_lowerbits_mask[33] = {
   0x1FFFFFFFUL, 0x3FFFFFFFUL, 0x7FFFFFFFUL, 0xFFFFFFFFUL
 };
 
+/* 0のラン長パターンテーブル（注意：上位ビットからのラン長） */
+static const uint8_t st_zerobit_runlength_table[0x100] = {
+  8, 7, 6, 6, 5, 5, 5, 5, 4, 4, 4, 4, 4, 4, 4, 4, 
+  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 
+  2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 
+  2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
 /* ファイルに対する一文字取得 */
 static SLABitStreamError SLABitStream_FGet(Stream* strm, int32_t* ch)
 {
@@ -597,6 +617,29 @@ END_OF_STREAM:
 
   /* 正常終了 */
   *val = tmp;
+  return SLABITSTREAM_APIRESULT_OK;
+}
+
+/* つぎの1にぶつかるまで読み込み、その間に読み込んだ0のランレングスを取得 */
+SLABitStreamApiResult SLABitStream_GetZeroRunLength(struct SLABitStream* stream, uint32_t* runlength)
+{
+  uint32_t  run;
+  uint8_t   bit;
+
+  /* 引数チェック */
+  if (stream == NULL || runlength == NULL) {
+    return SLABITSTREAM_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* ラン取得 */
+  run = 0;
+  SLABitStream_GetBit(stream, &bit);
+  while (bit == 0) {
+    run++;
+    SLABitStream_GetBit(stream, &bit);
+  }
+
+  *runlength = run;
   return SLABITSTREAM_APIRESULT_OK;
 }
 

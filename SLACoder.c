@@ -30,11 +30,11 @@
   (SLAUTILITY_MAX(SLACODER_FIXED_FLOAT_TO_UINT32((param_array)[(order)]), 1UL))
 /* Rice符号のパラメータ更新式 */
 /* 指数平滑平均により平均値を推定 */
-#define SOLARICE_PARAMETER_UPDATE(param_array, order, code) {\
+#define SLARICE_PARAMETER_UPDATE(param_array, order, code) {\
   (param_array)[(order)] = (SLARecursiveRiceParameter)(119 * (param_array)[(order)] + 9 * SLACODER_UINT32_TO_FIXED_FLOAT(code) + (1UL << 6)) >> 7; \
 }
 /* Rice符号のパラメータ計算 2 ** ceil(log2(E(x)/2)) = E(x)/2の2の冪乗切り上げ */
-#define SOLARICE_CALCULATE_RICE_PARAMETER(param_array, order) \
+#define SLARICE_CALCULATE_RICE_PARAMETER(param_array, order) \
   SLAUtility_RoundUp2Powered(SLAUTILITY_MAX(SLACODER_FIXED_FLOAT_TO_UINT32((param_array)[(order)] >> 1), 1UL))
 
 /* 再帰的ライス符号パラメータ型 */
@@ -197,18 +197,10 @@ static void SLARecursiveRice_PutQuotPart(
 static uint32_t SLARecursiveRice_GetQuotPart(struct SLABitStream* strm)
 {
   uint32_t  quot;
-  uint8_t   bit;
   
   assert(strm != NULL);
 
-  quot = 0;
-  while (1) {
-    SLABitStream_GetBit(strm, &bit);
-    if (bit != 0) {
-      break;
-    }
-    quot++;
-  } 
+  SLABitStream_GetZeroRunLength(strm, &quot);
 
   return quot;
 }
@@ -262,7 +254,7 @@ static void SLARecursiveRice_PutCode(
 
   reduced_val = val;
   for (i = 0; i < (num_params - 1); i++) {
-    param = SOLARICE_CALCULATE_RICE_PARAMETER(m_params, i);
+    param = SLARICE_CALCULATE_RICE_PARAMETER(m_params, i);
     /* 現在のパラメータ値よりも小さければ、符号化を行う */
     if (reduced_val < param) {
         /* 商部分としてはパラメータ段数 */
@@ -270,18 +262,18 @@ static void SLARecursiveRice_PutCode(
         /* 剰余部分 */
         SLARecursiveRice_PutRestPart(strm, reduced_val, param);
         /* パラメータ更新 */
-        SOLARICE_PARAMETER_UPDATE(m_params, i, reduced_val);
+        SLARICE_PARAMETER_UPDATE(m_params, i, reduced_val);
         break;
     }
     /* パラメータ更新 */
-    SOLARICE_PARAMETER_UPDATE(m_params, i, reduced_val);
+    SLARICE_PARAMETER_UPDATE(m_params, i, reduced_val);
     /* 現在のパラメータ値で減じる */
     reduced_val -= param;
   }
 
   /* 末尾のパラメータに達した */
   if (i == (num_params - 1)) {
-    uint32_t tail_param = SOLARICE_CALCULATE_RICE_PARAMETER(m_params, i);
+    uint32_t tail_param = SLARICE_CALCULATE_RICE_PARAMETER(m_params, i);
     uint32_t tail_quot  = i + reduced_val / tail_param;
     assert(SLAUTILITY_IS_POWERED_OF_2(tail_param));
     /* 商が大きい場合はガンマ符号を使用する */
@@ -293,7 +285,7 @@ static void SLARecursiveRice_PutCode(
     }
     SLARecursiveRice_PutRestPart(strm, reduced_val, tail_param);
     /* パラメータ更新 */
-    SOLARICE_PARAMETER_UPDATE(m_params, i, reduced_val);
+    SLARICE_PARAMETER_UPDATE(m_params, i, reduced_val);
   }
 
 }
@@ -315,19 +307,16 @@ static uint32_t SLARecursiveRice_GetCode(
 
   /* 得られたパラメータ段数までのパラメータを加算 */
   val = 0;
-  for (i = 0; i < num_params - 1; i++) {
-    if (i == quot) {
-      break;
-    }
-    val += SOLARICE_CALCULATE_RICE_PARAMETER(m_params, i);
+  for (i = 0; (i < quot) && (i < num_params - 1); i++) {
+    val += SLARICE_CALCULATE_RICE_PARAMETER(m_params, i);
   }
 
   if (quot < (num_params - 1)) {
     /* 指定したパラメータ段数で剰余部を取得 */
-    val += SLARecursiveRice_GetRestPart(strm, SOLARICE_CALCULATE_RICE_PARAMETER(m_params, i));
+    val += SLARecursiveRice_GetRestPart(strm, SLARICE_CALCULATE_RICE_PARAMETER(m_params, i));
   } else {
     /* 末尾のパラメータで取得 */
-    uint32_t tail_param = SOLARICE_CALCULATE_RICE_PARAMETER(m_params, i);
+    uint32_t tail_param = SLARICE_CALCULATE_RICE_PARAMETER(m_params, i);
     uint32_t tail_rest;
     if (quot == SLACODER_QUOTPART_THRESHOULD) {
       quot += SLAGamma_GetCode(strm);
@@ -340,8 +329,8 @@ static uint32_t SLARecursiveRice_GetCode(
   /* 補足）符号語が分かってからでないと更新できない */
   tmp_val = val;
   for (i = 0; (i <= quot) && (i < num_params); i++) {
-    param = SOLARICE_CALCULATE_RICE_PARAMETER(m_params, i);
-    SOLARICE_PARAMETER_UPDATE(m_params, i, tmp_val);
+    param = SLARICE_CALCULATE_RICE_PARAMETER(m_params, i);
+    SLARICE_PARAMETER_UPDATE(m_params, i, tmp_val);
     tmp_val -= param;
   }
 

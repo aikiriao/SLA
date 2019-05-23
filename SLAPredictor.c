@@ -1029,7 +1029,7 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
 
     /* 係数更新 */
     /* 更新量テーブルのインデックスを計算 */
-    log2_residual_index = SLALMS_SIGNED_LOG2CEIL(residual[smpl]) + 32;
+    log2_residual_index = SLALMS_SIGNED_LOG2CEIL(residual[smpl]) + 32;  /* 32を加算して [-32, 31] を [0, 63] の範囲にマップ */
     nlms->signal_sign_buffer[nlms->signal_sign_buffer_pos] = SLAUTILITY_SIGN(original_signal[smpl]) + 1;
     delta_table_p = logsignlms_delta_table[log2_residual_index];
     for (i = 0; i < num_coef; i++) {

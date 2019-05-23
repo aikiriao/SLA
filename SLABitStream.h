@@ -64,6 +64,9 @@ SLABitStreamApiResult SLABitStream_GetBit(struct SLABitStream* stream, uint8_t* 
 /* n_bits 取得（最大64bit）し、その値を右詰めして出力 */
 SLABitStreamApiResult SLABitStream_GetBits(struct SLABitStream* stream, uint32_t n_bits, uint64_t *val);
 
+/* つぎの1にぶつかるまで読み込み、その間に読み込んだ0のランレングスを取得 */
+SLABitStreamApiResult SLABitStream_GetZeroRunLength(struct SLABitStream* stream, uint32_t* runlength);
+
 /* バッファにたまったビットをクリア */
 SLABitStreamApiResult SLABitStream_Flush(struct SLABitStream* stream);
 
