@@ -623,22 +623,56 @@ END_OF_STREAM:
 /* つぎの1にぶつかるまで読み込み、その間に読み込んだ0のランレングスを取得 */
 SLABitStreamApiResult SLABitStream_GetZeroRunLength(struct SLABitStream* stream, uint32_t* runlength)
 {
-  uint32_t  run;
-  uint8_t   bit;
+  uint32_t  run, rshift, mask, table_index;
 
   /* 引数チェック */
   if (stream == NULL || runlength == NULL) {
     return SLABITSTREAM_APIRESULT_INVALID_ARGUMENT;
   }
 
-  /* ラン取得 */
-  run = 0;
-  SLABitStream_GetBit(stream, &bit);
-  while (bit == 0) {
-    run++;
-    SLABitStream_GetBit(stream, &bit);
+  /* ビットバッファに残っているデータを読み取るための
+   * 右シフト量とマスクを作成 */
+  rshift = 8 - (uint32_t)stream->bit_count;
+  mask   = (1U << rshift) - 1;
+
+  /* テーブル参照 / ラン取得 */
+  table_index         = 0xFF & (((uint32_t)stream->bit_buffer << rshift) | mask);
+  run                 = st_zerobit_runlength_table[table_index];
+  stream->bit_count   -= run;
+
+  /* バッファが空の時 */
+  while (stream->bit_count == 0) {
+    /* 1バイト読み込みとエラー処理 */
+    int32_t   ch;
+    uint32_t  tmp_run;
+    SLABitStreamError err;
+    err = stream->stm_if->SGetChar(&(stream->stm), &ch);
+    assert(ch >= 0);
+    assert(ch <= 0xFF);
+    switch (err) {
+      case SLABITSTREAM_APIRESULT_OK:
+        break;
+      case SLABITSTREAM_ERROR_EOS:
+        /* ファイル終端であればループを抜ける */
+        goto END_OF_STREAM;
+      case SLABITSTREAM_ERROR_IOERROR:  /* FALLTRHU */
+      default:
+        return SLABITSTREAM_APIRESULT_IOERROR;
+    }
+
+    /* ビットバッファにセットし直して再度ランを計測 */
+    stream->bit_buffer  = (uint8_t)ch;
+    tmp_run             = st_zerobit_runlength_table[ch];
+    stream->bit_count   = (int8_t)(8 - tmp_run);
+    /* ランを加算 */
+    run                 += tmp_run;
   }
 
+  /* 1を空読み */
+  stream->bit_count -= 1;
+
+END_OF_STREAM:
+  /* 正常終了 */
   *runlength = run;
   return SLABITSTREAM_APIRESULT_OK;
 }
