@@ -1,4 +1,5 @@
 #include "SLAUtility.h"
+#include "SLAInternal.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -6,14 +7,6 @@
 #include <assert.h>
 #include <string.h>
 #include <float.h>
-
-/* NULLチェックと領域解放 */
-#define NULLCHECK_AND_FREE(ptr) { \
-  if ((ptr) != NULL) {            \
-    free(ptr);                    \
-    (ptr) = NULL;                 \
-  }                               \
-}
 
 /* 連立１次方程式ソルバー */
 struct SLALESolver {

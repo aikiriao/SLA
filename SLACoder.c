@@ -65,7 +65,7 @@ static void SLAGolomb_PutCode(struct SLABitStream* strm, uint32_t m, uint32_t va
   assert(ret == SLABITSTREAM_APIRESULT_OK);
 
   /* 剰余部分の出力 */
-  if (!(m & (m - 1))) {
+  if (SLAUTILITY_IS_POWERED_OF_2(m)) {
     /* mが2の冪: ライス符号化 */
     ret = SLABitStream_PutBits(strm, SLAUtility_Log2Ceil(m), rest);
     assert(ret == SLABITSTREAM_APIRESULT_OK);
@@ -108,7 +108,7 @@ static uint32_t SLAGolomb_GetCode(struct SLABitStream* strm, uint32_t m)
   }
 
   /* 剰余部分の読み取り */
-  if (!(m & (m - 1))) {
+  if (SLAUTILITY_IS_POWERED_OF_2(m)) {
     /* mが2の冪: ライス符号化 */
     ret = SLABitStream_GetBits(strm, SLAUtility_Log2Ceil(m), &rest);
     assert(ret == SLABITSTREAM_APIRESULT_OK);
@@ -307,13 +307,14 @@ static uint32_t SLARecursiveRice_GetCode(
 
   /* 得られたパラメータ段数までのパラメータを加算 */
   val = 0;
-  for (i = 0; (i < quot) && (i < num_params - 1); i++) {
+  for (i = 0; (i < quot) && (i < (num_params - 1)); i++) {
     val += SLARICE_CALCULATE_RICE_PARAMETER(m_params, i);
   }
 
   if (quot < (num_params - 1)) {
     /* 指定したパラメータ段数で剰余部を取得 */
-    val += SLARecursiveRice_GetRestPart(strm, SLARICE_CALCULATE_RICE_PARAMETER(m_params, i));
+    val += SLARecursiveRice_GetRestPart(strm, 
+        SLARICE_CALCULATE_RICE_PARAMETER(m_params, i));
   } else {
     /* 末尾のパラメータで取得 */
     uint32_t tail_param = SLARICE_CALCULATE_RICE_PARAMETER(m_params, i);

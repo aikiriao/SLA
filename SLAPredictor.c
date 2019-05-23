@@ -27,14 +27,6 @@
 /* sign(x) * log2ceil(|x| + 1) の計算 */
 #define SLALMS_SIGNED_LOG2CEIL(x) (SLAUTILITY_SIGN(x) * (int32_t)SLAUtility_Log2Ceil((uint32_t)SLAUTILITY_ABS(x) + 1))
 
-/* NULLチェックと領域解放 */
-#define NULLCHECK_AND_FREE(ptr) { \
-  if ((ptr) != NULL) {            \
-    free(ptr);                    \
-    (ptr) = NULL;                 \
-  }                               \
-}
-
 /* 内部エラー型 */
 typedef enum SLAPredictorErrorTag {
   SLAPREDICTOR_ERROR_OK,
