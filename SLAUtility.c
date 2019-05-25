@@ -387,10 +387,11 @@ uint32_t SLAUtility_Log2CeilFor2PoweredValue(uint32_t val)
 {
   assert(val != 0);
   assert(SLAUTILITY_IS_POWERED_OF_2(val));
+  /* 短絡評価を期待するため、下位ビットから計算 */
   return  log2_for_2powered_val_table[0][0xFF & (val >>  0)]
-        + log2_for_2powered_val_table[1][0xFF & (val >>  8)]
-        + log2_for_2powered_val_table[2][0xFF & (val >> 16)]
-        + log2_for_2powered_val_table[3][0xFF & (val >> 24)];
+        | log2_for_2powered_val_table[1][0xFF & (val >>  8)]
+        | log2_for_2powered_val_table[2][0xFF & (val >> 16)]
+        | log2_for_2powered_val_table[3][0xFF & (val >> 24)];
 }
 
 /* 2の冪乗数に切り上げる ハッカーのたのしみ参照 */
