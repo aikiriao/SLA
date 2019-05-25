@@ -662,6 +662,35 @@ static void testSLABitStream_FileOperationTest(void *obj)
   }
 }
 
+/* ランレングス取得テスト */
+static void testSLABitStream_GetZeroRunLengthTest(void* obj)
+{
+  TEST_UNUSED_PARAMETER(obj);
+
+  {
+    struct SLABitStream* strm;
+    uint8_t data[4];
+    uint32_t test_length, run;
+    SLABitStreamApiResult ret;
+
+    for (test_length = 0; test_length < 32; test_length++) {
+      /* ラン長だけ0を書き込み、1で止める */
+      strm = SLABitStream_OpenMemory(data, sizeof(data), "w", NULL, 0);
+      for (run = 0; run < test_length; run++) {
+        SLABitStream_PutBit(strm, 0);
+      }
+      SLABitStream_PutBit(strm, 1);
+      SLABitStream_Close(strm);
+
+      strm = SLABitStream_OpenMemory(data, sizeof(data), "r", NULL, 0);
+      ret = SLABitStream_GetZeroRunLength(strm, &run);
+      Test_AssertEqual(ret, SLABITSTREAM_APIRESULT_OK);
+      Test_AssertEqual(run, test_length);
+    }
+  }
+
+}
+
 void testSLABitStream_Setup(void)
 {
   struct TestSuite *suite
@@ -671,4 +700,5 @@ void testSLABitStream_Setup(void)
   Test_AddTest(suite, testSLABitStream_CreateDestroyTest);
   Test_AddTest(suite, testSLABitStream_PutGetTest);
   Test_AddTest(suite, testSLABitStream_FileOperationTest);
+  Test_AddTest(suite, testSLABitStream_GetZeroRunLengthTest);
 }
