@@ -420,6 +420,24 @@ static void testSLAUtility_SolveLinearEquationsTest(void *obj)
 
 }
 
+static void testSLAUtility_CalculateLog2CeilTest(void* obj)
+{
+  TEST_UNUSED_PARAMETER(obj);
+
+  /* 2の冪乗数に対するテスト */
+  {
+    uint32_t get, val, lshift, ref;
+
+    for (lshift = 0; lshift < 32; lshift++) {
+      val = (1UL << lshift);
+      get = SLAUtility_Log2CeilFor2PoweredValue(val);
+      ref = SLAUtility_Log2Ceil(val);
+      Test_AssertEqual(ref, lshift);
+      Test_AssertEqual(get, lshift);
+    }
+  }
+}
+
 void testSLAUtility_Setup(void)
 {
   struct TestSuite *suite
@@ -428,4 +446,5 @@ void testSLAUtility_Setup(void)
 
   Test_AddTest(suite, testSLAUtility_CalculateCRC16Test);
   Test_AddTest(suite, testSLAUtility_SolveLinearEquationsTest);
+  Test_AddTest(suite, testSLAUtility_CalculateLog2CeilTest);
 }

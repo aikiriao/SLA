@@ -67,7 +67,7 @@ static void SLAGolomb_PutCode(struct SLABitStream* strm, uint32_t m, uint32_t va
   /* 剰余部分の出力 */
   if (SLAUTILITY_IS_POWERED_OF_2(m)) {
     /* mが2の冪: ライス符号化 */
-    ret = SLABitStream_PutBits(strm, SLAUtility_Log2Ceil(m), rest);
+    ret = SLABitStream_PutBits(strm, SLAUtility_Log2CeilFor2PoweredValue(m), rest);
     assert(ret == SLABITSTREAM_APIRESULT_OK);
     return;
   }
@@ -110,7 +110,7 @@ static uint32_t SLAGolomb_GetCode(struct SLABitStream* strm, uint32_t m)
   /* 剰余部分の読み取り */
   if (SLAUTILITY_IS_POWERED_OF_2(m)) {
     /* mが2の冪: ライス符号化 */
-    ret = SLABitStream_GetBits(strm, SLAUtility_Log2Ceil(m), &rest);
+    ret = SLABitStream_GetBits(strm, SLAUtility_Log2CeilFor2PoweredValue(m), &rest);
     assert(ret == SLABITSTREAM_APIRESULT_OK);
     return (uint32_t)(quot * m + rest);
   }
@@ -197,10 +197,12 @@ static void SLARecursiveRice_PutQuotPart(
 static uint32_t SLARecursiveRice_GetQuotPart(struct SLABitStream* strm)
 {
   uint32_t  quot;
+  SLABitStreamApiResult ret;
   
   assert(strm != NULL);
 
-  SLABitStream_GetZeroRunLength(strm, &quot);
+  ret = SLABitStream_GetZeroRunLength(strm, &quot);
+  assert(ret == SLABITSTREAM_APIRESULT_OK);
 
   return quot;
 }
@@ -215,7 +217,7 @@ static void SLARecursiveRice_PutRestPart(
   assert(m != 0);
   assert(SLAUTILITY_IS_POWERED_OF_2(m));
 
-  ret = SLABitStream_PutBits(strm, SLAUtility_Log2Ceil(m), val & (m - 1));
+  ret = SLABitStream_PutBits(strm, SLAUtility_Log2CeilFor2PoweredValue(m), val & (m - 1));
   assert(ret == SLABITSTREAM_APIRESULT_OK);
 }
 
@@ -235,7 +237,8 @@ static uint32_t SLARecursiveRice_GetRestPart(struct SLABitStream* strm, uint32_t
   }
 
   /* ライス符号の剰余部分取得 */
-  ret = SLABitStream_GetBits(strm, SLAUtility_Log2Ceil(m), &rest);
+  ret = SLABitStream_GetBits(strm, SLAUtility_Log2CeilFor2PoweredValue(m), &rest);
+
   assert(ret == SLABITSTREAM_APIRESULT_OK);
   
   return (uint32_t)rest;
