@@ -383,15 +383,19 @@ uint32_t SLAUtility_Log2Ceil(uint32_t val)
 }
 
 /* 2の冪乗数に対するceil(log2(val))計算 */
+/* 注意: 出現頻度に偏りがあるのを想定. 分岐予測により速度が上がる */
 uint32_t SLAUtility_Log2CeilFor2PoweredValue(uint32_t val)
 {
   assert(val != 0);
   assert(SLAUTILITY_IS_POWERED_OF_2(val));
-  /* 短絡評価を期待するため、下位ビットから計算 */
+
+  if (val >= 0x10000) {
+    return  log2_for_2powered_val_table[2][0xFF & (val >> 16)]
+          | log2_for_2powered_val_table[3][0xFF & (val >> 24)];
+  }
+
   return  log2_for_2powered_val_table[0][0xFF & (val >>  0)]
-        | log2_for_2powered_val_table[1][0xFF & (val >>  8)]
-        | log2_for_2powered_val_table[2][0xFF & (val >> 16)]
-        | log2_for_2powered_val_table[3][0xFF & (val >> 24)];
+        | log2_for_2powered_val_table[1][0xFF & (val >>  8)];
 }
 
 /* 2の冪乗数に切り上げる ハッカーのたのしみ参照 */
