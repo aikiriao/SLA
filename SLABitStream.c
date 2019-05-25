@@ -668,7 +668,7 @@ SLABitStreamApiResult SLABitStream_GetZeroRunLength(struct SLABitStream* stream,
     run                 += tmp_run;
   }
 
-  /* 1を空読み */
+  /* 続く1を空読み */
   stream->bit_count -= 1;
 
 END_OF_STREAM:
