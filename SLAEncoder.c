@@ -41,6 +41,7 @@ struct SLAEncoder {
   int32_t**                     residual;
   int32_t**                     tmp_residual;
   uint32_t*                     num_block_partition_samples;
+  uint8_t                       verpose_flag;
 };
 
 /* エンコーダハンドルの作成 */
@@ -65,6 +66,7 @@ struct SLAEncoder* SLAEncoder_Create(const struct SLAEncoderConfig* config)
   encoder->max_parcor_order         = config->max_parcor_order;
   encoder->max_longterm_order       = config->max_longterm_order;
   encoder->max_lms_order_par_filter = config->max_lms_order_par_filter;
+  encoder->verpose_flag             = config->verpose_flag;
 
   /* 各種領域割当て */
   encoder->strm_work              = malloc((size_t)SLABitStream_CalculateWorkSize());
@@ -700,8 +702,11 @@ SLAApiResult SLAEncoder_EncodeWhole(struct SLAEncoder* encoder,
       num_blocks++;
     }
 
-    printf("sample:%d / %d \r", encode_offset_sample, num_samples);
-    fflush(stdout);
+    /* 進捗表示 */
+    if (encoder->verpose_flag != 0) {
+      printf("progress:%d%% \r", (100 * encode_offset_sample) / num_samples);
+      fflush(stdout);
+    }
   }
 
   /* 最大ブロックサイズとブロック数を反映（ヘッダの再度書き込み） */

@@ -24,7 +24,7 @@ struct SLADecoder {
   void*                         strm_work;
 
   struct SLALPCSynthesizer*     lpcs;
-  struct SLALMSCalculator*     nlmsc;
+  struct SLALMSCalculator*      nlmsc;
 
   int32_t**                     parcor_coef;
   int32_t**                     longterm_coef;
@@ -33,6 +33,7 @@ struct SLADecoder {
   uint8_t*                      is_silence_block;
   int32_t**                     residual;
   int32_t**                     output;
+  uint8_t                       verpose_flag;
 };
 
 /* デコーダハンドルの作成 */
@@ -58,6 +59,7 @@ struct SLADecoder* SLADecoder_Create(const struct SLADecoderConfig* config)
   decoder->max_longterm_order       = config->max_longterm_order;
   decoder->max_lms_order_par_filter = config->max_lms_order_par_filter;
   decoder->enable_crc_check         = config->enable_crc_check;
+  decoder->verpose_flag             = config->verpose_flag;
 
   /* 各種領域割り当て */
   decoder->strm_work     = malloc((size_t)SLABitStream_CalculateWorkSize());
@@ -492,10 +494,11 @@ SLAApiResult SLADecoder_DecodeWhole(struct SLADecoder* decoder,
     /* デコードしたサンプル数の更新 */
     decode_offset_sample  += block_num_samples;
 
-    printf("size:%d / %d sample:%d / %d \r", 
-        decode_offset_byte, data_size, 
-        decode_offset_sample, header.num_samples);
-    fflush(stdout);
+    /* 進捗の表示 */
+    if (decoder->verpose_flag != 0) {
+      printf("progress:%d%% \r", (100 * decode_offset_byte) / data_size);
+      fflush(stdout);
+    }
   }
 
   /* 出力サンプル数を記録 */

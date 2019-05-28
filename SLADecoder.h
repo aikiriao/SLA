@@ -4,6 +4,9 @@
 #include "SLA.h"
 #include <stdint.h>
 
+/* デコーダバージョン */
+#define SLA_DECODER_VERSION   1
+
 /* デコーダハンドル */
 struct SLADecoder;
 
@@ -15,6 +18,7 @@ struct SLADecoderConfig {
 	uint32_t  max_longterm_order;		      /* 最大ロングターム次数 */
 	uint32_t  max_lms_order_par_filter;   /* 最大LMS次数 */
   uint8_t   enable_crc_check;           /* CRCチェックを有効にするか */
+  uint8_t   verpose_flag;               /* 詳細な情報を表示するか */
 };
 
 #ifdef __cplusplus
