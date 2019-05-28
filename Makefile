@@ -1,9 +1,9 @@
 CC 		    = gcc
 CFLAGS 	  = -std=c89 -Wall -Wextra -Wpedantic -Wformat=2 -Wconversion -O3 -g3
 CPPFLAGS	= -DNDEBUG
-LDFLAGS		= -Wall -Wextra -Wpedantic -O3 -g0
+LDFLAGS		= -Wall -Wextra -Wpedantic -O3
 LDLIBS		= -lm
-OBJS	 		= main.o wav.o SLABitStream.o SLACoder.o SLADecoder.o SLAEncoder.o SLAPredictor.o SLAUtility.o 
+OBJS	 		= main.o wav.o command_line_parser.o SLABitStream.o SLACoder.o SLADecoder.o SLAEncoder.o SLAPredictor.o SLAUtility.o 
 TARGET    = sla 
 
 all: $(TARGET) 
