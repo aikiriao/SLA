@@ -38,6 +38,10 @@ struct WAVFile {
 /* アクセサ */
 #define WAVFile_PCM(wavfile, samp, ch)  (wavfile->data[(ch)][(samp)])
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* ファイルからWAVファイルハンドルを作成 */
 struct WAVFile* WAV_CreateFromFile(const char* filename);
 
@@ -54,5 +58,9 @@ WAVApiResult WAV_WriteToFile(
 /* ファイルからWAVファイルフォーマットだけ読み取り */
 WAVApiResult WAV_GetWAVFormatFromFile(
     const char* filename, struct WAVFileFormat* format);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* WAV_INCLUDED */
