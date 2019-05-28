@@ -40,6 +40,105 @@
 /* 再帰的ライス符号パラメータ型 */
 typedef uint32_t SLARecursiveRiceParameter;
 
+/* 2の冪数に対するlog2計算のためのテーブル */
+static const uint8_t log2_for_2powered_val_table[4][0x100] = {
+  /* 1byte目 */
+  {
+    0, 0, 1, 0, 2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0,
+    4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+  },
+  /* 2byte目 */
+  {
+    0, 8, 9, 0,10, 0, 0, 0,11, 0, 0, 0, 0, 0, 0, 0,
+    12,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    13,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    14,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    15,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+  },
+  /* 3byte目 */
+  {
+    0,16,17, 0,18, 0, 0, 0,19, 0, 0, 0, 0, 0, 0, 0,
+    20,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    21,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    22,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    23,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+  },
+  /* 4byte目 */
+  {
+    0,24,25, 0,26, 0, 0, 0,27, 0, 0, 0, 0, 0, 0, 0,
+    28,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    29,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    30,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    31,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+  }
+};
+
+/* 2の冪乗数に対するceil(log2(val))計算 */
+/* 注意: 
+ * - インライン展開を期待するためstatic関数
+ * - 出現頻度に偏りがあるのを想定. 分岐予測により速度が上がる */
+static uint32_t SLACoder_Log2CeilFor2PoweredValue(uint32_t val)
+{
+  assert(val != 0);
+  assert(SLAUTILITY_IS_POWERED_OF_2(val));
+
+  if (val < 0x10000) {
+    return  log2_for_2powered_val_table[0][0xFF & (val >>  0)]
+          | log2_for_2powered_val_table[1][0xFF & (val >>  8)];
+  }
+
+  return  log2_for_2powered_val_table[2][0xFF & (val >> 16)]
+        | log2_for_2powered_val_table[3][0xFF & (val >> 24)];
+}
+
+
 /* ゴロム符号化の出力 */
 static void SLAGolomb_PutCode(struct SLABitStream* strm, uint32_t m, uint32_t val)
 {
@@ -67,7 +166,7 @@ static void SLAGolomb_PutCode(struct SLABitStream* strm, uint32_t m, uint32_t va
   /* 剰余部分の出力 */
   if (SLAUTILITY_IS_POWERED_OF_2(m)) {
     /* mが2の冪: ライス符号化 */
-    ret = SLABitStream_PutBits(strm, SLAUtility_Log2CeilFor2PoweredValue(m), rest);
+    ret = SLABitStream_PutBits(strm, SLACoder_Log2CeilFor2PoweredValue(m), rest);
     assert(ret == SLABITSTREAM_APIRESULT_OK);
     return;
   }
@@ -110,7 +209,7 @@ static uint32_t SLAGolomb_GetCode(struct SLABitStream* strm, uint32_t m)
   /* 剰余部分の読み取り */
   if (SLAUTILITY_IS_POWERED_OF_2(m)) {
     /* mが2の冪: ライス符号化 */
-    ret = SLABitStream_GetBits(strm, SLAUtility_Log2CeilFor2PoweredValue(m), &rest);
+    ret = SLABitStream_GetBits(strm, SLACoder_Log2CeilFor2PoweredValue(m), &rest);
     assert(ret == SLABITSTREAM_APIRESULT_OK);
     return (uint32_t)(quot * m + rest);
   }
@@ -217,7 +316,7 @@ static void SLARecursiveRice_PutRestPart(
   assert(m != 0);
   assert(SLAUTILITY_IS_POWERED_OF_2(m));
 
-  ret = SLABitStream_PutBits(strm, SLAUtility_Log2CeilFor2PoweredValue(m), val & (m - 1));
+  ret = SLABitStream_PutBits(strm, SLACoder_Log2CeilFor2PoweredValue(m), val & (m - 1));
   assert(ret == SLABITSTREAM_APIRESULT_OK);
 }
 
@@ -237,7 +336,7 @@ static uint32_t SLARecursiveRice_GetRestPart(struct SLABitStream* strm, uint32_t
   }
 
   /* ライス符号の剰余部分取得 */
-  ret = SLABitStream_GetBits(strm, SLAUtility_Log2CeilFor2PoweredValue(m), &rest);
+  ret = SLABitStream_GetBits(strm, SLACoder_Log2CeilFor2PoweredValue(m), &rest);
 
   assert(ret == SLABITSTREAM_APIRESULT_OK);
   
