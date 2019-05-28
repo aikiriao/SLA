@@ -10,6 +10,7 @@ void testSLAUtility_Setup(void);
 void testSLAByteArray_Setup(void);
 
 void testWAV_Setup(void);
+void testCommandLineParser_Setup(void);
 
 /* テスト実行 */
 int main(int argc, char **argv)
@@ -27,6 +28,7 @@ int main(int argc, char **argv)
   testSLAByteArray_Setup();
 
   testWAV_Setup();
+  testCommandLineParser_Setup();
 
   ret = Test_RunAllTestSuite();
 
