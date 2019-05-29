@@ -9,7 +9,6 @@ typedef enum CommandLineParserResultTag {
 	COMMAND_LINE_PARSER_RESULT_INVALID_ARGUMENT,                      /* 不正な引数 */
 	COMMAND_LINE_PARSER_RESULT_INSUFFICIENT_OTHER_STRING_ARRAY_SIZE,  /* その他の文字列が入った配列サイズが足らない */
 	COMMAND_LINE_PARSER_RESULT_NOT_SPECIFY_ARGUMENT_TO_OPTION,        /* 引数の指定が必須のオプションで引数の指定がない */
-	COMMAND_LINE_PARSER_RESULT_NOT_SPECIFY_MANDATORY_OPTION,          /* 指定が必須のオプションが指定されていない */
 	COMMAND_LINE_PARSER_RESULT_UNKNOWN_OPTION,                        /* 定義にないオプションが指定された */
 	COMMAND_LINE_PARSER_RESULT_OPTION_MULTIPLY_SPECIFIED,             /* オプションが複数回指定された */
 	COMMAND_LINE_PARSER_RESULT_INVALID_SPECIFICATION,                 /* 無効な仕様 */
@@ -27,7 +26,6 @@ struct CommandLineParserSpecification {
 	char 				          short_option;		  /* [in] 短いオプション文字列        */
 	const char* 		      long_option;		  /* [in] 長いオプション文字列        */
 	CommandLineParserBool	need_argument;		/* [in] オプションに引数は必要か？  */
-	CommandLineParserBool	mandatory;			  /* [in] 引数の指定は必須か？        */
 	const char* 		      description;		  /* [in] 引数の説明                  */
 	const char*				    argument_string;	/* [in,out] 得られた文字列          */
 	CommandLineParserBool	acquired;		      /* [out] オプションが指定されたか？ */

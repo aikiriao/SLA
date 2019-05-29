@@ -26,13 +26,13 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
   {
 #define INPUT_FILE_NAME "inputfile"
     static const struct CommandLineParserSpecification specs[2] = {
-      { 'i', NULL, COMMAND_LINE_PARSER_TRUE,   COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'p', NULL, COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, "output file", NULL, COMMAND_LINE_PARSER_FALSE }
+      { 'i', NULL,  COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'p', NULL, COMMAND_LINE_PARSER_FALSE, "output file", NULL, COMMAND_LINE_PARSER_FALSE }
     };
     struct CommandLineParserSpecification get_specs[2];
-    const char* test_argv1[] = { "progname", "-i", INPUT_FILE_NAME, "-p" };
-    const char* test_argv2[] = { "progname", "-p", "-i", INPUT_FILE_NAME };
-    const char* test_argv3[] = { "progname", "-pi", INPUT_FILE_NAME };
+    char* test_argv1[] = { "progname", "-i", INPUT_FILE_NAME, "-p" };
+    char* test_argv2[] = { "progname", "-p", "-i", INPUT_FILE_NAME };
+    char* test_argv3[] = { "progname", "-pi", INPUT_FILE_NAME };
 
     /* パースしてみる */
     get_specs[0] = specs[0]; get_specs[1] = specs[1];
@@ -92,9 +92,9 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
   /* 引数が指定されずに末尾に達した */
   {
     struct CommandLineParserSpecification specs[] = {
-      { 'i', NULL, COMMAND_LINE_PARSER_TRUE,   COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'i', NULL, COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
     };
-    const char* test_argv[] = { "progname", "-i" };
+    char* test_argv[] = { "progname", "-i" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
@@ -107,10 +107,10 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
   /* 引数に他のオプションが指定されている */
   {
     struct CommandLineParserSpecification specs[] = {
-      { 'i', NULL, COMMAND_LINE_PARSER_TRUE,   COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'i', NULL, COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
     };
-    const char* test_argv1[] = { "progname", "-i", "-p" };
-    const char* test_argv2[] = { "progname", "-i", "--pripara" };
+    char* test_argv1[] = { "progname", "-i", "-p" };
+    char* test_argv2[] = { "progname", "-i", "--pripara" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
@@ -130,10 +130,10 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
   /* 仕様にないオプションが指定された */
   {
     struct CommandLineParserSpecification specs[] = {
-      { 'i', NULL, COMMAND_LINE_PARSER_TRUE,   COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'p', NULL, COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, "output file", NULL, COMMAND_LINE_PARSER_FALSE }
+      { 'i', NULL, COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'p', NULL, COMMAND_LINE_PARSER_FALSE, "output file", NULL, COMMAND_LINE_PARSER_FALSE }
     };
-    const char* test_argv[] = { "progname", "-i", "kiriya aoi", "-p", "-s" };
+    char* test_argv[] = { "progname", "-i", "kiriya aoi", "-p", "-s" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
@@ -146,9 +146,9 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
   /* 同じオプションが複数回指定されている ケース1 */
   {
     struct CommandLineParserSpecification specs[] = {
-      { 'i', NULL, COMMAND_LINE_PARSER_TRUE,   COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'i', NULL, COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
     };
-    const char* test_argv[] = { "progname", "-i", "kiriya aoi", "-i", "shibuki ran" };
+    char* test_argv[] = { "progname", "-i", "kiriya aoi", "-i", "shibuki ran" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
@@ -161,10 +161,10 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
   /* 同じオプションが複数回指定されている ケース2 */
   {
     struct CommandLineParserSpecification specs[] = {
-      { 'i', NULL, COMMAND_LINE_PARSER_TRUE, COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'p', NULL, COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, "prichan", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'i', NULL,  COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'p', NULL, COMMAND_LINE_PARSER_FALSE, "prichan", NULL, COMMAND_LINE_PARSER_FALSE },
     };
-    const char* test_argv[] = { "progname", "-p", "-i", "kiriya aoi", "-p" };
+    char* test_argv[] = { "progname", "-p", "-i", "kiriya aoi", "-p" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
@@ -174,45 +174,13 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
         COMMAND_LINE_PARSER_RESULT_OPTION_MULTIPLY_SPECIFIED);
   }
 
-  /* 指定必須のオプションが指定されていない ケース1 */
-  {
-    struct CommandLineParserSpecification specs[] = {
-      { 'i', NULL, COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'p', NULL, COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_TRUE, "prichan",    NULL, COMMAND_LINE_PARSER_FALSE },
-    };
-    const char* test_argv[] = { "progname", "-p" };
-
-    Test_AssertEqual(
-        CommandLineParser_ParseArguments(
-          sizeof(test_argv) / sizeof(test_argv[0]), test_argv,
-          specs, sizeof(specs) / sizeof(specs[0]),
-          NULL, 0),
-        COMMAND_LINE_PARSER_RESULT_NOT_SPECIFY_MANDATORY_OPTION);
-  }
-
-  /* 指定必須のオプションが指定されていない ケース2 */
-  {
-    struct CommandLineParserSpecification specs[] = {
-      { 'i', NULL, COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'p', NULL, COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_TRUE, "prichan",    NULL, COMMAND_LINE_PARSER_FALSE },
-    };
-    const char* test_argv[] = { "progname", "-i" };
-
-    Test_AssertEqual(
-        CommandLineParser_ParseArguments(
-          sizeof(test_argv) / sizeof(test_argv[0]), test_argv,
-          specs, sizeof(specs) / sizeof(specs[0]),
-          NULL, 0),
-        COMMAND_LINE_PARSER_RESULT_NOT_SPECIFY_MANDATORY_OPTION);
-  }
-
   /* ショートオプションの使い方が正しくない パート1 */
   {
     struct CommandLineParserSpecification specs[] = {
-      { 'i', NULL, COMMAND_LINE_PARSER_TRUE,  COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'p', NULL, COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_TRUE, "prichan",    NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'i', NULL, COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'p', NULL, COMMAND_LINE_PARSER_FALSE, "prichan",    NULL, COMMAND_LINE_PARSER_FALSE },
     };
-    const char* test_argv[] = { "progname", "-ip", "filename" };
+    char* test_argv[] = { "progname", "-ip", "filename" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
@@ -225,10 +193,10 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
   /* ショートオプションの使い方が正しくない パート2 */
   {
     struct CommandLineParserSpecification specs[] = {
-      { 'i', NULL, COMMAND_LINE_PARSER_TRUE,  COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'p', NULL, COMMAND_LINE_PARSER_TRUE, COMMAND_LINE_PARSER_TRUE, "prichan",    NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'i', NULL, COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'p', NULL, COMMAND_LINE_PARSER_TRUE, "prichan",    NULL, COMMAND_LINE_PARSER_FALSE },
     };
-    const char* test_argv[] = { "progname", "-ip", "filename" };
+    char* test_argv[] = { "progname", "-ip", "filename" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
@@ -249,10 +217,10 @@ static void testCommandLineParser_GetLongOptionTest(void *obj)
   {
 #define INPUT_FILE_NAME "inputfile"
     struct CommandLineParserSpecification specs[2] = {
-      { 'i', "input",   COMMAND_LINE_PARSER_TRUE,  COMMAND_LINE_PARSER_TRUE,  "input file",   NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE }
+      { 'i', "input",   COMMAND_LINE_PARSER_TRUE, "input file",   NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE }
     };
-    const char* test_argv[] = { "progname", "--input", INPUT_FILE_NAME, "--aikatsu" };
+    char* test_argv[] = { "progname", "--input", INPUT_FILE_NAME, "--aikatsu" };
 
     /* パースしてみる */
     Test_AssertEqual(
@@ -277,10 +245,10 @@ static void testCommandLineParser_GetLongOptionTest(void *obj)
   {
 #define INPUT_FILE_NAME "inputfile"
     struct CommandLineParserSpecification specs[2] = {
-      { 'i', "input",   COMMAND_LINE_PARSER_TRUE,  COMMAND_LINE_PARSER_TRUE,  "input file",   NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE }
+      { 'i', "input",   COMMAND_LINE_PARSER_TRUE, "input file",   NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE }
     };
-    const char* test_argv[] = { "progname", "--input=" INPUT_FILE_NAME, "--aikatsu" };
+    char* test_argv[] = { "progname", "--input=" INPUT_FILE_NAME, "--aikatsu" };
 
     /* パースしてみる */
     Test_AssertEqual(
@@ -306,9 +274,9 @@ static void testCommandLineParser_GetLongOptionTest(void *obj)
   /* 引数が指定されずに末尾に達した */
   {
     struct CommandLineParserSpecification specs[] = {
-      { 'i', "input", COMMAND_LINE_PARSER_TRUE,   COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'i', "input", COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
     };
-    const char* test_argv[] = { "progname", "--input" };
+    char* test_argv[] = { "progname", "--input" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
@@ -321,10 +289,10 @@ static void testCommandLineParser_GetLongOptionTest(void *obj)
   /* 引数に他のオプションが指定されている */
   {
     struct CommandLineParserSpecification specs[] = {
-      { 'i', "input", COMMAND_LINE_PARSER_TRUE,   COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'i', "input", COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
     };
-    const char* test_argv1[] = { "progname", "--input", "-a" };
-    const char* test_argv2[] = { "progname", "--input", "--aikatsu" };
+    char* test_argv1[] = { "progname", "--input", "-a" };
+    char* test_argv2[] = { "progname", "--input", "--aikatsu" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
@@ -344,10 +312,10 @@ static void testCommandLineParser_GetLongOptionTest(void *obj)
   /* 仕様にないオプションが指定された */
   {
     struct CommandLineParserSpecification specs[] = {
-      { 'i', "input",   COMMAND_LINE_PARSER_TRUE,   COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'p', "aikatsu", COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, "aikatsu mode", NULL, COMMAND_LINE_PARSER_FALSE }
+      { 'i', "input",   COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'p', "aikatsu", COMMAND_LINE_PARSER_FALSE, "aikatsu mode", NULL, COMMAND_LINE_PARSER_FALSE }
     };
-    const char* test_argv[] = { "progname", "--input", "kiriya aoi", "--aikatsu", "--unknown" };
+    char* test_argv[] = { "progname", "--input", "kiriya aoi", "--aikatsu", "--unknown" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
@@ -360,9 +328,9 @@ static void testCommandLineParser_GetLongOptionTest(void *obj)
   /* 同じオプションが複数回指定されている ケース1 */
   {
     struct CommandLineParserSpecification specs[] = {
-      { 'i', "input", COMMAND_LINE_PARSER_TRUE,   COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'i', "input", COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
     };
-    const char* test_argv[] = { "progname", "--input", "kiriya aoi", "--input", "shibuki ran" };
+    char* test_argv[] = { "progname", "--input", "kiriya aoi", "--input", "shibuki ran" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
@@ -375,9 +343,9 @@ static void testCommandLineParser_GetLongOptionTest(void *obj)
   /* 同じオプションが複数回指定されている ケース2 */
   {
     struct CommandLineParserSpecification specs[] = {
-      { 'i', "input", COMMAND_LINE_PARSER_TRUE,   COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'i', "input", COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
     };
-    const char* test_argv[] = { "progname", "--input=kiriya aoi", "--input=shibuki ran" };
+    char* test_argv[] = { "progname", "--input=kiriya aoi", "--input=shibuki ran" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
@@ -390,9 +358,9 @@ static void testCommandLineParser_GetLongOptionTest(void *obj)
   /* 同じオプションが複数回指定されている ケース3 */
   {
     struct CommandLineParserSpecification specs[] = {
-      { 'i', "input", COMMAND_LINE_PARSER_TRUE,   COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'i', "input", COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
     };
-    const char* test_argv[] = { "progname", "--input=kiriya aoi", "--input", "shibuki ran" };
+    char* test_argv[] = { "progname", "--input=kiriya aoi", "--input", "shibuki ran" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
@@ -411,9 +379,9 @@ static void testCommandLineParser_GetOtherStringTest(void *obj)
   /* 簡単な成功例 */
   {
     struct CommandLineParserSpecification specs[] = {
-      { 'i', "input", COMMAND_LINE_PARSER_TRUE,   COMMAND_LINE_PARSER_FALSE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'i', "input", COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
     };
-    const char* test_argv[] = { "progname", "Ichgo Hoshimiya", "Aoi Kiriya", "Ran Shibuki" };
+    char* test_argv[] = { "progname", "Ichgo Hoshimiya", "Aoi Kiriya", "Ran Shibuki" };
     const char* other_string_array[3];
 
     Test_AssertEqual(
@@ -432,9 +400,9 @@ static void testCommandLineParser_GetOtherStringTest(void *obj)
   /* オプションを混ぜてみる */
   {
     struct CommandLineParserSpecification specs[] = {
-      { 'i', "input", COMMAND_LINE_PARSER_TRUE,   COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'i', "input", COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
     };
-    const char* test_argv[] = { "progname", "Ichgo Hoshimiya", "-i", "inputfile", "Aoi Kiriya", "Ran Shibuki" };
+    char* test_argv[] = { "progname", "Ichgo Hoshimiya", "-i", "inputfile", "Aoi Kiriya", "Ran Shibuki" };
     const char* other_string_array[3];
 
     Test_AssertEqual(
@@ -456,9 +424,9 @@ static void testCommandLineParser_GetOtherStringTest(void *obj)
   /* バッファサイズが足らない */
   {
     struct CommandLineParserSpecification specs[] = {
-      { 'i', "input", COMMAND_LINE_PARSER_TRUE,   COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'i', "input", COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
     };
-    const char* test_argv[] = { "progname", "Ichgo Hoshimiya", "Aoi Kiriya", "Ran Shibuki" };
+    char* test_argv[] = { "progname", "Ichgo Hoshimiya", "Aoi Kiriya", "Ran Shibuki" };
     const char* other_string_array[2];
 
     Test_AssertEqual(
@@ -479,11 +447,11 @@ static void testCommandLineParser_ParseVariousStringTest(void* obj)
   /* パーサ仕様が不正 ケース1（ショートオプション重複） */
   {
     struct CommandLineParserSpecification specs[] = {
-      { 'i', "input",   COMMAND_LINE_PARSER_TRUE,  COMMAND_LINE_PARSER_TRUE,  "input file",   NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'i', NULL, COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE }
+      { 'i', "input",   COMMAND_LINE_PARSER_TRUE, "input file",   NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'i', NULL, COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE }
     };
-    const char* test_argv[] = { "progname", "--input", "inputfile", "--aikatsu" };
+    char* test_argv[] = { "progname", "--input", "inputfile", "--aikatsu" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
@@ -496,11 +464,11 @@ static void testCommandLineParser_ParseVariousStringTest(void* obj)
   /* パーサ仕様が不正 ケース2（ロングオプション重複） */
   {
     struct CommandLineParserSpecification specs[] = {
-      { 'i', "input",   COMMAND_LINE_PARSER_TRUE,  COMMAND_LINE_PARSER_TRUE,  "input file",   NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'p', "input",   COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE }
+      { 'i', "input",   COMMAND_LINE_PARSER_TRUE, "input file",   NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'p', "input",   COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE }
     };
-    const char* test_argv[] = { "progname", "--input", "inputfile", "--aikatsu" };
+    char* test_argv[] = { "progname", "--input", "inputfile", "--aikatsu" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
@@ -520,9 +488,9 @@ static void testCommandLineParser_GetSpecificationIndexTest(void* obj)
   {
     uint32_t get_index, spec_no;
     const struct CommandLineParserSpecification specs[] = {
-      { 'i', "input",   COMMAND_LINE_PARSER_TRUE,  COMMAND_LINE_PARSER_TRUE,  "input file",   NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'p', "prichan",   COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE }
+      { 'i', "input",   COMMAND_LINE_PARSER_TRUE,  "input file",   NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'p', "prichan",   COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE }
     };
     const uint32_t num_specs = sizeof(specs) / sizeof(specs[0]);
 
@@ -551,9 +519,9 @@ static void testCommandLineParser_GetSpecificationIndexTest(void* obj)
   {
     uint32_t get_index;
     const struct CommandLineParserSpecification specs[] = {
-      { 'i', "input",   COMMAND_LINE_PARSER_TRUE,  COMMAND_LINE_PARSER_TRUE,  "input file",   NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'p', "prichan",   COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE }
+      { 'i', "input",   COMMAND_LINE_PARSER_TRUE,  "input file",   NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'p', "prichan",   COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE }
     };
     const uint32_t num_specs = sizeof(specs) / sizeof(specs[0]);
 
@@ -575,9 +543,9 @@ static void testCommandLineParser_GetSpecificationIndexTest(void* obj)
   {
     uint32_t get_index;
     const struct CommandLineParserSpecification specs[] = {
-      { 'i', "input",   COMMAND_LINE_PARSER_TRUE,  COMMAND_LINE_PARSER_TRUE,  "input file",   NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'p', "prichan",   COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE }
+      { 'i', "input",   COMMAND_LINE_PARSER_TRUE,  "input file",   NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
+      { 'p', "prichan",   COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE }
     };
     const uint32_t num_specs = sizeof(specs) / sizeof(specs[0]);
 

@@ -55,11 +55,13 @@ void CommandLineParser_PrintDescription(const struct CommandLineParserSpecificat
   for (spec_no = 0; spec_no < num_specs; spec_no++) {
     const struct CommandLineParserSpecification* pspec = &clps[spec_no];
     /* 引数の属性文字列を作成 */
-    sprintf(arg_option_attr, "(%s%s%s%s)",
-        (pspec->mandatory == COMMAND_LINE_PARSER_TRUE) ? "mandatory" : "optional",
-        (pspec->need_argument == COMMAND_LINE_PARSER_TRUE) ? ", needs argument" : "",
-        (pspec->argument_string != NULL) ? ", default: " : "",
-        (pspec->argument_string != NULL) ? pspec->argument_string : "");
+    if (pspec->need_argument == COMMAND_LINE_PARSER_TRUE) {
+      sprintf(arg_option_attr, "(needs argument, %s%s)",
+          (pspec->argument_string != NULL) ? "default: " : "",
+          (pspec->argument_string != NULL) ? pspec->argument_string : "");
+    } else {
+      strcpy(arg_option_attr, "");
+    }
 
     /* コマンド文字列を作成 */
     if (pspec->long_option != NULL) {
@@ -69,7 +71,7 @@ void CommandLineParser_PrintDescription(const struct CommandLineParserSpecificat
     }
 
     /* 説明を付加して全てを印字 */
-    printf("%-20s %-45s  %s \n",
+    printf("%-20s %-30s  %s \n",
         command_str, arg_option_attr,
         (pspec->description != NULL) ? pspec->description : "");
   }
@@ -290,14 +292,6 @@ CommandLineParserResult CommandLineParser_ParseArguments(
       /* 文字列取得 */
       other_string_array[other_string_index] = arg_str;
       other_string_index++;
-    }
-  }
-
-  /* 必須のオプションがセットされたか確認 */
-  for (spec_no = 0; spec_no < num_specs; spec_no++) {
-    if ((clps[spec_no].mandatory == COMMAND_LINE_PARSER_TRUE)
-        && (clps[spec_no].acquired != COMMAND_LINE_PARSER_TRUE)) {
-      return COMMAND_LINE_PARSER_RESULT_NOT_SPECIFY_MANDATORY_OPTION;
     }
   }
 

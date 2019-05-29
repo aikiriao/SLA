@@ -14,34 +14,28 @@
 
 /* コマンドライン仕様 */
 static struct CommandLineParserSpecification command_line_spec[] = {
-  { 'e', "encode", COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, 
+  { 'e', "encode", COMMAND_LINE_PARSER_FALSE, 
     "Encode mode", 
     NULL, COMMAND_LINE_PARSER_FALSE },
-  { 'd', "decode", COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, 
+  { 'd', "decode", COMMAND_LINE_PARSER_FALSE, 
     "Decode mode", 
     NULL, COMMAND_LINE_PARSER_FALSE },
-  { 'i', "input", COMMAND_LINE_PARSER_TRUE, COMMAND_LINE_PARSER_FALSE, 
-    "Specify input file", 
-    NULL, COMMAND_LINE_PARSER_FALSE },
-  { 'o', "output", COMMAND_LINE_PARSER_TRUE, COMMAND_LINE_PARSER_FALSE, 
-    "Specify output file", 
-    NULL, COMMAND_LINE_PARSER_FALSE },
-  { 'm', "mode", COMMAND_LINE_PARSER_TRUE, COMMAND_LINE_PARSER_FALSE, 
+  { 'm', "mode", COMMAND_LINE_PARSER_TRUE, 
     "Specify compress mode: 0(fast decode), ..., 4(high compression)", 
     "2", COMMAND_LINE_PARSER_FALSE },
-  { 'p', "verpose", COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, 
+  { 'p', "verpose", COMMAND_LINE_PARSER_FALSE, 
     "Verpose mode(try to display all information)", 
     NULL, COMMAND_LINE_PARSER_FALSE },
-  { 's', "silence", COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, 
+  { 's', "silence", COMMAND_LINE_PARSER_FALSE, 
     "Silence mode(suppress outputs)", 
     NULL, COMMAND_LINE_PARSER_FALSE },
-  { 'c', "crc-check", COMMAND_LINE_PARSER_TRUE, COMMAND_LINE_PARSER_FALSE, 
+  { 'c', "crc-check", COMMAND_LINE_PARSER_TRUE, 
     "Whether to check CRC16 at decoding(yes or no)", 
     "yes", COMMAND_LINE_PARSER_FALSE },
-  { 'h', "help", COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, 
+  { 'h', "help", COMMAND_LINE_PARSER_FALSE, 
     "Show command help message", 
     NULL, COMMAND_LINE_PARSER_FALSE },
-  { 'v', "version", COMMAND_LINE_PARSER_FALSE, COMMAND_LINE_PARSER_FALSE, 
+  { 'v', "version", COMMAND_LINE_PARSER_FALSE, 
     "Show version information", 
     NULL, COMMAND_LINE_PARSER_FALSE },
 };
@@ -259,21 +253,23 @@ int do_decode(const char* in_filename, const char* out_filename, uint8_t enable_
 /* 使用法の表示 */
 static void print_usage(char** argv)
 {
-  printf("Usage: %s -[ed] [options] INPUT_FILE_NAME -o OUTPUT_FILE_NAME \n", argv[0]);
+  printf("Usage: %s [options] INPUT_FILE_NAME OUTPUT_FILE_NAME \n", argv[0]);
 }
 
 /* バージョン情報の表示 */
 static void print_version_info(void)
 {
   printf("SLA - Solitary Lossless Audio Compressor (a.k.a. SHINING LINE*) \n"
-      "Encoder Version: %d \n" "Decoder Version: %d \n" "CUI     Version: %d \n",
+      "Encoder Version: %d \n"
+      "Decoder Version: %d \n"
+      "CUI     Version: %d \n",
       SLA_ENCODER_VERSION, SLA_DECODER_VERSION, SLA_CUI_VERSION);
 }
 
 /* メインエントリ */
 int main(int argc, char** argv)
 {
-  const char* filename_ptr[1] = { NULL };
+  const char* filename_ptr[2] = { NULL, NULL };
   const char* input_file;
   const char* output_file;
   uint8_t     verpose_flag = 1;
@@ -296,6 +292,7 @@ int main(int argc, char** argv)
   if (CommandLineParser_GetOptionAcquired(
         command_line_spec, num_specification, "help") == COMMAND_LINE_PARSER_TRUE) {
     print_usage(argv);
+    printf("options: \n");
     CommandLineParser_PrintDescription(command_line_spec, num_specification);
     return 0;
   } else if (CommandLineParser_GetOptionAcquired(
@@ -306,16 +303,12 @@ int main(int argc, char** argv)
 
   /* 入力ファイル名の取得 */
   if ((input_file = filename_ptr[0]) == NULL) {
-    if ((input_file = CommandLineParser_GetArgumentString(
-            command_line_spec, num_specification, "input")) == NULL) {
-      fprintf(stderr, "%s: input file must be specified. \n", argv[0]);
-      return 1;
-    }
+    fprintf(stderr, "%s: input file must be specified. \n", argv[0]);
+    return 1;
   }
   
   /* 出力ファイル名の取得 */
-  if ((output_file = CommandLineParser_GetArgumentString(
-          command_line_spec, num_specification, "output")) == NULL) {
+  if ((output_file = filename_ptr[1]) == NULL) {
     fprintf(stderr, "%s: output file must be specified. \n", argv[0]);
     return 1;
   }
