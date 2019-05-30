@@ -502,9 +502,9 @@ SLABitStreamApiResult SLABitStream_PutBits(struct SLABitStream* stream, uint32_t
   /* valの上位ビットから順次出力
    * 初回ループでは端数（出力に必要なビット数）分を埋め出力
    * 2回目以降は8bit単位で出力 */
-  while (n_bits >= (uint32_t)stream->bit_count) {
+  while (n_bits >= stream->bit_count) {
     n_bits              = n_bits - stream->bit_count;
-    stream->bit_buffer  |= (uint8_t)SLABITSTREAM_GETLOWERBITS(stream->bit_count, val >> n_bits);
+    stream->bit_buffer  |= (uint32_t)SLABITSTREAM_GETLOWERBITS(stream->bit_count, val >> n_bits);
     if (stream->stm_if->SPutChar(
           &(stream->stm), (int32_t)stream->bit_buffer) != SLABITSTREAM_ERROR_OK) {
       return SLABITSTREAM_APIRESULT_IOERROR;
@@ -555,7 +555,7 @@ SLABitStreamApiResult SLABitStream_GetBit(struct SLABitStream* stream, uint8_t* 
 
   /* カウンタとバッファの更新 */
   stream->bit_count   = 7;
-  stream->bit_buffer  = (uint8_t)ch;
+  stream->bit_buffer  = (uint32_t)ch;
 
   /* 取得したバッファの最上位ビットを出力 */
   (*bit) = (stream->bit_buffer >> 7) & 1;
@@ -588,8 +588,8 @@ SLABitStreamApiResult SLABitStream_GetBits(struct SLABitStream* stream, uint32_t
   /* 最上位ビットからデータを埋めていく
    * 初回ループではtmpの上位ビットにセット
    * 2回目以降は8bit単位で入力しtmpにセット */
-  while (n_bits > (uint32_t)stream->bit_count) {
-    n_bits  -= (uint32_t)stream->bit_count;
+  while (n_bits > stream->bit_count) {
+    n_bits  -= stream->bit_count;
     tmp     |= SLABITSTREAM_GETLOWERBITS(stream->bit_count, stream->bit_buffer) << n_bits;
     /* 1バイト読み込みとエラー処理 */
     err = stream->stm_if->SGetChar(&(stream->stm), &ch);
@@ -605,7 +605,7 @@ SLABitStreamApiResult SLABitStream_GetBits(struct SLABitStream* stream, uint32_t
       default:
         return SLABITSTREAM_APIRESULT_IOERROR;
     }
-    stream->bit_buffer  = (uint8_t)ch;
+    stream->bit_buffer  = (uint32_t)ch;
     stream->bit_count   = 8;
   }
 
