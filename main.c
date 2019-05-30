@@ -103,7 +103,7 @@ int do_encode(const char* in_filename, const char* out_filename, uint32_t encode
   enc_param.lms_order_par_filter    = encode_preset[encode_preset_no].lms_order_par_filter;
   enc_param.num_lms_filter_cascade  = encode_preset[encode_preset_no].num_lms_filter_cascade;
   if ((in_wav->format.num_channels == 2) 
-      && (encode_preset[encode_preset_no].window_function_type == SLA_CHPROCESSMETHOD_STEREO_MS)) {
+      && (encode_preset[encode_preset_no].ch_process_method == SLA_CHPROCESSMETHOD_STEREO_MS)) {
     /* 音源がステレオのときだけMSは有効 */
     enc_param.ch_process_method = SLA_CHPROCESSMETHOD_STEREO_MS;
   } else {
