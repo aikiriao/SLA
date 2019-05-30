@@ -71,7 +71,7 @@ int do_encode(const char* in_filename, const char* out_filename, uint32_t encode
   SLAApiResult              ret;
 
   /* エンコーダハンドルの作成 */
-  config.max_num_channels         = 2;
+  config.max_num_channels         = 8;
   config.max_num_block_samples    = 16384;
   config.max_parcor_order         = 48;
   config.max_longterm_order       = 5;
@@ -160,7 +160,7 @@ int do_decode(const char* in_filename, const char* out_filename, uint8_t enable_
   SLAApiResult              ret;
 
   /* デコーダハンドルの作成 */
-  config.max_num_channels         = 2;
+  config.max_num_channels         = 8;
   config.max_num_block_samples    = 16384;
   config.max_parcor_order         = 48;
   config.max_longterm_order       = 5;
