@@ -475,7 +475,7 @@ static WAVError WAVParser_GetBits(struct WAVParser* parser, uint8_t n_bits, uint
   tmp = 0;
   while (n_bits > buf->bit_count) {
     /* 上位bitから埋めていく */
-    n_bits  -= buf->bit_count;
+    n_bits  = (uint8_t)(n_bits - buf->bit_count);
     tmp     |= (uint64_t)WAV_GetLowerBits(buf->bit_count, buf->bytes[buf->byte_pos]) << n_bits;
 
     /* 1バイト読み進める */
@@ -493,7 +493,7 @@ static WAVError WAVParser_GetBits(struct WAVParser* parser, uint8_t n_bits, uint
 
   /* 端数ビットの処理 
    * 残ったビット分をtmpの最上位ビットにセット */
-  buf->bit_count -= n_bits;
+  buf->bit_count = (int8_t)(buf->bit_count - n_bits);
   tmp            |= (uint64_t)WAV_GetLowerBits(n_bits, (uint32_t)(buf->bytes[buf->byte_pos] >> buf->bit_count));
 
   *bitsbuf = tmp;
@@ -743,7 +743,7 @@ static WAVError WAVWriter_PutBits(struct WAVWriter* writer, uint64_t val, uint8_
    * 初回ループでは端数（出力に必要なビット数）分を埋め出力
    * 2回目以降は8bit単位で出力 */
   while (n_bits >= writer->bit_count) {
-    n_bits -= writer->bit_count;
+    n_bits = (uint8_t)(n_bits - writer->bit_count);
     writer->bit_buffer |= (uint8_t)WAV_GetLowerBits(writer->bit_count, (uint32_t)(val >> n_bits));
 
     /* バッファに追記 */
@@ -766,7 +766,7 @@ static WAVError WAVWriter_PutBits(struct WAVWriter* writer, uint64_t val, uint8_
 
   /* 端数ビットの処理:
    * 残った分をバッファの上位ビットにセット */
-  writer->bit_count -= n_bits;
+  writer->bit_count = (int8_t)(writer->bit_count - n_bits);
   writer->bit_buffer |= (uint8_t)(WAV_GetLowerBits(n_bits, (uint32_t)val) << writer->bit_count);
 
   return WAV_ERROR_OK;

@@ -52,8 +52,8 @@ struct SLABitStream {
   Stream                        stm;        /* ストリーム                 */
   const SLABitStreamInterface*  stm_if;     /* ストリームインターフェース */
   uint8_t                       flags;      /* 内部状態フラグ             */
-  uint8_t                       bit_buffer; /* 内部ビット入出力バッファ   */
-  int8_t                        bit_count;  /* 内部ビット入出力カウント   */
+  uint32_t                      bit_buffer; /* 内部ビット入出力バッファ   */
+  uint32_t                      bit_count;  /* 内部ビット入出力カウント   */
   void*                         work_ptr;   /* ワーク領域先頭ポインタ     */
 };
 
@@ -462,7 +462,7 @@ SLABitStreamApiResult SLABitStream_PutBit(struct SLABitStream* stream, uint8_t b
   /* バッファ出力・更新 */
   if (stream->bit_count == 0) {
     if (stream->stm_if->SPutChar(
-          &(stream->stm), stream->bit_buffer) != SLABITSTREAM_ERROR_OK) {
+          &(stream->stm), (int32_t)stream->bit_buffer) != SLABITSTREAM_ERROR_OK) {
       return SLABITSTREAM_APIRESULT_IOERROR;
     }
     stream->bit_buffer = 0;
@@ -503,10 +503,10 @@ SLABitStreamApiResult SLABitStream_PutBits(struct SLABitStream* stream, uint32_t
    * 初回ループでは端数（出力に必要なビット数）分を埋め出力
    * 2回目以降は8bit単位で出力 */
   while (n_bits >= (uint32_t)stream->bit_count) {
-    n_bits              -= (uint32_t)stream->bit_count;
+    n_bits              = n_bits - stream->bit_count;
     stream->bit_buffer  |= (uint8_t)SLABITSTREAM_GETLOWERBITS(stream->bit_count, val >> n_bits);
     if (stream->stm_if->SPutChar(
-          &(stream->stm), stream->bit_buffer) != SLABITSTREAM_ERROR_OK) {
+          &(stream->stm), (int32_t)stream->bit_buffer) != SLABITSTREAM_ERROR_OK) {
       return SLABITSTREAM_APIRESULT_IOERROR;
     }
     stream->bit_buffer  = 0;
@@ -516,8 +516,8 @@ SLABitStreamApiResult SLABitStream_PutBits(struct SLABitStream* stream, uint32_t
   /* 端数ビットの処理:
    * 残った分をバッファの上位ビットにセット */
   assert(n_bits <= 8);
-  stream->bit_count   -= (int8_t)n_bits;
-  stream->bit_buffer  |= (uint8_t)SLABITSTREAM_GETLOWERBITS(n_bits, val) << stream->bit_count;
+  stream->bit_count   -= n_bits;
+  stream->bit_buffer  |= (uint32_t)SLABITSTREAM_GETLOWERBITS(n_bits, val) << stream->bit_count;
 
   return SLABITSTREAM_APIRESULT_OK;
 }
@@ -538,8 +538,8 @@ SLABitStreamApiResult SLABitStream_GetBit(struct SLABitStream* stream, uint8_t* 
   }
 
   /* 入力ビットカウントを1減らし、バッファの対象ビットを出力 */
-  stream->bit_count--;
-  if (stream->bit_count >= 0) {
+  if (stream->bit_count > 0) {
+    stream->bit_count--;
     (*bit) = (stream->bit_buffer >> stream->bit_count) & 1;
     /* (*bit) = (stream->bit_buffer & st_bit_mask[stream->bit_count]); */
     return SLABITSTREAM_APIRESULT_OK;
@@ -661,9 +661,9 @@ SLABitStreamApiResult SLABitStream_GetZeroRunLength(struct SLABitStream* stream,
     }
 
     /* ビットバッファにセットし直して再度ランを計測 */
-    stream->bit_buffer  = (uint8_t)ch;
+    stream->bit_buffer  = (uint32_t)ch;
     tmp_run             = st_zerobit_runlength_table[ch];
-    stream->bit_count   = (int8_t)(8 - tmp_run);
+    stream->bit_count   = 8 - tmp_run;
     /* ランを加算 */
     run                 += tmp_run;
   }

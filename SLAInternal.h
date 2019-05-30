@@ -1,6 +1,8 @@
 #ifndef SLA_INTERNAL_H_INCLUDED
 #define SLA_INTERNAL_H_INCLUDED
 
+#include <assert.h>
+
 /* 内部エンコードパラメータ */
 #define SLALONGTERM_MAX_PERIOD                      1024                    /* ロングタームの最大周期                   */
 #define SLALONGTERM_PERIOD_NUM_BITS                 10                      /* ロングターム係数の記録に保存するビット数 */
@@ -29,5 +31,13 @@
     (ptr) = NULL;                 \
   }                               \
 }
+
+/* アサート */
+#ifdef NDEBUG
+/* 未使用変数警告を明示的に回避 */
+#define SLA_Assert(condition) ((void)(condition))
+#else
+#define SLA_Assert(condition) assert(condition)
+#endif
 
 #endif /* SLA_INTERNAL_H_INCLUDED */

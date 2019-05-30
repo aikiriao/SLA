@@ -1118,7 +1118,7 @@ static SLAPredictorApiResult SLAOptimalEncodeEstimator_ApplyDijkstraMethod(
 {
   uint32_t  i;
   double    min;
-  uint32_t  target;
+  uint32_t  target = 0;
 
   /* 引数チェック */
   if (oee == NULL || min_cost == NULL) {

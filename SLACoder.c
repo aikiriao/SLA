@@ -1,7 +1,7 @@
 #include "SLACoder.h"
 #include "SLAUtility.h"
+#include "SLAInternal.h"
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -126,8 +126,8 @@ static const uint8_t log2_for_2powered_val_table[4][0x100] = {
  * - 出現頻度に偏りがあるのを想定. 分岐予測により速度が上がる */
 static uint32_t SLACoder_Log2CeilFor2PoweredValue(uint32_t val)
 {
-  assert(val != 0);
-  assert(SLAUTILITY_IS_POWERED_OF_2(val));
+  SLA_Assert(val != 0);
+  SLA_Assert(SLAUTILITY_IS_POWERED_OF_2(val));
 
   if (val < 0x10000) {
     return  log2_for_2powered_val_table[0][0xFF & (val >>  0)]
@@ -148,8 +148,8 @@ static void SLAGolomb_PutCode(struct SLABitStream* strm, uint32_t m, uint32_t va
   uint32_t i;
   SLABitStreamApiResult ret;
 
-  assert(strm != NULL);
-  assert(m != 0);
+  SLA_Assert(strm != NULL);
+  SLA_Assert(m != 0);
 
   /* 商部分長と剰余部分の計算 */
   quot = val / m;
@@ -158,16 +158,16 @@ static void SLAGolomb_PutCode(struct SLABitStream* strm, uint32_t m, uint32_t va
   /* 前半部分の出力(unary符号) */
   for (i = 0; i < quot; i++) {
     ret = SLABitStream_PutBit(strm, 0);
-    assert(ret == SLABITSTREAM_APIRESULT_OK);
+    SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
   }
   ret = SLABitStream_PutBit(strm, 1);
-  assert(ret == SLABITSTREAM_APIRESULT_OK);
+  SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
 
   /* 剰余部分の出力 */
   if (SLAUTILITY_IS_POWERED_OF_2(m)) {
     /* mが2の冪: ライス符号化 */
     ret = SLABitStream_PutBits(strm, SLACoder_Log2CeilFor2PoweredValue(m), rest);
-    assert(ret == SLABITSTREAM_APIRESULT_OK);
+    SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
     return;
   }
 
@@ -176,10 +176,10 @@ static void SLAGolomb_PutCode(struct SLABitStream* strm, uint32_t m, uint32_t va
   two_b = (uint32_t)(1UL << b);
   if (rest < (two_b - m)) {
     ret = SLABitStream_PutBits(strm, b - 1, rest);
-    assert(ret == SLABITSTREAM_APIRESULT_OK);
+    SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
   } else {
     ret = SLABitStream_PutBits(strm, b, rest + two_b - m);
-    assert(ret == SLABITSTREAM_APIRESULT_OK);
+    SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
   }
 }
 
@@ -192,14 +192,14 @@ static uint32_t SLAGolomb_GetCode(struct SLABitStream* strm, uint32_t m)
   uint8_t  bit;
   SLABitStreamApiResult ret;
 
-  assert(strm != NULL);
-  assert(m != 0);
+  SLA_Assert(strm != NULL);
+  SLA_Assert(m != 0);
 
   /* 前半のunary符号部分を読み取り */
   quot = 0;
   while (1) {
     ret = SLABitStream_GetBit(strm, &bit);
-    assert(ret == SLABITSTREAM_APIRESULT_OK);
+    SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
     if (bit != 0) {
       break;
     }
@@ -210,7 +210,7 @@ static uint32_t SLAGolomb_GetCode(struct SLABitStream* strm, uint32_t m)
   if (SLAUTILITY_IS_POWERED_OF_2(m)) {
     /* mが2の冪: ライス符号化 */
     ret = SLABitStream_GetBits(strm, SLACoder_Log2CeilFor2PoweredValue(m), &rest);
-    assert(ret == SLABITSTREAM_APIRESULT_OK);
+    SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
     return (uint32_t)(quot * m + rest);
   }
 
@@ -218,13 +218,13 @@ static uint32_t SLAGolomb_GetCode(struct SLABitStream* strm, uint32_t m)
   b = SLAUtility_Log2Ceil(m);
   two_b = (uint32_t)(1UL << b);
   ret = SLABitStream_GetBits(strm, b - 1, &rest);
-  assert(ret == SLABITSTREAM_APIRESULT_OK);
+  SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
   if (rest < (two_b - m)) {
     return (uint32_t)(quot * m + rest);
   } else {
     rest <<= 1;
     ret = SLABitStream_GetBit(strm, &bit);
-    assert(ret == SLABITSTREAM_APIRESULT_OK);
+    SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
     rest += bit;
     return (uint32_t)(quot * m + rest - (two_b - m));
   }
@@ -235,7 +235,7 @@ static void SLAGamma_PutCode(struct SLABitStream* strm, uint32_t val)
 {
   uint32_t ndigit;
 
-  assert(strm != NULL);
+  SLA_Assert(strm != NULL);
 
   if (val == 0) {
     /* 符号化対象が0ならば1を出力して終了 */
@@ -258,7 +258,7 @@ static uint32_t SLAGamma_GetCode(struct SLABitStream* strm)
   uint8_t  bitbuf;
   uint64_t bitsbuf;
 
-  assert(strm != NULL);
+  SLA_Assert(strm != NULL);
 
   /* 桁数を取得 */
   /* 1が出現するまで桁数を増加 */
@@ -284,7 +284,7 @@ static void SLARecursiveRice_PutQuotPart(
 {
   uint32_t i;
 
-  assert(strm != NULL);
+  SLA_Assert(strm != NULL);
 
   for (i = 0; i < quot; i++) {
     SLABitStream_PutBit(strm, 0);
@@ -298,10 +298,10 @@ static uint32_t SLARecursiveRice_GetQuotPart(struct SLABitStream* strm)
   uint32_t  quot;
   SLABitStreamApiResult ret;
   
-  assert(strm != NULL);
+  SLA_Assert(strm != NULL);
 
   ret = SLABitStream_GetZeroRunLength(strm, &quot);
-  assert(ret == SLABITSTREAM_APIRESULT_OK);
+  SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
 
   return quot;
 }
@@ -312,12 +312,12 @@ static void SLARecursiveRice_PutRestPart(
 {
   SLABitStreamApiResult ret;
 
-  assert(strm != NULL);
-  assert(m != 0);
-  assert(SLAUTILITY_IS_POWERED_OF_2(m));
+  SLA_Assert(strm != NULL);
+  SLA_Assert(m != 0);
+  SLA_Assert(SLAUTILITY_IS_POWERED_OF_2(m));
 
   ret = SLABitStream_PutBits(strm, SLACoder_Log2CeilFor2PoweredValue(m), val & (m - 1));
-  assert(ret == SLABITSTREAM_APIRESULT_OK);
+  SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
 }
 
 /* 剰余部分を取得 */
@@ -326,9 +326,9 @@ static uint32_t SLARecursiveRice_GetRestPart(struct SLABitStream* strm, uint32_t
   uint64_t rest;
   SLABitStreamApiResult ret;
 
-  assert(strm != NULL);
-  assert(m != 0);
-  assert(SLAUTILITY_IS_POWERED_OF_2(m));
+  SLA_Assert(strm != NULL);
+  SLA_Assert(m != 0);
+  SLA_Assert(SLAUTILITY_IS_POWERED_OF_2(m));
 
   /* 1の剰余は0 */
   if (m == 1) {
@@ -338,7 +338,7 @@ static uint32_t SLARecursiveRice_GetRestPart(struct SLABitStream* strm, uint32_t
   /* ライス符号の剰余部分取得 */
   ret = SLABitStream_GetBits(strm, SLACoder_Log2CeilFor2PoweredValue(m), &rest);
 
-  assert(ret == SLABITSTREAM_APIRESULT_OK);
+  SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
   
   return (uint32_t)rest;
 }
@@ -349,10 +349,10 @@ static void SLARecursiveRice_PutCode(
 {
   uint32_t i, reduced_val, param;
 
-  assert(strm != NULL);
-  assert(m_params != NULL);
-  assert(num_params != 0);
-  assert(SLACODER_PARAMETER_GET(m_params, 0) != 0);
+  SLA_Assert(strm != NULL);
+  SLA_Assert(m_params != NULL);
+  SLA_Assert(num_params != 0);
+  SLA_Assert(SLACODER_PARAMETER_GET(m_params, 0) != 0);
 
   reduced_val = val;
   for (i = 0; i < (num_params - 1); i++) {
@@ -377,7 +377,7 @@ static void SLARecursiveRice_PutCode(
   if (i == (num_params - 1)) {
     uint32_t tail_param = SLARICE_CALCULATE_RICE_PARAMETER(m_params, i);
     uint32_t tail_quot  = i + reduced_val / tail_param;
-    assert(SLAUTILITY_IS_POWERED_OF_2(tail_param));
+    SLA_Assert(SLAUTILITY_IS_POWERED_OF_2(tail_param));
     /* 商が大きい場合はガンマ符号を使用する */
     if (tail_quot < SLACODER_QUOTPART_THRESHOULD) {
       SLARecursiveRice_PutQuotPart(strm, tail_quot);
@@ -399,10 +399,10 @@ static uint32_t SLARecursiveRice_GetCode(
   uint32_t  i, quot, val;
   uint32_t  param, tmp_val;
 
-  assert(strm != NULL);
-  assert(m_params != NULL);
-  assert(num_params != 0);
-  assert(SLACODER_PARAMETER_GET(m_params, 0) != 0);
+  SLA_Assert(strm != NULL);
+  SLA_Assert(m_params != NULL);
+  SLA_Assert(num_params != 0);
+  SLA_Assert(SLACODER_PARAMETER_GET(m_params, 0) != 0);
 
   /* 商部分を取得 */
   quot = SLARecursiveRice_GetQuotPart(strm);
@@ -448,8 +448,8 @@ void SLACoder_PutDataArray(struct SLABitStream* strm, const int32_t* data, uint3
   SLABitStreamApiResult ret;
   SLARecursiveRiceParameter rice_parameter[SLACODER_NUM_RECURSIVERICE_PARAMETER];
 
-  assert((strm != NULL) && (data != NULL));
-  assert(num_data != 0);
+  SLA_Assert((strm != NULL) && (data != NULL));
+  SLA_Assert(num_data != 0);
 
   /* パラメータ初期値（平均値）の計算 */
   sum = 0;
@@ -458,12 +458,12 @@ void SLACoder_PutDataArray(struct SLABitStream* strm, const int32_t* data, uint3
   }
   init_param = SLAUTILITY_MAX((uint32_t)(sum / num_data), 1);
 
-  assert(init_param != 0);
-  assert(init_param < (1UL << 16));
+  SLA_Assert(init_param != 0);
+  SLA_Assert(init_param < (1UL << 16));
 
   /* 初期パラメータの書き込み */
   ret = SLABitStream_PutBits(strm, 16, init_param);
-  assert(ret == SLABITSTREAM_APIRESULT_OK);
+  SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
 
   /* パラメータが小さい場合はパラメータ固定で符号化 */
   if (init_param <= SLACODER_LOW_THRESHOULD_PARAMETER) {
@@ -493,12 +493,12 @@ void SLACoder_GetDataArray(struct SLABitStream* strm, int32_t* data, uint32_t nu
   SLABitStreamApiResult ret;
   SLARecursiveRiceParameter rice_parameter[SLACODER_NUM_RECURSIVERICE_PARAMETER];
 
-  assert((strm != NULL) && (data != NULL));
+  SLA_Assert((strm != NULL) && (data != NULL));
 
   /* 初期パラメータの取得 */
   ret = SLABitStream_GetBits(strm, 16, &init_param);
-  assert(ret == SLABITSTREAM_APIRESULT_OK);
-  assert(init_param != 0);
+  SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
+  SLA_Assert(init_param != 0);
 
   /* パラメータが小さい場合はパラメータ固定で復号 */
   if (init_param <= SLACODER_LOW_THRESHOULD_PARAMETER) {

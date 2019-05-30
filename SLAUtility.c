@@ -429,7 +429,7 @@ void SLAUtility_PreEmphasisInt32(int32_t* data, uint32_t num_samples, int32_t co
   prev_int32 = 0;
   for (smpl = 0; smpl < num_samples; smpl++) {
     tmp_int32   = data[smpl];
-    data[smpl] -= SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(prev_int32 * coef_numer, coef_shift);
+    data[smpl] -= (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(prev_int32 * coef_numer, coef_shift);
     prev_int32  = tmp_int32;
   }
 
@@ -445,7 +445,7 @@ void SLAUtility_DeEmphasisInt32(int32_t* data, uint32_t num_samples, int32_t coe
 
   /* フィルタ適用 */
   for (smpl = 1; smpl < num_samples; smpl++) {
-    data[smpl] += SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(data[smpl - 1] * coef_numer, coef_shift);
+    data[smpl] += (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(data[smpl - 1] * coef_numer, coef_shift);
   }
 
 }
@@ -525,7 +525,8 @@ static int32_t SLALESolver_LUDecomposion(
     }
 
     /* α（U,下三角行列要素）の計算 */
-    max = 0.0f;
+    max       = 0.0f;
+    max_index = row;
     for (row = col; row < dim; row++) {
       sum = A[row][col];              /* Aのこの要素は1回しか参照されない */
       for (k = 0; k < col; ++k) {
