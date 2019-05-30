@@ -230,7 +230,7 @@ CommandLineParserResult CommandLineParser_ParseArguments(
       }
       /* オプションが見つからなかった */
       if (spec_no == num_specs) {
-        fprintf(stderr, "%s: Unknown option - \"%s\" \n", argv[0], &arg_str[2]);
+        fprintf(stderr, "%s: Unknown long option - \"%s\" \n", argv[0], &arg_str[2]);
         return COMMAND_LINE_PARSER_RESULT_UNKNOWN_OPTION;
       }
     } else if (arg_str[0] == '-') {
@@ -275,7 +275,7 @@ CommandLineParserResult CommandLineParser_ParseArguments(
         }
         /* オプションが見つからなかった */
         if (spec_no == num_specs) {
-          fprintf(stderr, "%s: Unknown option - \'%c\' \n", argv[0], arg_str[str_index]);
+          fprintf(stderr, "%s: Unknown short option - \'%c\' \n", argv[0], arg_str[str_index]);
           return COMMAND_LINE_PARSER_RESULT_UNKNOWN_OPTION;
         }
       }
