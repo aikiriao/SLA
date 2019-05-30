@@ -8,7 +8,6 @@
 
 #include <stdlib.h>
 #include <math.h>
-#include <assert.h>
 #include <string.h>
 
 /* エンコーダハンドル */
@@ -239,7 +238,7 @@ SLAApiResult SLAEncoder_EncodeHeader(
   SLAByteArray_PutUint32(data_pos, header->max_block_size);
 
   /* ヘッダサイズチェック */
-  assert((data_pos - data) == SLA_HEADER_SIZE);
+  SLA_Assert((data_pos - data) == SLA_HEADER_SIZE);
 
   /* ヘッダCRC16計算 */
   crc16 = SLAUtility_CalculateCRC16(
@@ -253,8 +252,8 @@ SLAApiResult SLAEncoder_EncodeHeader(
 /* 指定されたサンプル数で窓を作成 */
 static SLAApiResult SLAEncoder_MakeWindow(struct SLAEncoder* encoder, uint32_t num_samples)
 {
-  assert(encoder != NULL);
-  assert(num_samples <= encoder->encode_param.max_num_block_samples);
+  SLA_Assert(encoder != NULL);
+  SLA_Assert(num_samples <= encoder->encode_param.max_num_block_samples);
 
   switch (encoder->encode_param.window_function_type) {
     case SLA_WINDOWFUNCTIONTYPE_RECTANGULAR:
@@ -279,8 +278,8 @@ static SLAApiResult SLAEncoder_MakeWindow(struct SLAEncoder* encoder, uint32_t n
 /* チャンネル毎の処理を実行 */
 static SLAApiResult SLAEncoder_ApplyChProcessing(struct SLAEncoder* encoder, uint32_t num_samples)
 {
-  assert(encoder != NULL);
-  assert(num_samples <= encoder->encode_param.max_num_block_samples);
+  SLA_Assert(encoder != NULL);
+  SLA_Assert(num_samples <= encoder->encode_param.max_num_block_samples);
 
   /* チャンネル毎の処理が行えるかチェック */
   switch (encoder->encode_param.ch_process_method) {
@@ -453,7 +452,7 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
 
     /* 係数量子化 */
     encoder->parcor_coef_int32[ch][0] = 0; /* PARCOR係数の0次成分は0.0で確定だから飛ばす */
-    assert(encoder->parcor_coef[ch][0] == 0.0f);
+    SLA_Assert(encoder->parcor_coef[ch][0] == 0.0f);
     for (ord = 1; ord < parcor_order + 1; ord++) {
       uint32_t qbits; /* 量子化ビット数 */
       if (ord < SLAPARCOR_COEF_LOW_ORDER_THRESHOULD) {

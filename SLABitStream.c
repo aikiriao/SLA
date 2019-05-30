@@ -1,8 +1,8 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
-#include <assert.h>
 #include "SLABitStream.h"
+#include "SLAInternal.h"
 
 /* アラインメント */
 #define SLABITSTREAM_ALIGNMENT                   16
@@ -132,7 +132,7 @@ static SLABitStreamError SLABitStream_FGet(Stream* strm, int32_t* ch)
 {
   int32_t ret;
 
-  assert(strm != NULL && ch != NULL);
+  SLA_Assert(strm != NULL && ch != NULL);
 
   /* getcを発行 */
   if ((ret = getc(strm->fp)) == EOF) {
@@ -146,7 +146,7 @@ static SLABitStreamError SLABitStream_FGet(Stream* strm, int32_t* ch)
 /* ファイルに対する一文字書き込み */
 static SLABitStreamError SLABitStream_FPut(Stream* strm, int32_t ch)
 {
-  assert(strm != NULL);
+  SLA_Assert(strm != NULL);
   if (fputc(ch, strm->fp) == EOF) {
     return SLABITSTREAM_ERROR_IOERROR;
   }
@@ -156,14 +156,14 @@ static SLABitStreamError SLABitStream_FPut(Stream* strm, int32_t ch)
 /* ファイルに対するシーク関数 */
 static SLABitStreamError SLABitStream_FSeek(Stream* strm, int32_t offset, int32_t wherefrom)
 {
-  assert(strm != NULL);
+  SLA_Assert(strm != NULL);
   return (fseek(strm->fp, offset, wherefrom) == 0) ? SLABITSTREAM_ERROR_OK : SLABITSTREAM_ERROR_IOERROR;
 }
 
 /* ファイルに対するTell関数 */
 static SLABitStreamError SLABitStream_FTell(const Stream* strm, int32_t* result)
 {
-  assert(strm != NULL);
+  SLA_Assert(strm != NULL);
   /* ftell実行 */
   *result = (int32_t)ftell(strm->fp);
   return ((*result != -1) ? SLABITSTREAM_ERROR_OK : SLABITSTREAM_ERROR_IOERROR);
@@ -172,7 +172,7 @@ static SLABitStreamError SLABitStream_FTell(const Stream* strm, int32_t* result)
 /* メモリに対する一文字取得 */
 static SLABitStreamError SLABitStream_MGet(Stream* strm, int32_t* ch)
 {
-  assert(strm != NULL && ch != NULL);
+  SLA_Assert(strm != NULL && ch != NULL);
 
   /* 終端に達している */
   if (strm->mem.memory_p >= strm->mem.memory_size) {
@@ -188,7 +188,7 @@ static SLABitStreamError SLABitStream_MGet(Stream* strm, int32_t* ch)
 /* メモリに対する一文字書き込み */
 static SLABitStreamError SLABitStream_MPut(Stream* strm, int32_t ch)
 {
-  assert(strm != NULL);
+  SLA_Assert(strm != NULL);
 
   /* 終端に達している */
   if (strm->mem.memory_p >= strm->mem.memory_size) {
@@ -206,7 +206,7 @@ static SLABitStreamError SLABitStream_MSeek(Stream* strm, int32_t offset, int32_
 {
   int64_t pos;
 
-  assert(strm != NULL);
+  SLA_Assert(strm != NULL);
 
   /* オフセットをまず定める */
   switch (offset) {
@@ -238,7 +238,7 @@ static SLABitStreamError SLABitStream_MSeek(Stream* strm, int32_t offset, int32_
 /* メモリに対するTell関数 */
 static SLABitStreamError SLABitStream_MTell(const Stream* strm, int32_t* result)
 {
-  assert(strm != NULL && result != NULL);
+  SLA_Assert(strm != NULL && result != NULL);
 
   /* 位置を返すだけ */
   (*result) = (int32_t)strm->mem.memory_p;
@@ -515,7 +515,7 @@ SLABitStreamApiResult SLABitStream_PutBits(struct SLABitStream* stream, uint32_t
 
   /* 端数ビットの処理:
    * 残った分をバッファの上位ビットにセット */
-  assert(n_bits <= 8);
+  SLA_Assert(n_bits <= 8);
   stream->bit_count   -= n_bits;
   stream->bit_buffer  |= (uint32_t)SLABITSTREAM_GETLOWERBITS(n_bits, val) << stream->bit_count;
 
@@ -550,8 +550,8 @@ SLABitStreamApiResult SLABitStream_GetBit(struct SLABitStream* stream, uint8_t* 
         &(stream->stm), &ch) != SLABITSTREAM_ERROR_OK) {
     return SLABITSTREAM_APIRESULT_IOERROR;
   }
-  assert(ch >= 0);
-  assert(ch <= 0xFF);
+  SLA_Assert(ch >= 0);
+  SLA_Assert(ch <= 0xFF);
 
   /* カウンタとバッファの更新 */
   stream->bit_count   = 7;
@@ -593,8 +593,8 @@ SLABitStreamApiResult SLABitStream_GetBits(struct SLABitStream* stream, uint32_t
     tmp     |= SLABITSTREAM_GETLOWERBITS(stream->bit_count, stream->bit_buffer) << n_bits;
     /* 1バイト読み込みとエラー処理 */
     err = stream->stm_if->SGetChar(&(stream->stm), &ch);
-    assert(ch >= 0);
-    assert(ch <= 0xFF);
+    SLA_Assert(ch >= 0);
+    SLA_Assert(ch <= 0xFF);
     switch (err) {
       case SLABITSTREAM_APIRESULT_OK:
         break;
@@ -632,12 +632,12 @@ SLABitStreamApiResult SLABitStream_GetZeroRunLength(struct SLABitStream* stream,
 
   /* ビットバッファに残っているデータを読み取るための
    * 右シフト量とマスクを作成 */
-  rshift = 8 - (uint32_t)stream->bit_count;
+  rshift = 8 - stream->bit_count;
   mask   = (1U << rshift) - 1;
 
   /* テーブル参照 / ラン取得 */
-  table_index         = 0xFF & (((uint32_t)stream->bit_buffer << rshift) | mask);
-  run                 = st_zerobit_runlength_table[table_index];
+  table_index         = (stream->bit_buffer << rshift) | mask;
+  run                 = st_zerobit_runlength_table[0xFF & table_index];
   stream->bit_count   -= run;
 
   /* バッファが空の時 */
@@ -647,8 +647,8 @@ SLABitStreamApiResult SLABitStream_GetZeroRunLength(struct SLABitStream* stream,
     uint32_t  tmp_run;
     SLABitStreamError err;
     err = stream->stm_if->SGetChar(&(stream->stm), &ch);
-    assert(ch >= 0);
-    assert(ch <= 0xFF);
+    SLA_Assert(ch >= 0);
+    SLA_Assert(ch <= 0xFF);
     switch (err) {
       case SLABITSTREAM_APIRESULT_OK:
         break;

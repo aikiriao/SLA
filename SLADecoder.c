@@ -8,7 +8,6 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 
 /* デコーダハンドル */
 struct SLADecoder {
@@ -199,7 +198,7 @@ SLAApiResult SLADecoder_DecodeHeader(
   SLAByteArray_GetUint32(data_pos, &tmp_header.max_block_size);
 
   /* ヘッダサイズチェック */
-  assert((data_pos - data) == SLA_HEADER_SIZE);
+  SLA_Assert((data_pos - data) == SLA_HEADER_SIZE);
 
   /* 出力に書き込むが、ステータスは破壊検知の場合もある */
   *header_info = tmp_header;

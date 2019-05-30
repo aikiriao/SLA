@@ -4,7 +4,6 @@
 #include <math.h>
 #include <stdlib.h>
 #include <stddef.h>
-#include <assert.h>
 #include <string.h>
 #include <float.h>
 
@@ -73,7 +72,7 @@ void SLAUtility_ApplyWindow(const double* window, double* data, uint32_t num_sam
 {
   uint32_t smpl;
 
-  assert(window != NULL && data != NULL);
+  SLA_Assert(window != NULL && data != NULL);
 
   for (smpl = 0; smpl < num_samples; smpl++) {
     data[smpl] *= window[smpl];
@@ -86,7 +85,7 @@ void SLAUtility_MakeHannWindow(double* window, uint32_t window_size)
   uint32_t  smpl;
   double    x;
 
-  assert(window != NULL);
+  SLA_Assert(window != NULL);
 
   for (smpl = 0; smpl < window_size; smpl++) {
     x = (double)smpl / (window_size - 1);
@@ -100,7 +99,7 @@ void SLAUtility_MakeBlackmanWindow(double* window, uint32_t window_size)
   uint32_t  smpl;
   double    x;
 
-  assert(window != NULL);
+  SLA_Assert(window != NULL);
 
   for (smpl = 0; smpl < window_size; smpl++) {
     x = (double)smpl / (window_size - 1);
@@ -114,7 +113,7 @@ void SLAUtility_MakeSinWindow(double* window, uint32_t window_size)
   uint32_t  smpl;
   double    x;
 
-  assert(window != NULL);
+  SLA_Assert(window != NULL);
 
   for (smpl = 0; smpl < window_size; smpl++) {
     x = (double)smpl / (window_size - 1);
@@ -128,7 +127,7 @@ void SLAUtility_MakeVorbisWindow(double* window, uint32_t window_size)
   uint32_t  smpl;
   double    x;
 
-  assert(window != NULL);
+  SLA_Assert(window != NULL);
 
   for (smpl = 0; smpl < window_size; smpl++) {
     x = (double)smpl / (window_size - 1);
@@ -142,7 +141,7 @@ void SLAUtility_MakeTukeyWindow(double* window, uint32_t window_size, double alp
   uint32_t  smpl;
   double    x;
 
-  assert(window != NULL);
+  SLA_Assert(window != NULL);
 
   for (smpl = 0; smpl < window_size; smpl++) {
     x = (double)smpl / (window_size - 1);
@@ -256,7 +255,7 @@ static void realft(double data[], unsigned long n, int isign)
 /* FFTハンドル: realftのインデックスのズレを補正 */
 void SLAUtility_FFT(double* data, uint32_t n, int32_t sign)
 {
-  assert(data != NULL);
+  SLA_Assert(data != NULL);
   realft(&data[-1], n, sign);
 }
 
@@ -266,7 +265,7 @@ uint16_t SLAUtility_CalculateCRC16(const uint8_t* data, uint64_t data_size)
   uint16_t crc16;
 
   /* 引数チェック */
-  assert(data != NULL);
+  SLA_Assert(data != NULL);
 
   /* 初期値 */
   crc16 = 0x0000;
@@ -298,7 +297,7 @@ static uint32_t nlz10(uint32_t x)
 /* ceil(log2(val)) を計算する */
 uint32_t SLAUtility_Log2Ceil(uint32_t val)
 {
-  assert(val != 0);
+  SLA_Assert(val != 0);
   return 32U - nlz10(val - 1);
 }
 
@@ -321,10 +320,10 @@ void SLAUtility_LRtoMSDouble(double **data,
   uint32_t  smpl;
   double    mid, side;
 
-  assert(data != NULL);
-  assert(data[0] != NULL);
-  assert(data[1] != NULL);
-  assert(num_channels >= 2);
+  SLA_Assert(data != NULL);
+  SLA_Assert(data[0] != NULL);
+  SLA_Assert(data[1] != NULL);
+  SLA_Assert(num_channels >= 2);
   SLAUTILITY_UNUSED_ARGUMENT(num_channels);
 
   for (smpl = 0; smpl < num_samples; smpl++) {
@@ -342,18 +341,18 @@ void SLAUtility_LRtoMSInt32(int32_t **data,
   uint32_t  smpl;
   int32_t   mid, side;
 
-  assert(data != NULL);
-  assert(data[0] != NULL);
-  assert(data[1] != NULL);
-  assert(num_channels >= 2);
+  SLA_Assert(data != NULL);
+  SLA_Assert(data[0] != NULL);
+  SLA_Assert(data[1] != NULL);
+  SLA_Assert(num_channels >= 2);
   SLAUTILITY_UNUSED_ARGUMENT(num_channels); 
 
   for (smpl = 0; smpl < num_samples; smpl++) {
     mid   = (data[0][smpl] + data[1][smpl]) >> 1; /* 注意: 右シフト必須(/2ではだめ。0方向に丸められる) */
     side  = data[0][smpl] - data[1][smpl];
     /* 戻るかその場で確認 */
-    assert(data[0][smpl] == ((((mid << 1) | (side & 1)) + side) >> 1));
-    assert(data[1][smpl] == ((((mid << 1) | (side & 1)) - side) >> 1));
+    SLA_Assert(data[0][smpl] == ((((mid << 1) | (side & 1)) + side) >> 1));
+    SLA_Assert(data[1][smpl] == ((((mid << 1) | (side & 1)) - side) >> 1));
     data[0][smpl] = mid; 
     data[1][smpl] = side;
   }
@@ -366,10 +365,10 @@ void SLAUtility_MStoLRInt32(int32_t **data,
   uint32_t  smpl;
   int32_t   mid, side;
 
-  assert(data != NULL);
-  assert(data[0] != NULL);
-  assert(data[1] != NULL);
-  assert(num_channels >= 2);
+  SLA_Assert(data != NULL);
+  SLA_Assert(data[0] != NULL);
+  SLA_Assert(data[1] != NULL);
+  SLA_Assert(num_channels >= 2);
   SLAUTILITY_UNUSED_ARGUMENT(num_channels);
 
   for (smpl = 0; smpl < num_samples; smpl++) {
@@ -401,7 +400,7 @@ void SLAUtility_PreEmphasisDouble(double* data, uint32_t num_samples, int32_t co
   double    prev, tmp;
   double    coef;
 
-  assert(data != NULL);
+  SLA_Assert(data != NULL);
 
   /* フィルタ係数の計算 */
   coef = (pow(2, coef_shift) - 1.0f) * pow(2, -coef_shift);
@@ -423,7 +422,7 @@ void SLAUtility_PreEmphasisInt32(int32_t* data, uint32_t num_samples, int32_t co
   int32_t   prev_int32, tmp_int32;
   const int32_t coef_numer = (1 << coef_shift) - 1;
 
-  assert(data != NULL);
+  SLA_Assert(data != NULL);
 
   /* フィルタ適用 */
   prev_int32 = 0;
@@ -441,7 +440,7 @@ void SLAUtility_DeEmphasisInt32(int32_t* data, uint32_t num_samples, int32_t coe
   uint32_t  smpl;
   const int32_t coef_numer = (1 << coef_shift) - 1;
 
-  assert(data != NULL);
+  SLA_Assert(data != NULL);
 
   /* フィルタ適用 */
   for (smpl = 1; smpl < num_samples; smpl++) {
@@ -494,9 +493,9 @@ static int32_t SLALESolver_LUDecomposion(
   uint32_t row, col, k, max_index;
   double max, denom_elem, sum;
 
-  assert(A != NULL);
-  assert(change_index != NULL);
-  assert(row_scale != NULL);
+  SLA_Assert(A != NULL);
+  SLA_Assert(change_index != NULL);
+  SLA_Assert(row_scale != NULL);
 
   /* 各行のスケール（1/行最大値）を計算 */
   for (row = 0; row < dim; row++) {
@@ -582,9 +581,9 @@ static void SLALESolver_LUDecomposionForwardBack(
   uint32_t  row, col, pivod, nonzero_row;
   double    sum;
 
-  assert(A != NULL);
-  assert(b != NULL);
-  assert(change_index != NULL);
+  SLA_Assert(A != NULL);
+  SLA_Assert(b != NULL);
+  SLA_Assert(change_index != NULL);
 
   /* 前進代入 */
   nonzero_row = 0;
@@ -630,9 +629,9 @@ int32_t SLALESolver_Solve(
   int32_t  ret;
   long double error;  /* 残差はなるべく高精度 */
 
-  assert(lesolver != NULL);
-  assert(A != NULL);
-  assert(b != NULL);
+  SLA_Assert(lesolver != NULL);
+  SLA_Assert(A != NULL);
+  SLA_Assert(b != NULL);
 
   /* LU分解用のAを作成 */
   for (row = 0; row < dim; row++) {

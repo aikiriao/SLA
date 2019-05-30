@@ -7,7 +7,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <float.h>
-#include <assert.h>
 
 /* 最大自己相関値からどの比率のピークをピッチとして採用するか */
 /* TODO:ピッチが取りたいのではなく純粋に相関除去したいから1.0fでいいかも */
@@ -279,7 +278,7 @@ static SLAPredictorError LPC_LevinsonDurbinRecursion(
     gamma /= (-e_vec[delay]);
     e_vec[delay + 1] = (1.0f - gamma * gamma) * e_vec[delay];
     /* 誤差分散（パワー）は非負 */
-    assert(e_vec[delay] >= 0.0f);
+    SLA_Assert(e_vec[delay] >= 0.0f);
 
     /* u_vec, v_vecの更新 */
     for (i = 0; i < delay; i++) {
@@ -295,7 +294,7 @@ static SLAPredictorError LPC_LevinsonDurbinRecursion(
     /* PARCOR係数は反射係数の符号反転 */
     parcor_coef[delay + 1] = -gamma;
     /* PARCOR係数の絶対値は1未満（収束条件） */
-    assert(fabs(gamma) < 1.0f);
+    SLA_Assert(fabs(gamma) < 1.0f);
   }
 
   /* 結果を取得 */
@@ -421,7 +420,7 @@ SLAPredictorApiResult SLALPCCalculator_EstimateCodeLength(
     *length_per_sample = 1.0f / 8;
     return SLAPREDICTOR_APIRESULT_OK;
   }
-  assert(log2_mean_res_power > num_samples);
+  SLA_Assert(log2_mean_res_power > num_samples);
   log2_mean_res_power = SLAUtility_Log2(log2_mean_res_power) - SLAUtility_Log2(num_samples);
 
   /* sum(log2(1-parcor * parcor))の計算 */
@@ -438,7 +437,7 @@ SLAPredictorApiResult SLALPCCalculator_EstimateCodeLength(
   /* デバッグのしやすさのため、8で割ってバイト単位に換算 */
   *length_per_sample /= 8;
 
-  assert((*length_per_sample) > 0);
+  SLA_Assert((*length_per_sample) > 0);
   
   return SLAPREDICTOR_APIRESULT_OK;
 }
@@ -553,7 +552,7 @@ SLAPredictorApiResult SLALPCSynthesizer_PredictByParcorCoefInt32(
     /* 後ろ向き誤差計算部にデータ入力 */
     backward_residual[0] = (int64_t)data[samp];
     /* 残差信号 */
-    assert((forward_residual[order] <= INT32_MAX) && (forward_residual[order] >= INT32_MIN));
+    SLA_Assert((forward_residual[order] <= INT32_MAX) && (forward_residual[order] >= INT32_MIN));
     residual[samp] = (int32_t)(forward_residual[order]);
     /* printf("res: %08x(%8d) \n", residual[samp], residual[samp]); */
   }
@@ -604,7 +603,7 @@ SLAPredictorApiResult SLALPCSynthesizer_SynthesizeByParcorCoefInt32(
       backward_residual[ord] = backward_residual[ord - 1] - mul_temp;
     }
     /* 合成信号 */
-    assert((forward_residual <= INT32_MAX) && (forward_residual >= INT32_MIN));
+    SLA_Assert((forward_residual <= INT32_MAX) && (forward_residual >= INT32_MIN));
     output[samp] = (int32_t)(forward_residual);
     /* 後ろ向き誤差計算部にデータ入力 */
     backward_residual[0] = forward_residual;
@@ -979,7 +978,7 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
   }
   nlms->signal_sign_buffer_pos  = num_coef;
   /* バッファサイズは2の冪なので-1してマスクを作る */
-  assert(SLAUTILITY_IS_POWERED_OF_2(nlms->signal_sign_buffer_size));
+  SLA_Assert(SLAUTILITY_IS_POWERED_OF_2(nlms->signal_sign_buffer_size));
   signal_sign_buffer_mask       = nlms->signal_sign_buffer_size - 1;
 
   /* 次数チェック */
@@ -1005,8 +1004,8 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
     for (i = 0; i < num_coef; i++) {
       predict     += nlms->coef[i] * original_signal[smpl - i - 1];
       /* 値域チェック */
-      assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31) <= (int64_t)INT32_MAX);
-      assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31) >= (int64_t)INT32_MIN);
+      SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31) <= (int64_t)INT32_MAX);
+      SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31) >= (int64_t)INT32_MIN);
     }
     predict = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31);
 
@@ -1304,7 +1303,7 @@ SLAPredictorApiResult SLAOptimalEncodeEstimator_SearchOptimalBlockPartitions(
   tmp_node = num_nodes - 1;
   while (tmp_node != 0) {
     /* ノードの巡回順路は昇順になっているはず */
-    assert(tmp_node > oee->path[tmp_node]);
+    SLA_Assert(tmp_node > oee->path[tmp_node]);
     tmp_node = oee->path[tmp_node];
     tmp_optimal_num_partitions++;
   }
