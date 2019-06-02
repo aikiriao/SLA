@@ -351,7 +351,7 @@ static uint32_t testSLALPCSynthesizer_DoPredictSynthInt32TestCase(const LPCPredi
   int32_t     ret;
   double      *data, *coef;
   int32_t     *int32_data, *int32_coef, *residual, *output;
-  uint32_t    num_samples, order, smpl, ord;
+  uint32_t    num_samples, order, smpl, ord, bitwidth, rshift;
 
   assert(test_case != NULL);
 
@@ -384,6 +384,15 @@ static uint32_t testSLALPCSynthesizer_DoPredictSynthInt32TestCase(const LPCPredi
   /* 係数固定小数化 */
   for (ord = 0; ord < order + 1; ord++) {
     int32_coef[ord] = (int32_t)(round((double)coef[ord] * (1UL << 31)));
+  }
+
+  /* 入力データのビット幅計測 */
+  bitwidth = SLAUtility_GetDataBitWidth(int32_data, num_samples);
+  /* 16bitより大きければ乗算時の右シフト量を決める */
+  rshift   = SLAUTILITY_CALC_RSHIFT_FOR_SINT32(bitwidth);
+  /* 係数を16bitベースに右シフト */
+  for (ord = 0; ord < order + 1; ord++) {
+    int32_coef[ord] = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(int32_coef[ord], 16 + rshift);
   }
 
   /* 予測 */
@@ -949,7 +958,6 @@ void testLPC_CalculateAutoCorrelationTest(void* obj)
 {
   /* 判定精度 */
 #define FLOAT_ERROR_EPISILON 1.0e-8
-
 
   TEST_UNUSED_PARAMETER(obj);
 

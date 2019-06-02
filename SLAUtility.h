@@ -11,7 +11,7 @@
 /* 算術右シフト */
 #if ((((int32_t)-1) >> 1) == ((int32_t)-1))
 /* 算術右シフトが有効な環境では、そのまま右シフト */
-#define SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(sint32, rshift) ((int64_t)(sint32) >> (rshift))
+#define SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(sint32, rshift) ((sint32) >> (rshift))
 #else
 /* 算術右シフトが無効な環境では、自分で定義する ハッカーのたのしみのより引用 */
 /* 注意）有効範囲:0 <= rshift <= 32 */
@@ -31,6 +31,8 @@
 #define SLAUTILITY_UINT32_TO_SINT32(uint) (-((int32_t)((uint) >> 1) ^ -(int32_t)((uint) & 1)))
 /* 絶対値の取得 */
 #define SLAUTILITY_ABS(val)               (((val) > 0) ? (val) : -(val))
+/* 32bit整数演算のための右シフト量を計算 */
+#define SLAUTILITY_CALC_RSHIFT_FOR_SINT32(bitwidth) (((bitwidth) > 16) ? ((bitwidth) - 16) : 0)
 
 #ifdef __cplusplus
 extern "C" {
@@ -105,6 +107,10 @@ void SLALESolver_Destroy(struct SLALESolver* lesolver);
 int32_t SLALESolver_Solve(
     struct SLALESolver* lesolver,
     const double** A, double* b, uint32_t dim, uint32_t itration_count);
+
+/* 入力データをもれなく表現できるビット幅の取得 */
+uint32_t SLAUtility_GetDataBitWidth(
+    const int32_t* data, uint32_t num_samples);
 
 #ifdef __cplusplus
 }

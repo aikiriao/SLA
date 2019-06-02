@@ -32,6 +32,8 @@ struct SLAEncoder {
   int32_t**                     input_int32;
   double**                      parcor_coef;
   int32_t**                     parcor_coef_int32;
+  int32_t**                     parcor_coef_code;
+  uint32_t*                     parcor_rshift;
   double**                      longterm_coef;
   int32_t**                     longterm_coef_int32;
   uint32_t*                     pitch_period;
@@ -75,12 +77,15 @@ struct SLAEncoder* SLAEncoder_Create(const struct SLAEncoderConfig* config)
   encoder->tmp_residual           = (int32_t **)malloc(sizeof(int32_t *) * max_num_channels);
   encoder->parcor_coef            = (double **)malloc(sizeof(double *) * max_num_channels);
   encoder->parcor_coef_int32      = (int32_t **)malloc(sizeof(int32_t *) * max_num_channels);
+  encoder->parcor_coef_code       = (int32_t **)malloc(sizeof(int32_t *) * max_num_channels);
+  encoder->parcor_rshift          = (uint32_t *)malloc(sizeof(uint32_t) * max_num_channels);
   encoder->longterm_coef          = (double **)malloc(sizeof(double *) * max_num_channels);
   encoder->longterm_coef_int32    = (int32_t **)malloc(sizeof(int32_t *) * max_num_channels);
 
   for (ch = 0; ch < max_num_channels; ch++) {
     encoder->input_double[ch]         = (double *)malloc(sizeof(double) * max_num_block_samples);
     encoder->input_int32[ch]          = (int32_t *)malloc(sizeof(int32_t) * max_num_block_samples);
+    encoder->parcor_coef_code[ch]     = (int32_t *)malloc(sizeof(int32_t) * max_num_block_samples);
     encoder->residual[ch]             = (int32_t *)malloc(sizeof(int32_t) * max_num_block_samples);
     encoder->tmp_residual[ch]         = (int32_t *)malloc(sizeof(int32_t) * max_num_block_samples);
     encoder->parcor_coef[ch]          = (double *)malloc(sizeof(double) * (config->max_parcor_order + 1));
@@ -117,6 +122,7 @@ void SLAEncoder_Destroy(struct SLAEncoder* encoder)
       NULLCHECK_AND_FREE(encoder->tmp_residual[ch]);
       NULLCHECK_AND_FREE(encoder->parcor_coef[ch]);
       NULLCHECK_AND_FREE(encoder->parcor_coef_int32[ch]);
+      NULLCHECK_AND_FREE(encoder->parcor_coef_code[ch]);
       NULLCHECK_AND_FREE(encoder->longterm_coef[ch]);
       NULLCHECK_AND_FREE(encoder->longterm_coef_int32[ch]);
     }
@@ -126,9 +132,11 @@ void SLAEncoder_Destroy(struct SLAEncoder* encoder)
     NULLCHECK_AND_FREE(encoder->tmp_residual);
     NULLCHECK_AND_FREE(encoder->parcor_coef);
     NULLCHECK_AND_FREE(encoder->parcor_coef_int32);
+    NULLCHECK_AND_FREE(encoder->parcor_coef_code);
     NULLCHECK_AND_FREE(encoder->longterm_coef);
     NULLCHECK_AND_FREE(encoder->longterm_coef_int32);
     NULLCHECK_AND_FREE(encoder->num_block_partition_samples);
+    NULLCHECK_AND_FREE(encoder->parcor_rshift);
     SLALPCCalculator_Destroy(encoder->lpcc);
     SLALPCSynthesizer_Destroy(encoder->lpcs);
     SLALongTermCalculator_Destroy(encoder->ltc);
@@ -378,6 +386,7 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
 {
   uint32_t ch, smpl, ord;
   uint32_t num_channels, parcor_order, longterm_order;
+  uint32_t bitwidth;
   uint16_t crc16;
   SLAPredictorApiResult predictor_ret;
   SLAApiResult          api_ret;
@@ -453,8 +462,10 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
     /* 係数量子化 */
     encoder->parcor_coef_int32[ch][0] = 0; /* PARCOR係数の0次成分は0.0で確定だから飛ばす */
     SLA_Assert(encoder->parcor_coef[ch][0] == 0.0f);
+    /* データのビット幅 */
+    bitwidth = SLAUtility_GetDataBitWidth(encoder->input_int32[ch], num_samples);
     for (ord = 1; ord < parcor_order + 1; ord++) {
-      uint32_t qbits; /* 量子化ビット数 */
+      uint32_t qbits;     /* 量子化ビット数 */
       if (ord < SLAPARCOR_COEF_LOW_ORDER_THRESHOULD) {
         /* 低次成分 */
         qbits = 16;
@@ -462,10 +473,16 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
         /* 高次成分 */
         qbits = 8;
       }
-      encoder->parcor_coef_int32[ch][ord]
+      /* 整数化（符号化する係数） */
+      encoder->parcor_coef_code[ch][ord]
         = (int32_t)SLAUtility_Round(encoder->parcor_coef[ch][ord] * pow(2.0f, (qbits - 1)));
-      /* 計算自体は31bit精度で行う */
-      encoder->parcor_coef_int32[ch][ord] <<= (32 - qbits);
+      /* 係数右シフト量の計算 */
+      encoder->parcor_rshift[ch] = SLAUTILITY_CALC_RSHIFT_FOR_SINT32(bitwidth);
+      /* 16bit幅をベースに右シフト */
+      encoder->parcor_coef_int32[ch][ord] 
+        = encoder->parcor_coef_code[ch][ord] << (16U - qbits);
+      encoder->parcor_coef_int32[ch][ord]
+        = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(encoder->parcor_coef_int32[ch][ord], encoder->parcor_rshift[ch]);
     } 
 
     /* PARCORで残差計算 */
@@ -567,8 +584,10 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
       }
       /* 符号なしで符号化 */
       SLABitStream_PutBits(encoder->strm, qbits, 
-          SLAUTILITY_SINT32_TO_UINT32(encoder->parcor_coef_int32[ch][ord] >> (32 - qbits))
-          );
+          SLAUTILITY_SINT32_TO_UINT32(encoder->parcor_coef_code[ch][ord]));
+      /* 右シフト量を記録（TODO:可変長符号を使ってもいい） */
+      SLA_Assert(encoder->parcor_rshift[ch] < (1UL << 3));
+      SLABitStream_PutBits(encoder->strm, 3, encoder->parcor_rshift[ch]);
     }
 
     /* ピッチ周期/ロングターム係数 */

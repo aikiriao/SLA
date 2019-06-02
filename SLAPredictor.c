@@ -33,13 +33,6 @@ typedef enum SLAPredictorErrorTag {
   SLAPREDICTOR_ERROR_INVALID_ARGUMENT
 } SLAPredictorError;
 
-/* 内部データ型 */
-typedef union SLALPCDataUnitTag {
-  float     f32;
-  int32_t   s32;
-  int64_t   s64;
-} SLALPCDataUnit;
-
 /* LPC計算ハンドル */
 struct SLALPCCalculator {
   uint32_t  max_order;     /* 最大次数           */
@@ -56,9 +49,9 @@ struct SLALPCCalculator {
 
 /* 音声合成ハンドル（格子型フィルタ） */
 struct SLALPCSynthesizer {
-  uint32_t        max_order;                 /* 最大次数               */
-  SLALPCDataUnit* forward_residual_work;     /* 前向き誤差の計算ワーク領域   */
-  SLALPCDataUnit* backward_residual_work;    /* 後ろ向き誤差の計算ワーク領域 */
+  uint32_t  max_order;            /* 最大次数     */
+  int32_t*  forward_residual;     /* 前向き誤差   */
+  int32_t*  backward_residual;    /* 後ろ向き誤差 */
 };
 
 /* ロングターム計算ハンドル */
@@ -486,8 +479,8 @@ struct SLALPCSynthesizer* SLALPCSynthesizer_Create(uint32_t max_order)
   lpcs->max_order = max_order;
 
   /* 前向き/後ろ向き誤差の領域確保 */
-  lpcs->forward_residual_work   = malloc(sizeof(SLALPCDataUnit) * (max_order + 1));
-  lpcs->backward_residual_work  = malloc(sizeof(SLALPCDataUnit) * (max_order + 1));
+  lpcs->forward_residual  = malloc(sizeof(int32_t) * (max_order + 1));
+  lpcs->backward_residual = malloc(sizeof(int32_t) * (max_order + 1));
 
   return lpcs;
 }
@@ -496,24 +489,23 @@ struct SLALPCSynthesizer* SLALPCSynthesizer_Create(uint32_t max_order)
 void SLALPCSynthesizer_Destroy(struct SLALPCSynthesizer* lpc)
 {
   if (lpc != NULL) {
-    NULLCHECK_AND_FREE(lpc->forward_residual_work);
-    NULLCHECK_AND_FREE(lpc->backward_residual_work);
+    NULLCHECK_AND_FREE(lpc->forward_residual);
+    NULLCHECK_AND_FREE(lpc->backward_residual);
     free(lpc);
   }
 }
 
-/* PARCOR係数により予測/誤差出力（32bit整数入出力） */
-/* 係数parcor_coefはorder+1個の配列 */
+/* PARCOR係数により予測/誤差出力（32bit整数入出力）: 乗算時に32bit幅になるように修正 */
 SLAPredictorApiResult SLALPCSynthesizer_PredictByParcorCoefInt32(
     struct SLALPCSynthesizer* lpc,
     const int32_t* data, uint32_t num_samples,
     const int32_t* parcor_coef, uint32_t order, int32_t* residual)
 {
-  uint32_t samp, ord;
-  int64_t* forward_residual;
-  int64_t* backward_residual;
-  int64_t  mul_temp;          /* 乗算がオーバーフローする可能性があるため */
-  const int32_t half = (1UL << 30);
+  uint32_t      samp, ord;
+  int32_t*      forward_residual;
+  int32_t*      backward_residual;
+  int32_t       mul_temp;
+  const int32_t half = (1UL << 14);
 
   /* 引数チェック */
   if (lpc == NULL || data == NULL
@@ -527,8 +519,8 @@ SLAPredictorApiResult SLALPCSynthesizer_PredictByParcorCoefInt32(
   }
 
   /* オート変数にポインタをコピー */
-  forward_residual = (int64_t *)lpc->forward_residual_work;
-  backward_residual = (int64_t *)lpc->backward_residual_work;
+  forward_residual  = lpc->forward_residual;
+  backward_residual = lpc->backward_residual;
 
   /* 誤差をゼロ初期化 */
   for (ord = 0; ord < lpc->max_order + 1; ord++) {
@@ -538,22 +530,23 @@ SLAPredictorApiResult SLALPCSynthesizer_PredictByParcorCoefInt32(
   /* 誤差計算 */
   for (samp = 0; samp < num_samples; samp++) {
     /* 格子型フィルタにデータ入力 */
-    forward_residual[0] = (int64_t)data[samp];
+    forward_residual[0] = data[samp];
     /* 前向き誤差計算 */
     for (ord = 1; ord <= order; ord++) {
-      mul_temp = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(parcor_coef[ord] * backward_residual[ord - 1] + half, 31);
+      mul_temp 
+        = (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(parcor_coef[ord] * backward_residual[ord - 1] + half, 15);
       forward_residual[ord] = forward_residual[ord - 1] - mul_temp;
     }
     /* 後ろ向き誤差計算 */
     for (ord = order; ord >= 1; ord--) {
-      mul_temp = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(parcor_coef[ord] * forward_residual[ord - 1] + half, 31);
+      mul_temp 
+        = (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(parcor_coef[ord] * forward_residual[ord - 1] + half, 15);
       backward_residual[ord] = backward_residual[ord - 1] - mul_temp;
     }
     /* 後ろ向き誤差計算部にデータ入力 */
-    backward_residual[0] = (int64_t)data[samp];
+    backward_residual[0] = data[samp];
     /* 残差信号 */
-    SLA_Assert((forward_residual[order] <= INT32_MAX) && (forward_residual[order] >= INT32_MIN));
-    residual[samp] = (int32_t)(forward_residual[order]);
+    residual[samp] = forward_residual[order];
     /* printf("res: %08x(%8d) \n", residual[samp], residual[samp]); */
   }
 
@@ -561,16 +554,16 @@ SLAPredictorApiResult SLALPCSynthesizer_PredictByParcorCoefInt32(
 }
 
 /* PARCOR係数により誤差信号から音声合成（32bit整数入出力） */
-/* 係数parcor_coefはorder+1個の配列 */
 SLAPredictorApiResult SLALPCSynthesizer_SynthesizeByParcorCoefInt32(
     struct SLALPCSynthesizer* lpc,
     const int32_t* residual, uint32_t num_samples,
     const int32_t* parcor_coef, uint32_t order, int32_t* output)
 {
-  uint32_t ord, samp;
-  int64_t* backward_residual;
-  int64_t  mul_temp;                /* 乗算がオーバーフローする可能性があるため */
-  const int32_t half = (1UL << 30); /* 丸め誤差軽減のための加算定数 = 0.5 */
+  uint32_t      ord, samp;
+  int32_t       forward_residual;   /* 合成時は記憶領域を持つ必要なし */
+  int32_t*      backward_residual;
+  int32_t       mul_temp;
+  const int32_t half = (1UL << 14); /* 丸め誤差軽減のための加算定数 = 0.5 */
 
   /* 引数チェック */
   if (lpc == NULL || residual == NULL
@@ -578,13 +571,13 @@ SLAPredictorApiResult SLALPCSynthesizer_SynthesizeByParcorCoefInt32(
     return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
   }
 
-  /* オート変数にポインタをコピー */
-  backward_residual = (int64_t *)lpc->backward_residual_work;
-
   /* 次数チェック */
   if (order > lpc->max_order) {
     return SLAPREDICTOR_APIRESULT_EXCEED_MAX_ORDER;
   }
+
+  /* オート変数にポインタをコピー */
+  backward_residual = lpc->backward_residual;
 
   /* 誤差をゼロ初期化 */
   for (ord = 0; ord < lpc->max_order + 1; ord++) {
@@ -594,17 +587,18 @@ SLAPredictorApiResult SLALPCSynthesizer_SynthesizeByParcorCoefInt32(
   /* 格子型フィルタによる音声合成 */
   for (samp = 0; samp < num_samples; samp++) {
     /* 誤差入力 */
-    int64_t forward_residual = residual[samp];
+    forward_residual = residual[samp];
     for (ord = order; ord >= 1; ord--) {
       /* 前向き誤差計算 */
-      forward_residual += SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(parcor_coef[ord] * backward_residual[ord - 1] + half, 31);
+      forward_residual
+        += (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(parcor_coef[ord] * backward_residual[ord - 1] + half, 15);
       /* 後ろ向き誤差計算 */
-      mul_temp = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(parcor_coef[ord] * forward_residual + half, 31);
+      mul_temp
+        = (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(parcor_coef[ord] * forward_residual + half, 15);
       backward_residual[ord] = backward_residual[ord - 1] - mul_temp;
     }
     /* 合成信号 */
-    SLA_Assert((forward_residual <= INT32_MAX) && (forward_residual >= INT32_MIN));
-    output[samp] = (int32_t)(forward_residual);
+    output[samp] = forward_residual;
     /* 後ろ向き誤差計算部にデータ入力 */
     backward_residual[0] = forward_residual;
     /* printf("out: %08x(%8d) \n", output[samp], output[samp]); */

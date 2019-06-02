@@ -67,7 +67,7 @@ struct SLADecoder* SLADecoder_Create(const struct SLADecoderConfig* config)
   decoder->pitch_period  = (uint32_t *)malloc(sizeof(uint32_t) * max_num_channels);
   decoder->residual      = (int32_t **)malloc(sizeof(int32_t*) * max_num_channels);
   decoder->output        = (int32_t **)malloc(sizeof(int32_t*) * max_num_channels);
-  decoder->is_silence_block    = (uint8_t *)malloc(sizeof(uint8_t) * max_num_channels);
+  decoder->is_silence_block     = (uint8_t *)malloc(sizeof(uint8_t) * max_num_channels);
   for (ch = 0; ch < max_num_channels; ch++) {
     decoder->parcor_coef[ch]   = (int32_t *)malloc(sizeof(int32_t) * (config->max_parcor_order + 1));
     decoder->longterm_coef[ch] = (int32_t *)malloc(sizeof(int32_t) * config->max_longterm_order);
@@ -327,19 +327,26 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
       continue;
     }
 
-    /* PARCOR係数読み取り */
+    /* PARCOR係数・係数右シフト量読み取り */
     /* 0次は0で確定 */
     decoder->parcor_coef[ch][0] = 0;
     for (ord = 1; ord < parcor_order + 1; ord++) {
-      uint32_t qbits;
+      uint32_t qbits, rshift;
       if (ord < SLAPARCOR_COEF_LOW_ORDER_THRESHOULD) {
         qbits = 16;
       } else {
         qbits = 8;
       }
+      /* PARCOR係数 */
       SLABitStream_GetBits(decoder->strm, qbits, &bitsbuf);
       decoder->parcor_coef[ch][ord] = SLAUTILITY_UINT32_TO_SINT32(bitsbuf);
-      decoder->parcor_coef[ch][ord] <<= (32U - qbits);
+      /* 右シフト量 */
+      SLABitStream_GetBits(decoder->strm, 3, &bitsbuf);
+      rshift = (uint32_t)bitsbuf;
+      /* 16bitをベースに右シフト */
+      decoder->parcor_coef[ch][ord] <<= (16U - qbits);
+      decoder->parcor_coef[ch][ord] 
+        = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(decoder->parcor_coef[ch][ord], rshift);
     }
 
     /* ロングターム係数読み取り */

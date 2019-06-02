@@ -675,3 +675,25 @@ int32_t SLALESolver_Solve(
  
   return 0;
 }
+
+/* 入力データをもれなく表現できるビット幅の取得 */
+uint32_t SLAUtility_GetDataBitWidth(
+    const int32_t* data, uint32_t num_samples)
+{
+  uint32_t smpl;
+  uint32_t maxabs, abs;
+
+  SLA_Assert(data != NULL);
+
+  /* 最大絶対値の計測 */
+  maxabs = 0;
+  for (smpl = 0; smpl < num_samples; smpl++) {
+    abs = (uint32_t)SLAUTILITY_ABS(data[smpl]);
+    if (abs > maxabs) {
+      maxabs = abs;
+    }
+  }
+
+  /* 符号ビットを付け加えてビット幅とする */
+  return (maxabs > 0) ? (SLAUtility_Log2Ceil(maxabs) + 1) : 1;
+}
