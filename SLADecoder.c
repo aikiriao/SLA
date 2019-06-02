@@ -318,6 +318,8 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
 
   /* 各チャンネルの無音フラグ/係数取得 */
   for (ch = 0; ch < num_channels; ch++) {
+    uint32_t rshift;
+
     /* 無音フラグ取得 */
     SLABitStream_GetBit(decoder->strm, &decoder->is_silence_block[ch]);
 
@@ -327,11 +329,14 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
       continue;
     }
 
-    /* PARCOR係数・係数右シフト量読み取り */
+    /* PARCOR係数読み取り */
+    /* 右シフト量 */
+    SLABitStream_GetBits(decoder->strm, 3, &bitsbuf);
+    rshift = (uint32_t)bitsbuf;
     /* 0次は0で確定 */
     decoder->parcor_coef[ch][0] = 0;
     for (ord = 1; ord < parcor_order + 1; ord++) {
-      uint32_t qbits, rshift;
+      uint32_t qbits;
       if (ord < SLAPARCOR_COEF_LOW_ORDER_THRESHOULD) {
         qbits = 16;
       } else {
@@ -340,9 +345,6 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
       /* PARCOR係数 */
       SLABitStream_GetBits(decoder->strm, qbits, &bitsbuf);
       decoder->parcor_coef[ch][ord] = SLAUTILITY_UINT32_TO_SINT32(bitsbuf);
-      /* 右シフト量 */
-      SLABitStream_GetBits(decoder->strm, 3, &bitsbuf);
-      rshift = (uint32_t)bitsbuf;
       /* 16bitをベースに右シフト */
       decoder->parcor_coef[ch][ord] <<= (16U - qbits);
       decoder->parcor_coef[ch][ord] 

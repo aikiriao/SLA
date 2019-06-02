@@ -574,6 +574,9 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
     }
 
     /* PARCOR係数 */
+    /* 右シフト量を記録 */
+    SLA_Assert(encoder->parcor_rshift[ch] < (1UL << 3));
+    SLABitStream_PutBits(encoder->strm, 3, encoder->parcor_rshift[ch]);
     /* 0次は0.0だから符号化せず飛ばす */
     for (ord = 1; ord < parcor_order + 1; ord++) {
       uint32_t qbits; /* 量子化ビット数 */
@@ -585,9 +588,6 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
       /* 符号なしで符号化 */
       SLABitStream_PutBits(encoder->strm, qbits, 
           SLAUTILITY_SINT32_TO_UINT32(encoder->parcor_coef_code[ch][ord]));
-      /* 右シフト量を記録（TODO:可変長符号を使ってもいい） */
-      SLA_Assert(encoder->parcor_rshift[ch] < (1UL << 3));
-      SLABitStream_PutBits(encoder->strm, 3, encoder->parcor_rshift[ch]);
     }
 
     /* ピッチ周期/ロングターム係数 */
