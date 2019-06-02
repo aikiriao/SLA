@@ -24,6 +24,9 @@
 /* ブロックのCRC16書き込み開始位置 */
 #define SLA_BLOCK_CRC16_CALC_START_OFFSET   (2 + 4 + 2)             /* 同期コード + 次のブロックまでのオフセット + CRC16記録フィールド */
 
+/* PARCORの次数から係数のビット幅を取得 */
+#define SLA_GET_PARCOR_QUANTIZE_BIT_WIDTH(order)  (((order) < SLAPARCOR_COEF_LOW_ORDER_THRESHOULD) ? 16 : 8)
+
 /* NULLチェックと領域解放 */
 #define NULLCHECK_AND_FREE(ptr) { \
   if ((ptr) != NULL) {            \

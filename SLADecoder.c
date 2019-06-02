@@ -336,12 +336,8 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     /* 0次は0で確定 */
     decoder->parcor_coef[ch][0] = 0;
     for (ord = 1; ord < parcor_order + 1; ord++) {
-      uint32_t qbits;
-      if (ord < SLAPARCOR_COEF_LOW_ORDER_THRESHOULD) {
-        qbits = 16;
-      } else {
-        qbits = 8;
-      }
+      /* 量子化ビット数 */
+      uint32_t qbits = SLA_GET_PARCOR_QUANTIZE_BIT_WIDTH(ord);
       /* PARCOR係数 */
       SLABitStream_GetBits(decoder->strm, qbits, &bitsbuf);
       decoder->parcor_coef[ch][ord] = SLAUTILITY_UINT32_TO_SINT32(bitsbuf);

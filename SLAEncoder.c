@@ -465,14 +465,7 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
     /* データのビット幅 */
     bitwidth = SLAUtility_GetDataBitWidth(encoder->input_int32[ch], num_samples);
     for (ord = 1; ord < parcor_order + 1; ord++) {
-      uint32_t qbits;     /* 量子化ビット数 */
-      if (ord < SLAPARCOR_COEF_LOW_ORDER_THRESHOULD) {
-        /* 低次成分 */
-        qbits = 16;
-      } else {
-        /* 高次成分 */
-        qbits = 8;
-      }
+      uint32_t qbits = SLA_GET_PARCOR_QUANTIZE_BIT_WIDTH(ord);     /* 量子化ビット数 */
       /* 整数化（符号化する係数） */
       encoder->parcor_coef_code[ch][ord]
         = (int32_t)SLAUtility_Round(encoder->parcor_coef[ch][ord] * pow(2.0f, (qbits - 1)));
@@ -579,14 +572,8 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
     SLABitStream_PutBits(encoder->strm, 3, encoder->parcor_rshift[ch]);
     /* 0次は0.0だから符号化せず飛ばす */
     for (ord = 1; ord < parcor_order + 1; ord++) {
-      uint32_t qbits; /* 量子化ビット数 */
-      if (ord < SLAPARCOR_COEF_LOW_ORDER_THRESHOULD) {
-        qbits = 16;
-      } else {
-        qbits = 8;
-      }
       /* 符号なしで符号化 */
-      SLABitStream_PutBits(encoder->strm, qbits, 
+      SLABitStream_PutBits(encoder->strm, SLA_GET_PARCOR_QUANTIZE_BIT_WIDTH(ord), 
           SLAUTILITY_SINT32_TO_UINT32(encoder->parcor_coef_code[ch][ord]));
     }
 
