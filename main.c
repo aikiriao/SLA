@@ -59,16 +59,17 @@ const uint32_t default_preset_no = 2;
 /* エンコード */
 int do_encode(const char* in_filename, const char* out_filename, uint32_t encode_preset_no, uint8_t verpose_flag)
 {
-  FILE*                     out_fp;
-  struct WAVFile*           in_wav;
-  struct stat               fstat;
-  struct SLAEncoder*        encoder;
-  struct SLAEncoderConfig   config;
-  struct SLAEncodeParameter enc_param;
-  struct SLAWaveFormat      wave_format;
-  uint8_t*                  buffer;
-  uint32_t                  buffer_size, encoded_data_size;
-  SLAApiResult              ret;
+  FILE*                             out_fp;
+  struct WAVFile*                   in_wav;
+  struct stat                       fstat;
+  struct SLAEncoder*                encoder;
+  struct SLAEncoderConfig           config;
+  struct SLAEncodeParameter         enc_param;
+  struct SLAWaveFormat              wave_format;
+  uint8_t*                          buffer;
+  uint32_t                          buffer_size, encoded_data_size;
+  const struct SLAEncodeParameter*  ppreset;
+  SLAApiResult                      ret;
 
   /* エンコーダハンドルの作成 */
   config.max_num_channels         = 8;
@@ -98,19 +99,20 @@ int do_encode(const char* in_filename, const char* out_filename, uint32_t encode
   }
 
   /* エンコードパラメータの設定 */
-  enc_param.parcor_order            = encode_preset[encode_preset_no].parcor_order;
-  enc_param.longterm_order          = encode_preset[encode_preset_no].longterm_order;
-  enc_param.lms_order_par_filter    = encode_preset[encode_preset_no].lms_order_par_filter;
-  enc_param.num_lms_filter_cascade  = encode_preset[encode_preset_no].num_lms_filter_cascade;
+  ppreset = &encode_preset[encode_preset_no];
+  enc_param.parcor_order            = ppreset->parcor_order;
+  enc_param.longterm_order          = ppreset->longterm_order;
+  enc_param.lms_order_par_filter    = ppreset->lms_order_par_filter;
+  enc_param.num_lms_filter_cascade  = ppreset->num_lms_filter_cascade;
   if ((in_wav->format.num_channels == 2) 
-      && (encode_preset[encode_preset_no].ch_process_method == SLA_CHPROCESSMETHOD_STEREO_MS)) {
+      && (ppreset->ch_process_method == SLA_CHPROCESSMETHOD_STEREO_MS)) {
     /* 音源がステレオのときだけMSは有効 */
     enc_param.ch_process_method = SLA_CHPROCESSMETHOD_STEREO_MS;
   } else {
     enc_param.ch_process_method = SLA_CHPROCESSMETHOD_NONE;
   }
-  enc_param.window_function_type  = encode_preset[encode_preset_no].window_function_type;
-  enc_param.max_num_block_samples = encode_preset[encode_preset_no].max_num_block_samples;
+  enc_param.window_function_type  = ppreset->window_function_type;
+  enc_param.max_num_block_samples = ppreset->max_num_block_samples;
   if ((ret = SLAEncoder_SetEncodeParameter(encoder, &enc_param)) != SLA_APIRESULT_OK) {
     fprintf(stderr, "Failed to set encode parameter: %d \n", ret);
     return 1;
