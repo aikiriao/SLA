@@ -43,12 +43,12 @@ static struct CommandLineParserSpecification command_line_spec[] = {
 
 /* エンコードプリセット */
 static const struct SLAEncodeParameter encode_preset[] = {
-  /* parcor, longterm, lms, lms_cascade,                ch_porcess_method,                    window_func_type, max_block_size */
-  {       5,        1,   5,           1,         SLA_CHPROCESSMETHOD_NONE,  SLA_WINDOWFUNCTIONTYPE_RECTANGULAR,           4096 },
-  {       5,        1,   5,           1,    SLA_CHPROCESSMETHOD_STEREO_MS,          SLA_WINDOWFUNCTIONTYPE_SIN,          10240 },
-  {      10,        1,  10,           1,    SLA_CHPROCESSMETHOD_STEREO_MS,          SLA_WINDOWFUNCTIONTYPE_SIN,          12288 },
-  {      20,        1,  20,           1,    SLA_CHPROCESSMETHOD_STEREO_MS,          SLA_WINDOWFUNCTIONTYPE_SIN,          12288 },
-  {      30,        3,  30,           1,    SLA_CHPROCESSMETHOD_STEREO_MS,          SLA_WINDOWFUNCTIONTYPE_SIN,          16384 },
+  /* parcor, longterm, lms, lms_cascade,             ch_porcess_method,                   window_func_type, max_block_size */
+  {       5,        1,   5,           1,      SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_RECTANGULAR,           4096 },
+  {       5,        1,   5,           1, SLA_CHPROCESSMETHOD_STEREO_MS,         SLA_WINDOWFUNCTIONTYPE_SIN,          12288 },
+  {      10,        1,  10,           1, SLA_CHPROCESSMETHOD_STEREO_MS,         SLA_WINDOWFUNCTIONTYPE_SIN,          12288 },
+  {      20,        1,  10,           2, SLA_CHPROCESSMETHOD_STEREO_MS,         SLA_WINDOWFUNCTIONTYPE_SIN,          12288 },
+  {      30,        3,  10,           2, SLA_CHPROCESSMETHOD_STEREO_MS,         SLA_WINDOWFUNCTIONTYPE_SIN,          16384 }
 };
 
 /* エンコードプリセット数 */
