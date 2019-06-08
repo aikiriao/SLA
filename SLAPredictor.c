@@ -953,7 +953,6 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
   uint32_t        buffer_pos;
   uint32_t        buffer_pos_mask;
   int64_t         predict;
-  int32_t         log2_residual_index;
   const int32_t*  delta_table_p;
 
   /* 引数チェック */
@@ -1013,12 +1012,11 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
     /* printf("%8d, %8d, %8d \n", residual[smpl], original_signal[smpl], (int32_t)predict); */
 
     /* 更新量テーブルのインデックスを計算 */
-    log2_residual_index = SLALMS_SIGNED_LOG2CEIL(residual[smpl]) + 32;  /* 32を加算して [-32, 31] を [0, 63] の範囲にマップ */
     nlms->signal_sign_buffer[buffer_pos] = SLAUTILITY_SIGN(original_signal[smpl]) + 1;
-    delta_table_p = logsignlms_delta_table[log2_residual_index];
+    delta_table_p = logsignlms_delta_table[SLALMS_SIGNED_LOG2CEIL(residual[smpl]) + 32]; /* 32を加算して [-32, 31] を [0, 63] の範囲にマップ */
     for (i = 0; i < num_coef; i++) {
-      int32_t signal_sign_index = nlms->signal_sign_buffer[(buffer_pos - i - 1) & buffer_pos_mask];
-      nlms->coef[i] += delta_table_p[signal_sign_index];
+      int32_t table_index = nlms->signal_sign_buffer[(buffer_pos - i - 1) & buffer_pos_mask];
+      nlms->coef[i] += delta_table_p[table_index];
     }
 
     /* バッファ参照位置更新 */
