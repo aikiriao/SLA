@@ -72,7 +72,6 @@ struct SLALMSCalculator {
 	int64_t* 	coef;			                /* 係数 */
 	uint32_t	max_num_coef;	            /* 最大の係数個数 */
   int32_t*  signal_sign_buffer;       /* 信号の符号を記録したバッファ */
-  uint32_t  signal_sign_buffer_pos;   /* バッファ参照位置 */
   uint32_t  signal_sign_buffer_size;  /* バッファサイズ（2の冪） */
 };
 
@@ -950,15 +949,21 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
     int32_t* original_signal, int32_t* residual,
     uint32_t num_samples, uint8_t is_predict)
 {
-  uint32_t  smpl, i;
-  uint32_t  signal_sign_buffer_mask;
-  int64_t   predict;
-  int32_t   log2_residual_index;
+  uint32_t        smpl, i;
+  uint32_t        buffer_pos;
+  uint32_t        buffer_pos_mask;
+  int64_t         predict;
+  int32_t         log2_residual_index;
   const int32_t*  delta_table_p;
 
   /* 引数チェック */
   if (nlms == NULL || original_signal == NULL || residual == NULL) {
     return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* 次数チェック */
+  if (num_coef > nlms->max_num_coef) {
+    return SLAPREDICTOR_APIRESULT_EXCEED_MAX_ORDER;
   }
 
   /* 符号バッファの初期化 */
@@ -970,15 +975,10 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
       nlms->signal_sign_buffer[smpl] = SLAUTILITY_SIGN(residual[smpl]) + 1;
     }
   }
-  nlms->signal_sign_buffer_pos  = num_coef;
+  buffer_pos  = num_coef;
   /* バッファサイズは2の冪なので-1してマスクを作る */
   SLA_Assert(SLAUTILITY_IS_POWERED_OF_2(nlms->signal_sign_buffer_size));
-  signal_sign_buffer_mask       = nlms->signal_sign_buffer_size - 1;
-
-  /* 次数チェック */
-  if (num_coef > nlms->max_num_coef) {
-    return SLAPREDICTOR_APIRESULT_EXCEED_MAX_ORDER;
-  }
+  buffer_pos_mask = nlms->signal_sign_buffer_size - 1;
 
   /* 係数を0クリア */
   memset(nlms->coef, 0, sizeof(int64_t) * num_coef);
@@ -1012,19 +1012,17 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
     }
     /* printf("%8d, %8d, %8d \n", residual[smpl], original_signal[smpl], (int32_t)predict); */
 
-    /* 係数更新 TODO:信号側でlogとるのもあり */
     /* 更新量テーブルのインデックスを計算 */
     log2_residual_index = SLALMS_SIGNED_LOG2CEIL(residual[smpl]) + 32;  /* 32を加算して [-32, 31] を [0, 63] の範囲にマップ */
-    nlms->signal_sign_buffer[nlms->signal_sign_buffer_pos] = SLAUTILITY_SIGN(original_signal[smpl]) + 1;
+    nlms->signal_sign_buffer[buffer_pos] = SLAUTILITY_SIGN(original_signal[smpl]) + 1;
     delta_table_p = logsignlms_delta_table[log2_residual_index];
     for (i = 0; i < num_coef; i++) {
-      const uint32_t buffer_pos = (nlms->signal_sign_buffer_pos - i - 1) & signal_sign_buffer_mask;
-      int32_t signal_sign_index = nlms->signal_sign_buffer[buffer_pos];
+      int32_t signal_sign_index = nlms->signal_sign_buffer[(buffer_pos - i - 1) & buffer_pos_mask];
       nlms->coef[i] += delta_table_p[signal_sign_index];
     }
 
     /* バッファ参照位置更新 */
-    nlms->signal_sign_buffer_pos = (nlms->signal_sign_buffer_pos + 1) & signal_sign_buffer_mask;
+    buffer_pos = (buffer_pos + 1) & buffer_pos_mask;
   }
 
   return SLAPREDICTOR_APIRESULT_OK;
