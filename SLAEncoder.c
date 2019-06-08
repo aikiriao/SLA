@@ -275,6 +275,9 @@ static SLAApiResult SLAEncoder_MakeWindow(struct SLAEncoder* encoder, uint32_t n
     case SLA_WINDOWFUNCTIONTYPE_BLACKMAN:
       SLAUtility_MakeBlackmanWindow(encoder->window, num_samples);
       break;
+    case SLA_WINDOWFUNCTIONTYPE_VORBIS:
+      SLAUtility_MakeVorbisWindow(encoder->window, num_samples);
+      break;
     default:
       return SLA_APIRESULT_INVALID_WINDOWFUNCTION_TYPE;
       break;
@@ -658,7 +661,7 @@ SLAApiResult SLAEncoder_EncodeWhole(struct SLAEncoder* encoder,
   num_blocks = 0;
   while (encode_offset_sample < num_samples) {
     /* 出力バッファサイズが足らない */
-    if (cur_output_size > data_size) {
+    if (cur_output_size >= data_size) {
       return SLA_APIRESULT_INSUFFICIENT_BUFFER_SIZE;
     }
 
@@ -709,7 +712,8 @@ SLAApiResult SLAEncoder_EncodeWhole(struct SLAEncoder* encoder,
 
     /* 進捗表示 */
     if (encoder->verpose_flag != 0) {
-      printf("progress:%d%% \r", (100 * encode_offset_sample) / num_samples);
+      printf("progress:%2d%% (output size:%10d)\r",
+          (100 * encode_offset_sample) / num_samples, cur_output_size);
       fflush(stdout);
     }
   }
