@@ -49,7 +49,8 @@ typedef enum SLAWindowFunctionTypeTag {
 	SLA_WINDOWFUNCTIONTYPE_RECTANGULAR = 0,	  /* 矩形窓（何もしない） */
 	SLA_WINDOWFUNCTIONTYPE_SIN,	              /* サイン窓             */
 	SLA_WINDOWFUNCTIONTYPE_HANN,	            /* ハン窓               */
-	SLA_WINDOWFUNCTIONTYPE_BLACKMAN	          /* ブラックマン窓       */
+	SLA_WINDOWFUNCTIONTYPE_BLACKMAN,	        /* ブラックマン窓       */
+	SLA_WINDOWFUNCTIONTYPE_VORBIS	            /* Vorbis窓             */
 } SLAWindowFunctionType;
 
 /* 波形フォーマット */
