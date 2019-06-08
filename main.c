@@ -21,8 +21,8 @@ static struct CommandLineParserSpecification command_line_spec[] = {
     "Decode mode", 
     NULL, COMMAND_LINE_PARSER_FALSE },
   { 'm', "mode", COMMAND_LINE_PARSER_TRUE, 
-    "Specify compress mode: 0(fast decode), ..., 4(high compression)", 
-    "2", COMMAND_LINE_PARSER_FALSE },
+    "Specify compress mode: 0(fast decode), ..., 4(high compression) default:2", 
+    NULL, COMMAND_LINE_PARSER_FALSE },
   { 'p', "verpose", COMMAND_LINE_PARSER_FALSE, 
     "Verpose mode(try to display all information)", 
     NULL, COMMAND_LINE_PARSER_FALSE },
@@ -30,14 +30,14 @@ static struct CommandLineParserSpecification command_line_spec[] = {
     "Silence mode(suppress outputs)", 
     NULL, COMMAND_LINE_PARSER_FALSE },
   { 'c', "crc-check", COMMAND_LINE_PARSER_TRUE, 
-    "Whether to check CRC16 at decoding(yes or no)", 
-    "yes", COMMAND_LINE_PARSER_FALSE },
+    "Whether to check CRC16 at decoding(yes or no) default:yes", 
+    NULL, COMMAND_LINE_PARSER_FALSE },
   { 'h', "help", COMMAND_LINE_PARSER_FALSE, 
     "Show command help message", 
     NULL, COMMAND_LINE_PARSER_FALSE },
   { 'v', "version", COMMAND_LINE_PARSER_FALSE, 
     "Show version information", 
-    NULL, COMMAND_LINE_PARSER_FALSE },
+    NULL, COMMAND_LINE_PARSER_FALSE }
 };
 
 /* コマンドライン仕様数 */
@@ -55,6 +55,8 @@ static const struct SLAEncodeParameter encode_preset[] = {
 
 /* エンコードプリセット数 */
 const uint32_t num_encode_preset = sizeof(encode_preset) / sizeof(encode_preset[0]);
+/* デフォルトのプリセット番号 */
+const uint32_t default_preset_no = 2;
 
 /* エンコード */
 int do_encode(const char* in_filename, const char* out_filename, uint32_t encode_preset_no, uint8_t verpose_flag)
@@ -121,7 +123,7 @@ int do_encode(const char* in_filename, const char* out_filename, uint32_t encode
   buffer_size = (uint32_t)fstat.st_size;
 
   /* エンコードデータ領域を作成
-   * 入力wavよりは大きくならないだろうという想定 */
+   * 入力wavの2倍よりは大きくならないだろうという想定 */
   buffer = (uint8_t *)malloc(buffer_size);
 
   /* 一括エンコード */
@@ -334,9 +336,17 @@ int main(int argc, char** argv)
   if (CommandLineParser_GetOptionAcquired(
         command_line_spec, num_specification, "decode") == COMMAND_LINE_PARSER_TRUE) {
     /* デコード */
-    const char* crc_check_arg
-      = CommandLineParser_GetArgumentString(command_line_spec, num_specification, "crc-check");
-    uint8_t enable_crc_check = (strcmp(crc_check_arg, "yes") == 0) ? 1 : 0;
+    uint8_t enable_crc_check = 1;
+    /* CRC有効フラグを取得 */
+    if (CommandLineParser_GetOptionAcquired(
+          command_line_spec, num_specification, "crc-check") == COMMAND_LINE_PARSER_TRUE) {
+      const char* crc_check_arg
+        = CommandLineParser_GetArgumentString(command_line_spec, num_specification, "crc-check");
+      enable_crc_check = (strcmp(crc_check_arg, "yes") == 0) ? 1 : 0;
+    } else {
+      /* デフォルトでON */
+      enable_crc_check = 1;
+    }
     /* 一括デコード実行 */
     if (do_decode(input_file, output_file, enable_crc_check, verpose_flag) != 0) {
       fprintf(stderr, "%s: failed to decode %s. \n", argv[0], input_file);
@@ -345,12 +355,18 @@ int main(int argc, char** argv)
   } else if (CommandLineParser_GetOptionAcquired(
         command_line_spec, num_specification, "encode") == COMMAND_LINE_PARSER_TRUE) {
     /* エンコード */
+    uint32_t encode_preset_no;
     /* エンコードプリセット番号取得 */
-    uint32_t encode_preset_no
-      = (uint32_t)strtol(CommandLineParser_GetArgumentString(command_line_spec, num_specification, "mode"), NULL, 10);
-    if (encode_preset_no >= num_encode_preset) {
-      fprintf(stderr, "%s: encode preset no out of range. \n", argv[0]);
-      return 1;
+    if (CommandLineParser_GetOptionAcquired(
+          command_line_spec, num_specification, "mode") == COMMAND_LINE_PARSER_TRUE) {
+      encode_preset_no = (uint32_t)strtol(CommandLineParser_GetArgumentString(command_line_spec, num_specification, "mode"), NULL, 10);
+      if (encode_preset_no >= num_encode_preset) {
+        fprintf(stderr, "%s: encode preset number is out of range. \n", argv[0]);
+        return 1;
+      }
+    } else {
+      /* デフォルトのプリセットを選択 */
+      encode_preset_no = default_preset_no;
     }
     /* 一括エンコード実行 */
     if (do_encode(input_file, output_file, encode_preset_no, verpose_flag) != 0) {
