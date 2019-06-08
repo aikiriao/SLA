@@ -4,13 +4,35 @@
 #include <string.h>
 #include <assert.h>
 
-/* コマンドラインパーサ仕様のチェック */
-static CommandLineParserBool CommandLineParser_CheckSpecification(
-    const struct CommandLineParserSpecification* clps, uint32_t num_specs)
+/* 仕様リストサイズを計測 */
+static uint32_t CommandLineParser_GetNumSpecifications(
+    const struct CommandLineParserSpecification* clps)
 {
-  uint32_t spec_no;
+  uint32_t num_specs;
 
   assert(clps != NULL);
+
+  /* リスト終端の0にぶつかるまでポインタを進める */
+  num_specs = 0;
+  while (clps->short_option != 0) {
+    num_specs++;
+    clps++;
+  }
+
+  return num_specs;
+}
+
+/* コマンドラインパーサ仕様のチェック */
+static CommandLineParserBool CommandLineParser_CheckSpecification(
+    const struct CommandLineParserSpecification* clps)
+{
+  uint32_t spec_no;
+  uint32_t num_specs;
+
+  assert(clps != NULL);
+
+  /* 仕様数の取得 */
+  num_specs = CommandLineParser_GetNumSpecifications(clps);
 
   for (spec_no = 0; spec_no < num_specs; spec_no++) {
     uint32_t j;
@@ -34,11 +56,12 @@ static CommandLineParserBool CommandLineParser_CheckSpecification(
 }
 
 /* 引数説明の印字 */
-void CommandLineParser_PrintDescription(const struct CommandLineParserSpecification* clps, uint32_t num_specs)
+void CommandLineParser_PrintDescription(const struct CommandLineParserSpecification* clps)
 {
   uint32_t  spec_no;
   char      arg_option_attr[256];
   char      command_str[256];
+  uint32_t  num_specs;
 
   /* 引数チェック */
   if (clps == NULL) {
@@ -47,18 +70,19 @@ void CommandLineParser_PrintDescription(const struct CommandLineParserSpecificat
   }
 
   /* 仕様をチェックしておく */
-  if (CommandLineParser_CheckSpecification(clps, num_specs) != COMMAND_LINE_PARSER_TRUE) {
+  if (CommandLineParser_CheckSpecification(clps) != COMMAND_LINE_PARSER_TRUE) {
     fprintf(stderr, "Warning: Command-line specification is invalid. (Unable to parse) \n");
   }
+
+  /* 仕様数の取得 */
+  num_specs = CommandLineParser_GetNumSpecifications(clps);
 
   /* 仕様を順番に表示 */
   for (spec_no = 0; spec_no < num_specs; spec_no++) {
     const struct CommandLineParserSpecification* pspec = &clps[spec_no];
     /* 引数の属性文字列を作成 */
     if (pspec->need_argument == COMMAND_LINE_PARSER_TRUE) {
-      sprintf(arg_option_attr, "(needs argument, %s%s)",
-          (pspec->argument_string != NULL) ? "default: " : "",
-          (pspec->argument_string != NULL) ? pspec->argument_string : "");
+      sprintf(arg_option_attr, "(needs argument)");
     } else {
       strcpy(arg_option_attr, "");
     }
@@ -71,7 +95,7 @@ void CommandLineParser_PrintDescription(const struct CommandLineParserSpecificat
     }
 
     /* 説明を付加して全てを印字 */
-    printf("%-20s %-30s  %s \n",
+    printf("%-20s %-18s  %s \n",
         command_str, arg_option_attr,
         (pspec->description != NULL) ? pspec->description : "");
   }
@@ -79,15 +103,19 @@ void CommandLineParser_PrintDescription(const struct CommandLineParserSpecificat
 
 /* オプション名からインデックスを取得 */
 static CommandLineParserResult CommandLineParser_GetSpecificationIndex(
-    const struct CommandLineParserSpecification* clps, uint32_t num_specs,
+    const struct CommandLineParserSpecification* clps,
     const char* option_name, uint32_t* index)
 {
   uint32_t spec_no;
+  uint32_t num_specs;
 
   /* 引数チェック */
   if (clps == NULL || option_name == NULL || index == NULL) {
     return COMMAND_LINE_PARSER_RESULT_INVALID_ARGUMENT;
   }
+
+  /* 仕様数の取得 */
+  num_specs = CommandLineParser_GetNumSpecifications(clps);
 
   /* ショートオプションから検索 */
   if (strlen(option_name) == 1) {
@@ -113,13 +141,13 @@ static CommandLineParserResult CommandLineParser_GetSpecificationIndex(
 
 /* オプション名からそのオプションが指定されたか取得 */
 CommandLineParserBool CommandLineParser_GetOptionAcquired(
-    const struct CommandLineParserSpecification* clps, uint32_t num_specs,
+    const struct CommandLineParserSpecification* clps,
     const char* option_name)
 {
   uint32_t spec_no;
 
   /* インデックス取得 */
-  if (CommandLineParser_GetSpecificationIndex(clps, num_specs, option_name, &spec_no) != COMMAND_LINE_PARSER_RESULT_OK) {
+  if (CommandLineParser_GetSpecificationIndex(clps, option_name, &spec_no) != COMMAND_LINE_PARSER_RESULT_OK) {
     return COMMAND_LINE_PARSER_FALSE;
   }
 
@@ -128,13 +156,13 @@ CommandLineParserBool CommandLineParser_GetOptionAcquired(
 
 /* オプション名からそのオプション引数を取得 */
 const char* CommandLineParser_GetArgumentString(
-    const struct CommandLineParserSpecification* clps, uint32_t num_specs,
+    const struct CommandLineParserSpecification* clps,
     const char* option_name)
 {
   uint32_t spec_no;
 
   /* インデックス取得 */
-  if (CommandLineParser_GetSpecificationIndex(clps, num_specs, option_name, &spec_no) != COMMAND_LINE_PARSER_RESULT_OK) {
+  if (CommandLineParser_GetSpecificationIndex(clps, option_name, &spec_no) != COMMAND_LINE_PARSER_RESULT_OK) {
     return NULL;
   }
 
@@ -143,22 +171,26 @@ const char* CommandLineParser_GetArgumentString(
 
 /* 引数のパース */
 CommandLineParserResult CommandLineParser_ParseArguments(
+	struct CommandLineParserSpecification* clps,
 	int32_t argc, char** argv,
-	struct CommandLineParserSpecification* clps, uint32_t num_specs,
 	const char** other_string_array, uint32_t other_string_array_size)
 {
   int32_t     count;
   uint32_t    spec_no;
   const char* arg_str;
   uint32_t    other_string_index;
+  uint32_t    num_specs;
 
   /* 引数チェック */
   if (argv == NULL || clps == NULL) {
     return COMMAND_LINE_PARSER_RESULT_INVALID_ARGUMENT;
   }
 
+  /* 仕様数の取得 */
+  num_specs = CommandLineParser_GetNumSpecifications(clps);
+
   /* コマンドライン仕様のチェック */
-  if (CommandLineParser_CheckSpecification(clps, num_specs) != COMMAND_LINE_PARSER_TRUE) {
+  if (CommandLineParser_CheckSpecification(clps) != COMMAND_LINE_PARSER_TRUE) {
     return COMMAND_LINE_PARSER_RESULT_INVALID_SPECIFICATION;
   }
 

@@ -22,6 +22,7 @@ typedef enum CommandLineParserBoolTag {
 } CommandLineParserBool;
 
 /* コマンドラインパーサ仕様 */
+/* 補足）コマンドラインパーサ仕様の配列の最後の要素の短いオプションに0を指定して下さい */
 struct CommandLineParserSpecification {
 	char 				          short_option;		  /* [in] 短いオプション文字列        */
 	const char* 		      long_option;		  /* [in] 長いオプション文字列        */
@@ -37,22 +38,20 @@ extern "C" {
 
 /* 引数説明の印字 */
 void CommandLineParser_PrintDescription(
-    const struct CommandLineParserSpecification* clps, uint32_t num_specs);
+    const struct CommandLineParserSpecification* clps);
 
 /* オプション名からそのオプションが指定されたか取得 */
 CommandLineParserBool CommandLineParser_GetOptionAcquired(
-    const struct CommandLineParserSpecification* clps, uint32_t num_specs,
-    const char* option_name);
+    const struct CommandLineParserSpecification* clps, const char* option_name);
 
 /* オプション名からそのオプション引数を取得 */
 const char* CommandLineParser_GetArgumentString(
-    const struct CommandLineParserSpecification* clps, uint32_t num_specs,
-    const char* option_name);
+    const struct CommandLineParserSpecification* clps, const char* option_name);
 
 /* 引数のパース */
 CommandLineParserResult CommandLineParser_ParseArguments(
+	struct CommandLineParserSpecification* clps,
 	int32_t argc, char** argv,
-	struct CommandLineParserSpecification* clps, uint32_t num_specs,
 	const char** other_string_array, uint32_t other_string_array_size);
 
 #ifdef __cplusplus

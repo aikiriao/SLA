@@ -37,11 +37,9 @@ static struct CommandLineParserSpecification command_line_spec[] = {
     NULL, COMMAND_LINE_PARSER_FALSE },
   { 'v', "version", COMMAND_LINE_PARSER_FALSE, 
     "Show version information", 
-    NULL, COMMAND_LINE_PARSER_FALSE }
+    NULL, COMMAND_LINE_PARSER_FALSE },
+  { 0, }
 };
-
-/* コマンドライン仕様数 */
-const uint32_t num_specification = sizeof(command_line_spec) / sizeof(command_line_spec[0]);
 
 /* エンコードプリセット */
 static const struct SLAEncodeParameter encode_preset[] = {
@@ -137,7 +135,9 @@ int do_encode(const char* in_filename, const char* out_filename, uint32_t encode
   out_fp = fopen(out_filename, "wb");
   fwrite(buffer, sizeof(uint8_t), encoded_data_size, out_fp);
 
-  printf("Encode succuess! size:%d -> %d \n", buffer_size, encoded_data_size);
+  if (verpose_flag != 0) {
+    printf("Encode succuess! size:%d -> %d \n", buffer_size, encoded_data_size);
+  }
 
   fclose(out_fp);
   free(buffer);
@@ -283,22 +283,19 @@ int main(int argc, char** argv)
   }
 
   /* コマンドライン解析 */
-  if (CommandLineParser_ParseArguments(argc, argv,
-        command_line_spec, num_specification,
-        filename_ptr, sizeof(filename_ptr) / sizeof(filename_ptr[0]))
+  if (CommandLineParser_ParseArguments(command_line_spec,
+        argc, argv, filename_ptr, sizeof(filename_ptr) / sizeof(filename_ptr[0]))
       != COMMAND_LINE_PARSER_RESULT_OK) {
     return 1;
   }
 
   /* ヘルプやバージョン情報の表示判定 */
-  if (CommandLineParser_GetOptionAcquired(
-        command_line_spec, num_specification, "help") == COMMAND_LINE_PARSER_TRUE) {
+  if (CommandLineParser_GetOptionAcquired(command_line_spec, "help") == COMMAND_LINE_PARSER_TRUE) {
     print_usage(argv);
     printf("options: \n");
-    CommandLineParser_PrintDescription(command_line_spec, num_specification);
+    CommandLineParser_PrintDescription(command_line_spec);
     return 0;
-  } else if (CommandLineParser_GetOptionAcquired(
-        command_line_spec, num_specification, "version") == COMMAND_LINE_PARSER_TRUE) {
+  } else if (CommandLineParser_GetOptionAcquired(command_line_spec, "version") == COMMAND_LINE_PARSER_TRUE) {
     print_version_info();
     return 0;
   }
@@ -316,57 +313,43 @@ int main(int argc, char** argv)
   }
 
   /* エンコードとデコードは同時に指定できない */
-  if ((CommandLineParser_GetOptionAcquired(
-          command_line_spec, num_specification, "decode") == COMMAND_LINE_PARSER_TRUE)
-      && (CommandLineParser_GetOptionAcquired(
-          command_line_spec, num_specification, "encode") == COMMAND_LINE_PARSER_TRUE)) {
+  if ((CommandLineParser_GetOptionAcquired(command_line_spec, "decode") == COMMAND_LINE_PARSER_TRUE)
+      && (CommandLineParser_GetOptionAcquired(command_line_spec, "encode") == COMMAND_LINE_PARSER_TRUE)) {
       fprintf(stderr, "%s: encode and decode mode cannot specify simultaneously. \n", argv[0]);
       return 1;
   }
 
   /* 情報表示オプション */
-  if (CommandLineParser_GetOptionAcquired(
-        command_line_spec, num_specification, "verpose") == COMMAND_LINE_PARSER_TRUE) {
+  if (CommandLineParser_GetOptionAcquired(command_line_spec, "verpose") == COMMAND_LINE_PARSER_TRUE) {
     verpose_flag = 1;
-  } else if (CommandLineParser_GetOptionAcquired(
-        command_line_spec, num_specification, "silence") == COMMAND_LINE_PARSER_TRUE) {
+  } else if (CommandLineParser_GetOptionAcquired(command_line_spec, "silence") == COMMAND_LINE_PARSER_TRUE) {
     verpose_flag = 0;
   }
 
-  if (CommandLineParser_GetOptionAcquired(
-        command_line_spec, num_specification, "decode") == COMMAND_LINE_PARSER_TRUE) {
+  if (CommandLineParser_GetOptionAcquired(command_line_spec, "decode") == COMMAND_LINE_PARSER_TRUE) {
     /* デコード */
     uint8_t enable_crc_check = 1;
     /* CRC有効フラグを取得 */
-    if (CommandLineParser_GetOptionAcquired(
-          command_line_spec, num_specification, "crc-check") == COMMAND_LINE_PARSER_TRUE) {
+    if (CommandLineParser_GetOptionAcquired(command_line_spec, "crc-check") == COMMAND_LINE_PARSER_TRUE) {
       const char* crc_check_arg
-        = CommandLineParser_GetArgumentString(command_line_spec, num_specification, "crc-check");
+        = CommandLineParser_GetArgumentString(command_line_spec, "crc-check");
       enable_crc_check = (strcmp(crc_check_arg, "yes") == 0) ? 1 : 0;
-    } else {
-      /* デフォルトでON */
-      enable_crc_check = 1;
     }
     /* 一括デコード実行 */
     if (do_decode(input_file, output_file, enable_crc_check, verpose_flag) != 0) {
       fprintf(stderr, "%s: failed to decode %s. \n", argv[0], input_file);
       return 1;
     }
-  } else if (CommandLineParser_GetOptionAcquired(
-        command_line_spec, num_specification, "encode") == COMMAND_LINE_PARSER_TRUE) {
+  } else if (CommandLineParser_GetOptionAcquired(command_line_spec, "encode") == COMMAND_LINE_PARSER_TRUE) {
     /* エンコード */
-    uint32_t encode_preset_no;
+    uint32_t encode_preset_no = default_preset_no;
     /* エンコードプリセット番号取得 */
-    if (CommandLineParser_GetOptionAcquired(
-          command_line_spec, num_specification, "mode") == COMMAND_LINE_PARSER_TRUE) {
-      encode_preset_no = (uint32_t)strtol(CommandLineParser_GetArgumentString(command_line_spec, num_specification, "mode"), NULL, 10);
+    if (CommandLineParser_GetOptionAcquired(command_line_spec, "mode") == COMMAND_LINE_PARSER_TRUE) {
+      encode_preset_no = (uint32_t)strtol(CommandLineParser_GetArgumentString(command_line_spec, "mode"), NULL, 10);
       if (encode_preset_no >= num_encode_preset) {
         fprintf(stderr, "%s: encode preset number is out of range. \n", argv[0]);
         return 1;
       }
-    } else {
-      /* デフォルトのプリセットを選択 */
-      encode_preset_no = default_preset_no;
     }
     /* 一括エンコード実行 */
     if (do_encode(input_file, output_file, encode_preset_no, verpose_flag) != 0) {

@@ -25,11 +25,12 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
   /* 簡単な成功例 */
   {
 #define INPUT_FILE_NAME "inputfile"
-    static const struct CommandLineParserSpecification specs[2] = {
+    static const struct CommandLineParserSpecification specs[] = {
       { 'i', NULL,  COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'p', NULL, COMMAND_LINE_PARSER_FALSE, "output file", NULL, COMMAND_LINE_PARSER_FALSE }
+      { 'p', NULL, COMMAND_LINE_PARSER_FALSE, "output file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
-    struct CommandLineParserSpecification get_specs[2];
+    struct CommandLineParserSpecification get_specs[sizeof(specs) / sizeof(specs[0])];
     char* test_argv1[] = { "progname", "-i", INPUT_FILE_NAME, "-p" };
     char* test_argv2[] = { "progname", "-p", "-i", INPUT_FILE_NAME };
     char* test_argv3[] = { "progname", "-pi", INPUT_FILE_NAME };
@@ -38,8 +39,8 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
     get_specs[0] = specs[0]; get_specs[1] = specs[1];
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          get_specs,
           sizeof(test_argv1) / sizeof(test_argv1[0]), test_argv1,
-          get_specs, sizeof(get_specs) / sizeof(get_specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_OK);
 
@@ -55,8 +56,8 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
     get_specs[0] = specs[0]; get_specs[1] = specs[1];
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          get_specs,
           sizeof(test_argv2) / sizeof(test_argv2[0]), test_argv2,
-          get_specs, sizeof(get_specs) / sizeof(get_specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_OK);
 
@@ -72,8 +73,8 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
     get_specs[0] = specs[0]; get_specs[1] = specs[1];
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          get_specs,
           sizeof(test_argv3) / sizeof(test_argv3[0]), test_argv3,
-          get_specs, sizeof(get_specs) / sizeof(get_specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_OK);
 
@@ -93,13 +94,14 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
   {
     struct CommandLineParserSpecification specs[] = {
       { 'i', NULL, COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
     char* test_argv[] = { "progname", "-i" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv) / sizeof(test_argv[0]), test_argv,
-          specs, sizeof(specs) / sizeof(specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_NOT_SPECIFY_ARGUMENT_TO_OPTION);
   }
@@ -108,21 +110,22 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
   {
     struct CommandLineParserSpecification specs[] = {
       { 'i', NULL, COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
     char* test_argv1[] = { "progname", "-i", "-p" };
     char* test_argv2[] = { "progname", "-i", "--pripara" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv1) / sizeof(test_argv1[0]), test_argv1,
-          specs, sizeof(specs) / sizeof(specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_NOT_SPECIFY_ARGUMENT_TO_OPTION);
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv2) / sizeof(test_argv2[0]), test_argv2,
-          specs, sizeof(specs) / sizeof(specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_NOT_SPECIFY_ARGUMENT_TO_OPTION);
   }
@@ -131,14 +134,15 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
   {
     struct CommandLineParserSpecification specs[] = {
       { 'i', NULL, COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'p', NULL, COMMAND_LINE_PARSER_FALSE, "output file", NULL, COMMAND_LINE_PARSER_FALSE }
+      { 'p', NULL, COMMAND_LINE_PARSER_FALSE, "output file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
     char* test_argv[] = { "progname", "-i", "kiriya aoi", "-p", "-s" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv) / sizeof(test_argv[0]), test_argv,
-          specs, sizeof(specs) / sizeof(specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_UNKNOWN_OPTION);
   }
@@ -147,13 +151,14 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
   {
     struct CommandLineParserSpecification specs[] = {
       { 'i', NULL, COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
     char* test_argv[] = { "progname", "-i", "kiriya aoi", "-i", "shibuki ran" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv) / sizeof(test_argv[0]), test_argv,
-          specs, sizeof(specs) / sizeof(specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_OPTION_MULTIPLY_SPECIFIED);
   }
@@ -163,13 +168,14 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
     struct CommandLineParserSpecification specs[] = {
       { 'i', NULL,  COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
       { 'p', NULL, COMMAND_LINE_PARSER_FALSE, "prichan", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
     char* test_argv[] = { "progname", "-p", "-i", "kiriya aoi", "-p" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv) / sizeof(test_argv[0]), test_argv,
-          specs, sizeof(specs) / sizeof(specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_OPTION_MULTIPLY_SPECIFIED);
   }
@@ -179,13 +185,14 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
     struct CommandLineParserSpecification specs[] = {
       { 'i', NULL, COMMAND_LINE_PARSER_TRUE,  "input file", NULL, COMMAND_LINE_PARSER_FALSE },
       { 'p', NULL, COMMAND_LINE_PARSER_FALSE, "prichan",    NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
     char* test_argv[] = { "progname", "-ip", "filename" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv) / sizeof(test_argv[0]), test_argv,
-          specs, sizeof(specs) / sizeof(specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_INVAILD_SHORT_OPTION_ARGUMENT);
   }
@@ -195,13 +202,14 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
     struct CommandLineParserSpecification specs[] = {
       { 'i', NULL, COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
       { 'p', NULL, COMMAND_LINE_PARSER_TRUE, "prichan",    NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
     char* test_argv[] = { "progname", "-ip", "filename" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv) / sizeof(test_argv[0]), test_argv,
-          specs, sizeof(specs) / sizeof(specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_INVAILD_SHORT_OPTION_ARGUMENT);
   }
@@ -216,17 +224,18 @@ static void testCommandLineParser_GetLongOptionTest(void *obj)
   /* 簡単な成功例 */
   {
 #define INPUT_FILE_NAME "inputfile"
-    struct CommandLineParserSpecification specs[2] = {
+    struct CommandLineParserSpecification specs[] = {
       { 'i', "input",   COMMAND_LINE_PARSER_TRUE, "input file",   NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE }
+      { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
     char* test_argv[] = { "progname", "--input", INPUT_FILE_NAME, "--aikatsu" };
 
     /* パースしてみる */
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv) / sizeof(test_argv[0]), test_argv,
-          specs, sizeof(specs) / sizeof(specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_OK);
 
@@ -244,17 +253,18 @@ static void testCommandLineParser_GetLongOptionTest(void *obj)
   /* 簡単な成功例 パート2 */
   {
 #define INPUT_FILE_NAME "inputfile"
-    struct CommandLineParserSpecification specs[2] = {
+    struct CommandLineParserSpecification specs[] = {
       { 'i', "input",   COMMAND_LINE_PARSER_TRUE, "input file",   NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE }
+      { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
     char* test_argv[] = { "progname", "--input=" INPUT_FILE_NAME, "--aikatsu" };
 
     /* パースしてみる */
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv) / sizeof(test_argv[0]), test_argv,
-          specs, sizeof(specs) / sizeof(specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_OK);
 
@@ -275,13 +285,14 @@ static void testCommandLineParser_GetLongOptionTest(void *obj)
   {
     struct CommandLineParserSpecification specs[] = {
       { 'i', "input", COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
     char* test_argv[] = { "progname", "--input" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv) / sizeof(test_argv[0]), test_argv,
-          specs, sizeof(specs) / sizeof(specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_NOT_SPECIFY_ARGUMENT_TO_OPTION);
   }
@@ -290,21 +301,22 @@ static void testCommandLineParser_GetLongOptionTest(void *obj)
   {
     struct CommandLineParserSpecification specs[] = {
       { 'i', "input", COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
     char* test_argv1[] = { "progname", "--input", "-a" };
     char* test_argv2[] = { "progname", "--input", "--aikatsu" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv1) / sizeof(test_argv1[0]), test_argv1,
-          specs, sizeof(specs) / sizeof(specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_NOT_SPECIFY_ARGUMENT_TO_OPTION);
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv2) / sizeof(test_argv2[0]), test_argv2,
-          specs, sizeof(specs) / sizeof(specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_NOT_SPECIFY_ARGUMENT_TO_OPTION);
   }
@@ -313,14 +325,15 @@ static void testCommandLineParser_GetLongOptionTest(void *obj)
   {
     struct CommandLineParserSpecification specs[] = {
       { 'i', "input",   COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'p', "aikatsu", COMMAND_LINE_PARSER_FALSE, "aikatsu mode", NULL, COMMAND_LINE_PARSER_FALSE }
+      { 'p', "aikatsu", COMMAND_LINE_PARSER_FALSE, "aikatsu mode", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
     char* test_argv[] = { "progname", "--input", "kiriya aoi", "--aikatsu", "--unknown" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv) / sizeof(test_argv[0]), test_argv,
-          specs, sizeof(specs) / sizeof(specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_UNKNOWN_OPTION);
   }
@@ -329,13 +342,14 @@ static void testCommandLineParser_GetLongOptionTest(void *obj)
   {
     struct CommandLineParserSpecification specs[] = {
       { 'i', "input", COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
     char* test_argv[] = { "progname", "--input", "kiriya aoi", "--input", "shibuki ran" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv) / sizeof(test_argv[0]), test_argv,
-          specs, sizeof(specs) / sizeof(specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_OPTION_MULTIPLY_SPECIFIED);
   }
@@ -344,13 +358,14 @@ static void testCommandLineParser_GetLongOptionTest(void *obj)
   {
     struct CommandLineParserSpecification specs[] = {
       { 'i', "input", COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
     char* test_argv[] = { "progname", "--input=kiriya aoi", "--input=shibuki ran" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv) / sizeof(test_argv[0]), test_argv,
-          specs, sizeof(specs) / sizeof(specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_OPTION_MULTIPLY_SPECIFIED);
   }
@@ -359,13 +374,14 @@ static void testCommandLineParser_GetLongOptionTest(void *obj)
   {
     struct CommandLineParserSpecification specs[] = {
       { 'i', "input", COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
     char* test_argv[] = { "progname", "--input=kiriya aoi", "--input", "shibuki ran" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv) / sizeof(test_argv[0]), test_argv,
-          specs, sizeof(specs) / sizeof(specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_OPTION_MULTIPLY_SPECIFIED);
   }
@@ -380,14 +396,15 @@ static void testCommandLineParser_GetOtherStringTest(void *obj)
   {
     struct CommandLineParserSpecification specs[] = {
       { 'i', "input", COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
     char* test_argv[] = { "progname", "Ichgo Hoshimiya", "Aoi Kiriya", "Ran Shibuki" };
     const char* other_string_array[3];
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv) / sizeof(test_argv[0]), test_argv,
-          specs, sizeof(specs) / sizeof(specs[0]),
           other_string_array, sizeof(other_string_array) / sizeof(other_string_array[0])),
         COMMAND_LINE_PARSER_RESULT_OK);
 
@@ -401,14 +418,15 @@ static void testCommandLineParser_GetOtherStringTest(void *obj)
   {
     struct CommandLineParserSpecification specs[] = {
       { 'i', "input", COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
     char* test_argv[] = { "progname", "Ichgo Hoshimiya", "-i", "inputfile", "Aoi Kiriya", "Ran Shibuki" };
     const char* other_string_array[3];
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv) / sizeof(test_argv[0]), test_argv,
-          specs, sizeof(specs) / sizeof(specs[0]),
           other_string_array, sizeof(other_string_array) / sizeof(other_string_array[0])),
         COMMAND_LINE_PARSER_RESULT_OK);
 
@@ -425,14 +443,15 @@ static void testCommandLineParser_GetOtherStringTest(void *obj)
   {
     struct CommandLineParserSpecification specs[] = {
       { 'i', "input", COMMAND_LINE_PARSER_TRUE, "input file", NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
     char* test_argv[] = { "progname", "Ichgo Hoshimiya", "Aoi Kiriya", "Ran Shibuki" };
     const char* other_string_array[2];
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv) / sizeof(test_argv[0]), test_argv,
-          specs, sizeof(specs) / sizeof(specs[0]),
           other_string_array, sizeof(other_string_array) / sizeof(other_string_array[0])),
         COMMAND_LINE_PARSER_RESULT_INSUFFICIENT_OTHER_STRING_ARRAY_SIZE);
   }
@@ -449,14 +468,15 @@ static void testCommandLineParser_ParseVariousStringTest(void* obj)
     struct CommandLineParserSpecification specs[] = {
       { 'i', "input",   COMMAND_LINE_PARSER_TRUE, "input file",   NULL, COMMAND_LINE_PARSER_FALSE },
       { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'i', NULL, COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE }
+      { 'i', NULL, COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
     char* test_argv[] = { "progname", "--input", "inputfile", "--aikatsu" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv) / sizeof(test_argv[0]), test_argv,
-          specs, sizeof(specs) / sizeof(specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_INVALID_SPECIFICATION);
   }
@@ -466,14 +486,15 @@ static void testCommandLineParser_ParseVariousStringTest(void* obj)
     struct CommandLineParserSpecification specs[] = {
       { 'i', "input",   COMMAND_LINE_PARSER_TRUE, "input file",   NULL, COMMAND_LINE_PARSER_FALSE },
       { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'p', "input",   COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE }
+      { 'p', "input",   COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
     char* test_argv[] = { "progname", "--input", "inputfile", "--aikatsu" };
 
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
+          specs,
           sizeof(test_argv) / sizeof(test_argv[0]), test_argv,
-          specs, sizeof(specs) / sizeof(specs[0]),
           NULL, 0),
         COMMAND_LINE_PARSER_RESULT_INVALID_SPECIFICATION);
   }
@@ -490,9 +511,10 @@ static void testCommandLineParser_GetSpecificationIndexTest(void* obj)
     const struct CommandLineParserSpecification specs[] = {
       { 'i', "input",   COMMAND_LINE_PARSER_TRUE,  "input file",   NULL, COMMAND_LINE_PARSER_FALSE },
       { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'p', "prichan",   COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE }
+      { 'p', "prichan",   COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
-    const uint32_t num_specs = sizeof(specs) / sizeof(specs[0]);
+    uint32_t num_specs = CommandLineParser_GetNumSpecifications(specs);
 
     for (spec_no = 0; spec_no < num_specs; spec_no++) {
       char short_option_str[2];
@@ -501,13 +523,13 @@ static void testCommandLineParser_GetSpecificationIndexTest(void* obj)
       short_option_str[1] = '\0';
       Test_AssertEqual(
           CommandLineParser_GetSpecificationIndex(
-            specs, num_specs, short_option_str, &get_index),
+          specs, short_option_str, &get_index),
           COMMAND_LINE_PARSER_RESULT_OK);
       Test_AssertEqual(get_index, spec_no);
       /* ロングオプションに対してテスト */
       Test_AssertEqual(
           CommandLineParser_GetSpecificationIndex(
-            specs, num_specs, specs[spec_no].long_option, &get_index),
+          specs, specs[spec_no].long_option, &get_index),
           COMMAND_LINE_PARSER_RESULT_OK);
       Test_AssertEqual(get_index, spec_no);
     }
@@ -521,21 +543,21 @@ static void testCommandLineParser_GetSpecificationIndexTest(void* obj)
     const struct CommandLineParserSpecification specs[] = {
       { 'i', "input",   COMMAND_LINE_PARSER_TRUE,  "input file",   NULL, COMMAND_LINE_PARSER_FALSE },
       { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'p', "prichan",   COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE }
+      { 'p', "prichan",   COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
-    const uint32_t num_specs = sizeof(specs) / sizeof(specs[0]);
 
     Test_AssertEqual(
         CommandLineParser_GetSpecificationIndex(
-          NULL, num_specs, "aikatsu", &get_index),
+          NULL, "aikatsu", &get_index),
         COMMAND_LINE_PARSER_RESULT_INVALID_ARGUMENT);
     Test_AssertEqual(
         CommandLineParser_GetSpecificationIndex(
-          specs, num_specs, NULL, &get_index),
+          specs, NULL, &get_index),
         COMMAND_LINE_PARSER_RESULT_INVALID_ARGUMENT);
     Test_AssertEqual(
         CommandLineParser_GetSpecificationIndex(
-          specs, num_specs, "aikatsu", NULL),
+          specs, "aikatsu", NULL),
         COMMAND_LINE_PARSER_RESULT_INVALID_ARGUMENT);
   }
 
@@ -545,29 +567,29 @@ static void testCommandLineParser_GetSpecificationIndexTest(void* obj)
     const struct CommandLineParserSpecification specs[] = {
       { 'i', "input",   COMMAND_LINE_PARSER_TRUE,  "input file",   NULL, COMMAND_LINE_PARSER_FALSE },
       { 'a', "aikatsu", COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
-      { 'p', "prichan",   COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE }
+      { 'p', "prichan",   COMMAND_LINE_PARSER_FALSE, "aikatsu dakega boku no shinri datta",  NULL, COMMAND_LINE_PARSER_FALSE },
+      { 0, }
     };
-    const uint32_t num_specs = sizeof(specs) / sizeof(specs[0]);
 
     Test_AssertEqual(
         CommandLineParser_GetSpecificationIndex(
-          specs, num_specs, "aikats", &get_index),
+          specs, "aikats", &get_index),
         COMMAND_LINE_PARSER_RESULT_UNKNOWN_OPTION);
     Test_AssertEqual(
         CommandLineParser_GetSpecificationIndex(
-          specs, num_specs, "moegi emo", &get_index),
+          specs, "moegi emo", &get_index),
         COMMAND_LINE_PARSER_RESULT_UNKNOWN_OPTION);
     Test_AssertEqual(
         CommandLineParser_GetSpecificationIndex(
-          specs, num_specs, "mirai momoyama", &get_index),
+          specs, "mirai momoyama", &get_index),
         COMMAND_LINE_PARSER_RESULT_UNKNOWN_OPTION);
     Test_AssertEqual(
         CommandLineParser_GetSpecificationIndex(
-          specs, num_specs, "s", &get_index),
+          specs, "s", &get_index),
         COMMAND_LINE_PARSER_RESULT_UNKNOWN_OPTION);
     Test_AssertEqual(
         CommandLineParser_GetSpecificationIndex(
-          specs, num_specs, "b", &get_index),
+          specs, "b", &get_index),
         COMMAND_LINE_PARSER_RESULT_UNKNOWN_OPTION);
   }
 }
