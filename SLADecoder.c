@@ -331,7 +331,7 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
 
     /* PARCOR係数読み取り */
     /* 右シフト量 */
-    SLABitStream_GetBits(decoder->strm, 3, &bitsbuf);
+    SLABitStream_GetBits(decoder->strm, 4, &bitsbuf);
     rshift = (uint32_t)bitsbuf;
     /* 0次は0で確定 */
     decoder->parcor_coef[ch][0] = 0;

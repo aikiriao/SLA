@@ -607,8 +607,8 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
 
     /* PARCOR係数 */
     /* 右シフト量を記録 */
-    SLA_Assert(encoder->parcor_rshift[ch] < (1UL << 3));
-    SLABitStream_PutBits(encoder->strm, 3, encoder->parcor_rshift[ch]);
+    SLA_Assert(encoder->parcor_rshift[ch] < (1UL << 4));
+    SLABitStream_PutBits(encoder->strm, 4, encoder->parcor_rshift[ch]);
     /* 0次は0.0だから符号化せず飛ばす */
     for (ord = 1; ord < parcor_order + 1; ord++) {
       /* 符号なしで符号化 */

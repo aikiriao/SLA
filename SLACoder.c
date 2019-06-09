@@ -458,11 +458,12 @@ void SLACoder_PutDataArray(struct SLABitStream* strm, const int32_t* data, uint3
   }
   init_param = SLAUTILITY_MAX((uint32_t)(sum / num_data), 1);
 
+  /* FIXME: ここで固定24bitは大きい。ビットレートから分かるから省略できる */
   SLA_Assert(init_param != 0);
-  SLA_Assert(init_param < (1UL << 16));
+  SLA_Assert(init_param < (1UL << 24));
 
   /* 初期パラメータの書き込み */
-  ret = SLABitStream_PutBits(strm, 16, init_param);
+  ret = SLABitStream_PutBits(strm, 24, init_param);
   SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
 
   /* パラメータが小さい場合はパラメータ固定で符号化 */
@@ -496,7 +497,8 @@ void SLACoder_GetDataArray(struct SLABitStream* strm, int32_t* data, uint32_t nu
   SLA_Assert((strm != NULL) && (data != NULL));
 
   /* 初期パラメータの取得 */
-  ret = SLABitStream_GetBits(strm, 16, &init_param);
+  /* FIXME: ここで固定24bitは大きい。ビットレートから分かるから省略できる */
+  ret = SLABitStream_GetBits(strm, 24, &init_param);
   SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
   SLA_Assert(init_param != 0);
 
