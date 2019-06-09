@@ -29,7 +29,7 @@ static void testSLACoder_SLARecursiveRiceTest(void *obj)
     const char* test_file_name
       = "coding_util_recur_rice_test.bin";
     struct SLABitStream* strm;
-    uint32_t param_array[2] = {0, 0};
+    SLARecursiveRiceParameter param_array[2] = {0, 0};
 
     /* 0を4回出力 */
     SLACODER_PARAMETER_SET(param_array, 0, 1);
@@ -136,7 +136,7 @@ static void testSLACoder_SLARecursiveRiceTest(void *obj)
     const char* test_file_name
       = "coding_util_recur_rice_test_case2.bin";
     struct SLABitStream* strm;
-    uint32_t param_array[3] = {0, 0, 0};
+    SLARecursiveRiceParameter param_array[3] = {0, 0, 0};
     uint32_t test_output_pattern[TEST_OUTPUT_LENGTH];
 
     /* 出力の生成 */
@@ -181,7 +181,7 @@ static void testSLACoder_SLARecursiveRiceTest(void *obj)
     const char* test_file_name
       = "coding_util_recur_rice_test_case3.bin";
     struct SLABitStream* strm;
-    uint32_t param_array[3] = {0, 0, 0};
+    SLARecursiveRiceParameter param_array[3] = {0, 0, 0};
     uint32_t test_output_pattern[TEST_OUTPUT_LENGTH];
 
     /* 出力の生成 */
@@ -230,7 +230,7 @@ static void testSLACoder_SLARecursiveRiceTest(void *obj)
     uint8_t*    decimg;
     FILE*       fp;
     struct SLABitStream* strm;
-    uint32_t param_array[8];
+    SLARecursiveRiceParameter param_array[8];
     const uint32_t num_params = sizeof(param_array) / sizeof(param_array[0]);
 
     /* 入力データ読み出し */
