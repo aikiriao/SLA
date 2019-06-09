@@ -485,18 +485,19 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
       continue;
     }
 
+    /* データのビット幅 */
+    bitwidth = SLAUtility_GetDataBitWidth(encoder->input_int32[ch], num_samples);
+    /* 係数右シフト量の計算 */
+    encoder->parcor_rshift[ch] = SLAUTILITY_CALC_RSHIFT_FOR_SINT32(bitwidth);
+
     /* 係数量子化 */
     encoder->parcor_coef_int32[ch][0] = 0; /* PARCOR係数の0次成分は0.0で確定だから飛ばす */
     SLA_Assert(encoder->parcor_coef[ch][0] == 0.0f);
-    /* データのビット幅 */
-    bitwidth = SLAUtility_GetDataBitWidth(encoder->input_int32[ch], num_samples);
     for (ord = 1; ord < parcor_order + 1; ord++) {
       uint32_t qbits = SLA_GET_PARCOR_QUANTIZE_BIT_WIDTH(ord);     /* 量子化ビット数 */
       /* 整数化（符号化する係数） */
       encoder->parcor_coef_code[ch][ord]
         = (int32_t)SLAUtility_Round(encoder->parcor_coef[ch][ord] * pow(2.0f, (qbits - 1)));
-      /* 係数右シフト量の計算 */
-      encoder->parcor_rshift[ch] = SLAUTILITY_CALC_RSHIFT_FOR_SINT32(bitwidth);
       /* 16bit幅をベースに右シフト */
       encoder->parcor_coef_int32[ch][ord] 
         = encoder->parcor_coef_code[ch][ord] << (16U - qbits);
