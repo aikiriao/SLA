@@ -38,7 +38,7 @@
   SLAUtility_RoundUp2Powered(SLAUTILITY_MAX(SLACODER_FIXED_FLOAT_TO_UINT32((param_array)[(order)] >> 1), 1UL))
 
 /* 再帰的ライス符号パラメータ型 */
-typedef uint32_t SLARecursiveRiceParameter;
+typedef uint64_t SLARecursiveRiceParameter;
 
 /* 2の冪数に対するlog2計算のためのテーブル */
 static const uint8_t log2_for_2powered_val_table[4][0x100] = {
