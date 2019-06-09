@@ -120,10 +120,10 @@ int do_encode(const char* in_filename, const char* out_filename, uint32_t encode
 
   /* 入力ファイルのサイズを拾っておく */
   stat(in_filename, &fstat);
-  buffer_size = (uint32_t)fstat.st_size;
+  /* 入力wavの2倍よりは大きくならないだろうという想定 */
+  buffer_size = (uint32_t)(2 * fstat.st_size);
 
-  /* エンコードデータ領域を作成
-   * 入力wavの2倍よりは大きくならないだろうという想定 */
+  /* エンコードデータ領域を作成 */
   buffer = (uint8_t *)malloc(buffer_size);
 
   /* 一括エンコード */
@@ -138,7 +138,8 @@ int do_encode(const char* in_filename, const char* out_filename, uint32_t encode
   fwrite(buffer, sizeof(uint8_t), encoded_data_size, out_fp);
 
   if (verpose_flag != 0) {
-    printf("Encode succuess! size:%d -> %d \n", buffer_size, encoded_data_size);
+    printf("Encode succuess! size:%d -> %d \n", 
+        (uint32_t)fstat.st_size, encoded_data_size);
   }
 
   fclose(out_fp);

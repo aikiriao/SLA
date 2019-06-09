@@ -29,7 +29,7 @@ struct SLADecoder {
   int32_t**                     longterm_coef;
   uint32_t*                     pitch_period;
 
-  uint8_t*                      is_silence_block;
+  SLABlockDataType*             block_data_type;
   int32_t**                     residual;
   int32_t**                     output;
   uint8_t                       verpose_flag;
@@ -67,7 +67,7 @@ struct SLADecoder* SLADecoder_Create(const struct SLADecoderConfig* config)
   decoder->pitch_period  = (uint32_t *)malloc(sizeof(uint32_t) * max_num_channels);
   decoder->residual      = (int32_t **)malloc(sizeof(int32_t*) * max_num_channels);
   decoder->output        = (int32_t **)malloc(sizeof(int32_t*) * max_num_channels);
-  decoder->is_silence_block     = (uint8_t *)malloc(sizeof(uint8_t) * max_num_channels);
+  decoder->block_data_type     = (SLABlockDataType *)malloc(sizeof(SLABlockDataType) * max_num_channels);
   for (ch = 0; ch < max_num_channels; ch++) {
     decoder->parcor_coef[ch]   = (int32_t *)malloc(sizeof(int32_t) * (config->max_parcor_order + 1));
     decoder->longterm_coef[ch] = (int32_t *)malloc(sizeof(int32_t) * config->max_longterm_order);
@@ -98,7 +98,7 @@ void SLADecoder_Destroy(struct SLADecoder* decoder)
     NULLCHECK_AND_FREE(decoder->output);
     NULLCHECK_AND_FREE(decoder->parcor_coef);
     NULLCHECK_AND_FREE(decoder->longterm_coef);
-    NULLCHECK_AND_FREE(decoder->is_silence_block);
+    NULLCHECK_AND_FREE(decoder->block_data_type);
     SLALPCSynthesizer_Destroy(decoder->lpcs);
     SLALMSCalculator_Destroy(decoder->nlmsc);
     NULLCHECK_AND_FREE(decoder->strm_work);
@@ -321,11 +321,11 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     uint32_t rshift;
 
     /* 無音フラグ取得 */
-    SLABitStream_GetBit(decoder->strm, &decoder->is_silence_block[ch]);
+    SLABitStream_GetBits(decoder->strm, 2, &bitsbuf);
+    decoder->block_data_type[ch] = (SLABlockDataType)bitsbuf;
 
-    /* 無音ブロックを実際に無音で埋め、以降の係数取得をスキップ */
-    if (decoder->is_silence_block[ch] == 1) {
-      memset(decoder->output[ch], 0, sizeof(int32_t) * block_samples);
+    /* 無音ブロック/生データはスキップ */
+    if (decoder->block_data_type[ch] != SLA_BLOCK_DATA_TYPE_COMPRESSDATA) {
       continue;
     }
 
@@ -365,8 +365,23 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
 
   /* チャンネル毎に残差を復号/音声合成 */
   for (ch = 0; ch < num_channels; ch++) {
-    /* 無音ブロックはスキップ */
-    if (decoder->is_silence_block[ch] == 1) { continue; }
+    /* 無音ブロック（生データ）を実際に無音（生データ）で埋め、以降の合成処理をスキップ */
+    switch (decoder->block_data_type[ch]) {
+      case SLA_BLOCK_DATA_TYPE_SILENT:
+        memset(decoder->output[ch], 0, sizeof(int32_t) * block_samples);
+        continue;
+      case SLA_BLOCK_DATA_TYPE_RAWDATA:
+        for (smpl = 0; smpl < block_samples; smpl++) {
+          SLABitStream_GetBits(decoder->strm,
+              decoder->wave_format.bit_per_sample, &bitsbuf);
+          decoder->output[ch][smpl] = SLAUTILITY_UINT32_TO_SINT32((uint32_t)bitsbuf);
+        }
+        continue;
+      case SLA_BLOCK_DATA_TYPE_COMPRESSDATA:  /* FALLTHRU */
+      default:
+        /* デコード処理へ */
+        break;
+    }
 
     /* 残差信号をデコード */
     SLACoder_GetDataArray(decoder->strm, decoder->residual[ch], block_samples);

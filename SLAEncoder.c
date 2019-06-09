@@ -38,7 +38,7 @@ struct SLAEncoder {
   int32_t**                     longterm_coef_int32;
   uint32_t*                     pitch_period;
   double*                       window;
-  uint8_t*                      is_silence_block;
+  SLABlockDataType*             block_data_type;
   int32_t**                     residual;
   int32_t**                     tmp_residual;
   uint32_t*                     num_block_partition_samples;
@@ -95,7 +95,7 @@ struct SLAEncoder* SLAEncoder_Create(const struct SLAEncoderConfig* config)
   }
 
   encoder->pitch_period                 = (uint32_t *)malloc(sizeof(uint32_t) * max_num_channels);
-  encoder->is_silence_block             = (uint8_t *)malloc(sizeof(uint8_t) * max_num_channels);
+  encoder->block_data_type              = (SLABlockDataType *)malloc(sizeof(SLABlockDataType) * max_num_channels);
   encoder->window                       = (double *)malloc(sizeof(double) * max_num_block_samples);
   encoder->num_block_partition_samples  = (uint32_t *)malloc(sizeof(uint32_t) * SLAOptimalEncodeEstimator_CalculateMaxNumPartitions(config->max_num_block_samples, SLA_SEARCH_BLOCK_NUM_SAMPLES_DELTA));
 
@@ -387,10 +387,11 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
     const int32_t* const* input, uint32_t num_samples,
     uint8_t* data, uint32_t data_size, uint32_t* output_size)
 {
-  uint32_t ch, smpl, ord;
-  uint32_t num_channels, parcor_order, longterm_order;
-  uint32_t bitwidth;
-  uint16_t crc16;
+  uint32_t              ch, smpl, ord;
+  uint32_t              num_channels, parcor_order, longterm_order;
+  uint32_t              bitwidth;
+  uint16_t              crc16;
+  double                estimated_code_length;
   SLAPredictorApiResult predictor_ret;
   SLAApiResult          api_ret;
 
@@ -403,6 +404,11 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
   /* 許容サンプル数を超えている */
   if (num_samples > encoder->max_num_block_samples) {
     return SLA_APIRESULT_EXCEED_HANDLE_CAPACITY;
+  }
+
+  /* ブロックヘッダを書く余裕すらない */
+  if (data_size <= SLA_BLOCK_HEADER_SIZE) {
+    return SLA_APIRESULT_INSUFFICIENT_DATA_SIZE;
   }
 
   /* 頻繁に参照する変数をオート変数に受ける */
@@ -430,10 +436,10 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
 
   /* 無音ブロック判定 */
   for (ch = 0; ch < num_channels; ch++) {
-    encoder->is_silence_block[ch] = 1;
+    encoder->block_data_type[ch] = SLA_BLOCK_DATA_TYPE_SILENT;
     for (smpl = 0; smpl < num_samples; smpl++) {
       if (encoder->input_int32[ch][smpl] != 0) {
-        encoder->is_silence_block[ch] = 0;
+        encoder->block_data_type[ch] = SLA_BLOCK_DATA_TYPE_COMPRESSDATA;
         break;
       }
     }
@@ -442,7 +448,7 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
   /* ch毎に残差信号を計算 */
   for (ch = 0; ch < num_channels; ch++) {
     /* 無音ブロックか否か？ */
-    if (encoder->is_silence_block[ch] == 1) {
+    if (encoder->block_data_type[ch] == SLA_BLOCK_DATA_TYPE_SILENT) {
       /* 以下の処理を全てスキップ */
       continue;
     }
@@ -460,6 +466,23 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
           encoder->input_double[ch], num_samples,
           encoder->parcor_coef[ch], parcor_order) != SLAPREDICTOR_APIRESULT_OK) {
       return SLA_APIRESULT_FAILED_TO_CALCULATE_COEF;
+    }
+
+    /* サンプルあたり推定符号長を計算 */
+    if (SLALPCCalculator_EstimateCodeLength(
+          encoder->input_double[ch], num_samples, encoder->wave_format.bit_per_sample,
+          encoder->parcor_coef[ch], parcor_order, &estimated_code_length) != SLAPREDICTOR_APIRESULT_OK) {
+      return SLA_APIRESULT_FAILED_TO_CALCULATE_COEF;
+    }
+    /* 推定圧縮率（=推定符号長/元の符号長）に変換 */
+    estimated_code_length = (8 * estimated_code_length) / encoder->wave_format.bit_per_sample;
+
+    /* 推定圧縮率が閾値以上ならば、予測を諦めて生データ出力を行う */
+    if (estimated_code_length >= SLA_ESTIMATE_CODELENGTH_THRESHOLD) {
+      /* PARCOR係数計算前にプリエンファシスをかけているのでデエンファシスして元に戻しておく */
+      SLAUtility_DeEmphasisInt32(encoder->input_int32[ch], num_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
+      encoder->block_data_type[ch] = SLA_BLOCK_DATA_TYPE_RAWDATA;
+      continue;
     }
 
     /* 係数量子化 */
@@ -561,12 +584,25 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
   /* ch毎に係数情報を符号化 */
   for (ch = 0; ch < num_channels; ch++) {
     /* 無音ブロックか否か？ */
-    if (encoder->is_silence_block[ch] == 1) {
-      /* 以下の処理を全てスキップ */
-      SLABitStream_PutBit(encoder->strm, 1);
-      continue;
-    } else {
-      SLABitStream_PutBit(encoder->strm, 0);
+    switch (encoder->block_data_type[ch]) {
+      case SLA_BLOCK_DATA_TYPE_SILENT:
+        /* 以下の処理を全てスキップ */
+        SLABitStream_PutBits(encoder->strm, 2, SLA_BLOCK_DATA_TYPE_SILENT);
+        continue;
+      case SLA_BLOCK_DATA_TYPE_RAWDATA:
+        SLABitStream_PutBits(encoder->strm, 2, SLA_BLOCK_DATA_TYPE_RAWDATA);
+        /* 圧縮を断念している。生データを符号なし整数化して書き出す */
+        for (smpl = 0; smpl < num_samples; smpl++) {
+          SLABitStream_PutBits(encoder->strm, encoder->wave_format.bit_per_sample,
+              SLAUTILITY_SINT32_TO_UINT32(encoder->input_int32[ch][smpl]));
+        }
+        continue;
+      case SLA_BLOCK_DATA_TYPE_COMPRESSDATA:  /* FALLTHRU */
+      default:
+        /* 圧縮処理を行ったブロック */
+        SLABitStream_PutBits(encoder->strm, 2, SLA_BLOCK_DATA_TYPE_COMPRESSDATA);
+        /* 予測処理へ */
+        break;
     }
 
     /* PARCOR係数 */
@@ -596,8 +632,8 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
 
   /* 各チャンネルごとに残差符号化 */
   for (ch = 0; ch < num_channels; ch++) {
-    /* 無音ブロックならばスキップ */
-    if (encoder->is_silence_block[ch] == 1) { continue; }
+    /* 無音ブロック/生データならばスキップ */
+    if (encoder->block_data_type[ch] != SLA_BLOCK_DATA_TYPE_COMPRESSDATA) { continue; }
     SLACoder_PutDataArray(encoder->strm, encoder->residual[ch], num_samples);
   }
 
@@ -716,6 +752,11 @@ SLAApiResult SLAEncoder_EncodeWhole(struct SLAEncoder* encoder,
           (100 * encode_offset_sample) / num_samples, cur_output_size);
       fflush(stdout);
     }
+  }
+
+  /* 最終ブロックを書き出したところでオーバーランを検知 */
+  if (cur_output_size > data_size) {
+    return SLA_APIRESULT_INSUFFICIENT_DATA_SIZE;
   }
 
   /* 最大ブロックサイズとブロック数を反映（ヘッダの再度書き込み） */

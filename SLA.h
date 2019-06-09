@@ -7,6 +7,8 @@
 #define SLA_FORMAT_VERSION			    1
 /* ヘッダのサイズ */
 #define SLA_HEADER_SIZE			        39
+/* ブロックヘッダのサイズ */
+#define SLA_BLOCK_HEADER_SIZE			  10
 /* 処理可能な最大チャンネル数（撤廃予定） */
 #define SLA_MAX_CHANNELS            8 
 /* サンプル数の無効値 */

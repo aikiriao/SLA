@@ -18,11 +18,12 @@
  *  1. ブロック先頭における残差の収束
  *  2. LMSが収束しきらない */
 #define SLAOPTIMALENCODEESTIMATOR_LONGPATH_PENALTY  300
+#define SLA_ESTIMATE_CODELENGTH_THRESHOLD           0.95f                   /* 推定符号長比（=推定符号長/元データ長）がこの値以上ならば圧縮を諦め、生データを書き出す */
 
 /* ヘッダのCRC16書き込み開始位置 */
-#define SLA_HEADER_CRC16_CALC_START_OFFSET  (1 * 4 + 4 + 2)         /* シグネチャ + 先頭ブロックまでのオフセット + CRC16記録フィールド */
+#define SLA_HEADER_CRC16_CALC_START_OFFSET          (1 * 4 + 4 + 2)         /* シグネチャ + 先頭ブロックまでのオフセット + CRC16記録フィールド */
 /* ブロックのCRC16書き込み開始位置 */
-#define SLA_BLOCK_CRC16_CALC_START_OFFSET   (2 + 4 + 2)             /* 同期コード + 次のブロックまでのオフセット + CRC16記録フィールド */
+#define SLA_BLOCK_CRC16_CALC_START_OFFSET           (2 + 4 + 2)             /* 同期コード + 次のブロックまでのオフセット + CRC16記録フィールド */
 
 /* PARCORの次数から係数のビット幅を取得 */
 #define SLA_GET_PARCOR_QUANTIZE_BIT_WIDTH(order)  (((order) < SLAPARCOR_COEF_LOW_ORDER_THRESHOULD) ? 16 : 8)
@@ -42,5 +43,13 @@
 #else
 #define SLA_Assert(condition) assert(condition)
 #endif
+
+/* ブロックデータタイプ */
+typedef enum SLABlockDataTypeTag {
+  SLA_BLOCK_DATA_TYPE_COMPRESSDATA  = 0,     /* 圧縮済みデータ */
+  SLA_BLOCK_DATA_TYPE_SILENT        = 1,     /* 無音データ     */
+  SLA_BLOCK_DATA_TYPE_RAWDATA       = 2,     /* 生データ       */
+  SLA_BLOCK_DATA_TYPE_INVAILD       = 3      /* 無効           */
+} SLABlockDataType;
 
 #endif /* SLA_INTERNAL_H_INCLUDED */
