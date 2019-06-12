@@ -199,6 +199,7 @@ int do_decode(const char* in_filename, const char* out_filename, uint8_t enable_
     printf("Num Channels:                %d \n", header.wave_format.num_channels);
     printf("Bit Per Sample:              %d \n", header.wave_format.bit_per_sample);
     printf("Sampling Rate:               %d \n", header.wave_format.sampling_rate);
+    printf("Offset Left Shift:           %d \n", header.wave_format.offset_lshift);
     printf("PARCOR Order:                %d \n", header.encode_param.parcor_order);
     printf("Longterm Order:              %d \n", header.encode_param.longterm_order);
     printf("LMS Order Par Filter:        %d \n", header.encode_param.lms_order_par_filter);

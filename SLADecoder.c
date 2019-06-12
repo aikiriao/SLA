@@ -173,6 +173,8 @@ SLAApiResult SLADecoder_DecodeHeader(
   /* サンプルあたりビット数 */
   SLAByteArray_GetUint8(data_pos, &u8buf);
   tmp_header.wave_format.bit_per_sample     = (uint32_t)u8buf;
+  /* オフセット分の左シフト量 */
+  SLAByteArray_GetUint8(data_pos, &tmp_header.wave_format.offset_lshift);
   /* PARCOR係数次数 */
   SLAByteArray_GetUint8(data_pos, &u8buf);
   tmp_header.encode_param.parcor_order      = (uint32_t)u8buf;
@@ -371,9 +373,11 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
         memset(decoder->output[ch], 0, sizeof(int32_t) * block_samples);
         continue;
       case SLA_BLOCK_DATA_TYPE_RAWDATA:
+        /* 左シフト量だけ減らして取得 */
+        SLA_Assert(decoder->wave_format.bit_per_sample > decoder->wave_format.offset_lshift);
         for (smpl = 0; smpl < block_samples; smpl++) {
           SLABitStream_GetBits(decoder->strm,
-              decoder->wave_format.bit_per_sample, &bitsbuf);
+              decoder->wave_format.bit_per_sample - decoder->wave_format.offset_lshift, &bitsbuf);
           decoder->output[ch][smpl] = SLAUTILITY_UINT32_TO_SINT32((uint32_t)bitsbuf);
         }
         continue;
@@ -434,9 +438,12 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
   }
 
   /* 最終結果をバッファにコピー */
+  SLA_Assert(decoder->wave_format.bit_per_sample > decoder->wave_format.offset_lshift);
+  SLA_Assert((decoder->wave_format.bit_per_sample - decoder->wave_format.offset_lshift) < 32);
   for (ch = 0; ch < num_channels; ch++) {
     for (smpl = 0; smpl < block_samples; smpl++) {
-      buffer[ch][smpl] = decoder->output[ch][smpl] << (32 - decoder->wave_format.bit_per_sample);
+      buffer[ch][smpl]
+        = decoder->output[ch][smpl] << (32 - decoder->wave_format.bit_per_sample + decoder->wave_format.offset_lshift);
     }
   }
 

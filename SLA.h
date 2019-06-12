@@ -6,7 +6,7 @@
 /* フォーマットバージョン */
 #define SLA_FORMAT_VERSION			    1
 /* ヘッダのサイズ */
-#define SLA_HEADER_SIZE			        39
+#define SLA_HEADER_SIZE			        40
 /* ブロックヘッダのサイズ */
 #define SLA_BLOCK_HEADER_SIZE			  10
 /* 処理可能な最大チャンネル数（撤廃予定） */
@@ -57,9 +57,10 @@ typedef enum SLAWindowFunctionTypeTag {
 
 /* 波形フォーマット */
 struct SLAWaveFormat {
-	uint32_t num_channels;			/* チャンネル数 */
-	uint32_t bit_per_sample;		/* サンプルあたりビット数 */
-	uint32_t sampling_rate;			/* サンプリングレート */
+	uint32_t  num_channels;			/* チャンネル数             */
+	uint32_t  bit_per_sample;		/* サンプルあたりビット数   */
+	uint32_t  sampling_rate;		/* サンプリングレート       */
+  uint8_t   offset_lshift;    /* オフセット分の左シフト量 */
 };
 
 /* エンコードパラメータ */
@@ -75,10 +76,10 @@ struct SLAEncodeParameter {
 
 /* SLAヘッダ情報 */
 struct SLAHeaderInfo {
-	struct SLAWaveFormat      wave_format;	    /* 波形フォーマット */
-  struct SLAEncodeParameter encode_param;     /* エンコードパラメータ */
-	uint32_t                  num_samples;			/* 全サンプル数 */
-  uint32_t                  num_blocks;       /* ブロック数 */
+	struct SLAWaveFormat      wave_format;	    /* 波形フォーマット         */
+  struct SLAEncodeParameter encode_param;     /* エンコードパラメータ     */
+	uint32_t                  num_samples;			/* 全サンプル数             */
+  uint32_t                  num_blocks;       /* ブロック数               */
 	uint32_t                  max_block_size;		/* 最大ブロックサイズ[byte] */
 };
 

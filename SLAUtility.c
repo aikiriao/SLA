@@ -301,6 +301,12 @@ uint32_t SLAUtility_Log2Ceil(uint32_t val)
   return 32U - nlz10(val - 1);
 }
 
+/* floor(log2(val)) を計算する */
+uint32_t SLAUtility_Log2Floor(uint32_t val)
+{
+  return 31U - nlz10(val);
+}
+
 /* 2の冪乗数に切り上げる ハッカーのたのしみ参照 */
 uint32_t SLAUtility_RoundUp2Powered(uint32_t val)
 {

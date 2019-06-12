@@ -78,6 +78,9 @@ static void testSLAEncoder_EncodeHeaderTest(void *obj)
     /* サンプルあたりbit数 */
     SLAByteArray_GetUint8(data_ptr, &u8buf);
     Test_AssertEqual(u8buf, header.wave_format.bit_per_sample);
+    /* オフセット分の左シフト量 */
+    SLAByteArray_GetUint8(data_ptr, &u8buf);
+    Test_AssertEqual(u8buf, header.wave_format.offset_lshift);
     /* PARCOR係数次数 */
     SLAByteArray_GetUint8(data_ptr, &u8buf);
     Test_AssertEqual(u8buf, header.encode_param.parcor_order);

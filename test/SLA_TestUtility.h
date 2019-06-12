@@ -27,6 +27,7 @@
     (p_format)->num_channels           = 2;         \
     (p_format)->bit_per_sample         = 8;         \
     (p_format)->sampling_rate          = 8000;      \
+    (p_format)->offset_lshift          = 0;         \
 }
 
 /* ひとまず有効なエンコードパラメータを設定 */

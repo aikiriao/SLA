@@ -228,6 +228,8 @@ SLAApiResult SLAEncoder_EncodeHeader(
   SLAByteArray_PutUint32(data_pos, header->wave_format.sampling_rate);
   /* サンプルあたりbit数 */
   SLAByteArray_PutUint8(data_pos,  (uint8_t)header->wave_format.bit_per_sample);
+  /* オフセット分の左シフト量 */
+  SLAByteArray_PutUint8(data_pos,  header->wave_format.offset_lshift);
   /* PARCOR係数次数 */
   SLAByteArray_PutUint8(data_pos,  (uint8_t)header->encode_param.parcor_order);
   /* ロングターム係数次数 */
@@ -382,6 +384,36 @@ DETECT_NOT_SILENCE:
   return SLA_APIRESULT_OK;
 }
 
+/* オフセット分の左シフト量を計算 */
+static uint32_t SLAEncoder_CalculateLeftShiftOffset(
+    struct SLAEncoder* encoder, const int32_t* const* input, uint32_t num_samples)
+{
+  uint32_t ch, smpl, abs, minabs_bits;
+  uint32_t minabs = UINT32_MAX;
+
+  SLA_Assert(encoder != NULL);
+  SLA_Assert(input != NULL);
+
+  /* 非ゼロの最小絶対値を求める */
+  for (ch = 0; ch < encoder->wave_format.num_channels; ch++) {
+    for (smpl = 0; smpl < num_samples; smpl++) {
+      abs = (uint32_t)SLAUTILITY_ABS(input[ch][smpl]);
+      if ((abs != 0) && (abs < minabs)) {
+        minabs = abs;
+      }
+    }
+  }
+
+  /* 32bit int基準でのオフセットビット幅（左シフト量） */
+  minabs_bits = SLAUtility_Log2Floor(minabs);
+  SLA_Assert(minabs_bits <= 32);
+
+  /* 32-offset_bitsはダイナミックレンジbitを示す */
+  /* 元のビット幅から引くことで元の左シフト量が求まる */
+  SLA_Assert(encoder->wave_format.bit_per_sample > (32 - minabs_bits));
+  return encoder->wave_format.bit_per_sample - (32 - minabs_bits);
+}
+
 /* 1ブロックエンコード */
 SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
     const int32_t* const* input, uint32_t num_samples,
@@ -422,10 +454,14 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
   }
 
   /* 入力をdouble化/情報が失われない程度に右シフト */
+  SLA_Assert(encoder->wave_format.bit_per_sample > encoder->wave_format.offset_lshift);
+  SLA_Assert((encoder->wave_format.bit_per_sample - encoder->wave_format.offset_lshift) < 32);
   for (ch = 0; ch < num_channels; ch++) {
     for (smpl = 0; smpl < num_samples; smpl++) {
       encoder->input_double[ch][smpl] = (double)input[ch][smpl] * pow(2, -31);
-      encoder->input_int32[ch][smpl]  = input[ch][smpl] >> (32 - encoder->wave_format.bit_per_sample);
+      encoder->input_int32[ch][smpl]  
+        = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(input[ch][smpl], 
+            32 - encoder->wave_format.bit_per_sample + encoder->wave_format.offset_lshift);
     }
   }
 
@@ -593,8 +629,11 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
       case SLA_BLOCK_DATA_TYPE_RAWDATA:
         SLABitStream_PutBits(encoder->strm, 2, SLA_BLOCK_DATA_TYPE_RAWDATA);
         /* 圧縮を断念している。生データを符号なし整数化して書き出す */
+        /* 左シフトしている場合があるのでその分は書き出しビット幅を減らす */
+        SLA_Assert(encoder->wave_format.bit_per_sample > encoder->wave_format.offset_lshift);
         for (smpl = 0; smpl < num_samples; smpl++) {
-          SLABitStream_PutBits(encoder->strm, encoder->wave_format.bit_per_sample,
+          SLABitStream_PutBits(encoder->strm,
+              encoder->wave_format.bit_per_sample - encoder->wave_format.offset_lshift,
               SLAUTILITY_SINT32_TO_UINT32(encoder->input_int32[ch][smpl]));
         }
         continue;
@@ -690,6 +729,12 @@ SLAApiResult SLAEncoder_EncodeWhole(struct SLAEncoder* encoder,
       != SLA_APIRESULT_OK) {
     return api_ret;
   }
+
+  /* オフセット分の左シフト量を解析 */
+  header.wave_format.offset_lshift
+    = encoder->wave_format.offset_lshift
+    = (uint8_t)SLAEncoder_CalculateLeftShiftOffset(encoder, input, num_samples);
+  SLA_Assert(encoder->wave_format.bit_per_sample > encoder->wave_format.offset_lshift);
 
   /* 全ブロックを逐次エンコード */
   cur_output_size = SLA_HEADER_SIZE;
