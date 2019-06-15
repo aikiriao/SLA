@@ -69,9 +69,12 @@ struct SLALongTermCalculator {
 
 /* LMS計算ハンドル */
 struct SLALMSCalculator {
-	int64_t* 	coef;			                /* 係数 */
+	int64_t* 	fir_coef;			            /* FIR係数 */
+	int64_t* 	iir_coef;			            /* IIR係数 */
 	uint32_t	max_num_coef;	            /* 最大の係数個数 */
-  int32_t*  signal_sign_buffer;       /* 信号の符号を記録したバッファ */
+  int32_t*  fir_sign_buffer;          /* 入力信号の符号を記録したバッファ */
+  int32_t*  iir_sign_buffer;          /* 予測信号の符号を記録したバッファ */
+  int32_t*  iir_buffer;               /* 予測信号バッファ */
   uint32_t  signal_sign_buffer_size;  /* バッファサイズ（2の冪） */
 };
 
@@ -927,8 +930,11 @@ struct SLALMSCalculator* SLALMSCalculator_Create(uint32_t max_num_coef)
   nlms->max_num_coef  = max_num_coef;
   nlms->signal_sign_buffer_size = SLAUtility_RoundUp2Powered(max_num_coef);
 
-  nlms->coef = malloc(sizeof(int64_t) * max_num_coef);
-  nlms->signal_sign_buffer = malloc(sizeof(int32_t) * SLAUtility_RoundUp2Powered(max_num_coef));
+  nlms->fir_coef        = malloc(sizeof(int64_t) * max_num_coef);
+  nlms->iir_coef        = malloc(sizeof(int64_t) * max_num_coef);
+  nlms->fir_sign_buffer = malloc(sizeof(int32_t) * SLAUtility_RoundUp2Powered(max_num_coef));
+  nlms->iir_sign_buffer = malloc(sizeof(int32_t) * SLAUtility_RoundUp2Powered(max_num_coef));
+  nlms->iir_buffer      = malloc(sizeof(int32_t) * SLAUtility_RoundUp2Powered(max_num_coef));
 
   return nlms;
 }
@@ -937,8 +943,11 @@ struct SLALMSCalculator* SLALMSCalculator_Create(uint32_t max_num_coef)
 void SLALMSCalculator_Destroy(struct SLALMSCalculator* nlms)
 {
   if (nlms != NULL) {
-    NULLCHECK_AND_FREE(nlms->coef);
-    NULLCHECK_AND_FREE(nlms->signal_sign_buffer);
+    NULLCHECK_AND_FREE(nlms->fir_coef);
+    NULLCHECK_AND_FREE(nlms->iir_coef);
+    NULLCHECK_AND_FREE(nlms->fir_sign_buffer);
+    NULLCHECK_AND_FREE(nlms->iir_sign_buffer);
+    NULLCHECK_AND_FREE(nlms->iir_buffer);
     free(nlms);
   }
 }
@@ -968,10 +977,14 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
   /* 符号バッファの初期化 */
   for (smpl = 0; smpl < num_coef; smpl++) {
     if (is_predict == 1) {
-      nlms->signal_sign_buffer[smpl] = SLAUTILITY_SIGN(original_signal[smpl]) + 1;
+      nlms->fir_sign_buffer[smpl]
+        = nlms->iir_sign_buffer[smpl]
+        = SLAUTILITY_SIGN(original_signal[smpl]) + 1;
     } else {
       /* 合成時は残差に符号情報が入っている */
-      nlms->signal_sign_buffer[smpl] = SLAUTILITY_SIGN(residual[smpl]) + 1;
+      nlms->fir_sign_buffer[smpl]
+        = nlms->iir_sign_buffer[smpl]
+        = SLAUTILITY_SIGN(residual[smpl]) + 1;
     }
   }
   buffer_pos  = num_coef;
@@ -980,7 +993,8 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
   buffer_pos_mask = nlms->signal_sign_buffer_size - 1;
 
   /* 係数を0クリア */
-  memset(nlms->coef, 0, sizeof(int64_t) * num_coef);
+  memset(nlms->fir_coef, 0, sizeof(int64_t) * num_coef);
+  memset(nlms->iir_coef, 0, sizeof(int64_t) * num_coef);
 
   /* 一旦全部コピー */
   /* （残差のときは予測分で引くだけ、合成のときは足すだけで良くなる） */
@@ -990,12 +1004,16 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
     memcpy(original_signal, residual, sizeof(int32_t) * num_samples);
   }
 
+  /* 出力バッファの初期化: 先頭coef分は残差と元信号は同一 */
+  memcpy(nlms->iir_buffer, residual, sizeof(int32_t) * num_coef);
+
   /* フィルタ処理実行 */
   for (smpl = num_coef; smpl < num_samples; smpl++) {
     /* 予測 */
     predict = (1UL << 30);  /* 丸め誤差回避 */
     for (i = 0; i < num_coef; i++) {
-      predict     += nlms->coef[i] * original_signal[smpl - i - 1];
+      predict += nlms->fir_coef[i] * original_signal[smpl - i - 1];
+      predict += nlms->iir_coef[i] * nlms->iir_buffer[(buffer_pos - i - 1) & buffer_pos_mask];
       /* 値域チェック */
       SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31) <= (int64_t)INT32_MAX);
       SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31) >= (int64_t)INT32_MIN);
@@ -1011,12 +1029,19 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
     }
     /* printf("%8d, %8d, %8d \n", residual[smpl], original_signal[smpl], (int32_t)predict); */
 
+    /* 出力バッファに記録 */
+    nlms->iir_buffer[buffer_pos]      = (int32_t)predict;
+    nlms->iir_sign_buffer[buffer_pos] = SLAUTILITY_SIGN(nlms->iir_buffer[buffer_pos]) + 1;
+
     /* 更新量テーブルのインデックスを計算 */
-    nlms->signal_sign_buffer[buffer_pos] = SLAUTILITY_SIGN(original_signal[smpl]) + 1;
+    nlms->fir_sign_buffer[buffer_pos] = SLAUTILITY_SIGN(original_signal[smpl]) + 1;
     delta_table_p = logsignlms_delta_table[SLALMS_SIGNED_LOG2CEIL(residual[smpl]) + 32]; /* 32を加算して [-32, 31] を [0, 63] の範囲にマップ */
     for (i = 0; i < num_coef; i++) {
-      int32_t table_index = nlms->signal_sign_buffer[(buffer_pos - i - 1) & buffer_pos_mask];
-      nlms->coef[i] += delta_table_p[table_index];
+      int32_t table_index;
+      table_index = nlms->fir_sign_buffer[(buffer_pos - i - 1) & buffer_pos_mask];
+      nlms->fir_coef[i] += delta_table_p[table_index];
+      table_index = nlms->iir_sign_buffer[(buffer_pos - i - 1) & buffer_pos_mask];
+      nlms->iir_coef[i] += delta_table_p[table_index];
     }
 
     /* バッファ参照位置更新 */
