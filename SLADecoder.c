@@ -343,8 +343,9 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
       /* PARCOR係数 */
       SLABitStream_GetBits(decoder->strm, qbits, &bitsbuf);
       decoder->parcor_coef[ch][ord] = SLAUTILITY_UINT32_TO_SINT32(bitsbuf);
-      /* 16bitをベースに右シフト */
+      /* 16bitをベースにシフト */
       decoder->parcor_coef[ch][ord] <<= (16U - qbits);
+      /* オーバーフローを防ぐための右シフト */
       decoder->parcor_coef[ch][ord] 
         = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(decoder->parcor_coef[ch][ord], rshift);
     }

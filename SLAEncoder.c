@@ -534,9 +534,10 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
       /* 整数化（符号化する係数） */
       encoder->parcor_coef_code[ch][ord]
         = (int32_t)SLAUtility_Round(encoder->parcor_coef[ch][ord] * pow(2.0f, (qbits - 1)));
-      /* 16bit幅をベースに右シフト */
+      /* 16bit幅をベースにシフト */
       encoder->parcor_coef_int32[ch][ord] 
         = encoder->parcor_coef_code[ch][ord] << (16U - qbits);
+      /* オーバーフローを防ぐための右シフト */
       encoder->parcor_coef_int32[ch][ord]
         = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(encoder->parcor_coef_int32[ch][ord], encoder->parcor_rshift[ch]);
     } 
