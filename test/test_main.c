@@ -8,6 +8,7 @@ void testSLAEncoder_Setup(void);
 void testSLADecoder_Setup(void);
 void testSLAUtility_Setup(void);
 void testSLAByteArray_Setup(void);
+void testSLAEncodeDecode_Setup(void);
 
 void testWAV_Setup(void);
 void testCommandLineParser_Setup(void);
@@ -26,6 +27,7 @@ int main(int argc, char **argv)
   testSLADecoder_Setup();
   testSLAUtility_Setup();
   testSLAByteArray_Setup();
+  testSLAEncodeDecode_Setup();
 
   testWAV_Setup();
   testCommandLineParser_Setup();
