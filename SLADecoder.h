@@ -29,7 +29,7 @@ extern "C" {
 struct SLADecoder* SLADecoder_Create(const struct SLADecoderConfig* condig);
 
 /* デコーダハンドルの破棄 */
-void SLADecoder_Destroy(struct SLADecoder* encoder);
+void SLADecoder_Destroy(struct SLADecoder* decoder);
 
 /* ヘッダデコード */
 SLAApiResult SLADecoder_DecodeHeader(
@@ -49,7 +49,7 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     int32_t** buffer, uint32_t buffer_num_samples,
     uint32_t* output_block_size, uint32_t* output_num_samples);
 
-/* ヘッダを含めて全ブロックデコード */
+/* ヘッダを含めて全ブロックデコード（波形パラメータ・エンコードパラメータも自動でセット） */
 SLAApiResult SLADecoder_DecodeWhole(struct SLADecoder* decoder,
     const uint8_t* data, uint32_t data_size,
     int32_t** buffer, uint32_t buffer_num_samples, uint32_t* output_num_samples);
