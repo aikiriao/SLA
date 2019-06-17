@@ -388,29 +388,32 @@ DETECT_NOT_SILENCE:
 static uint32_t SLAEncoder_CalculateLeftShiftOffset(
     struct SLAEncoder* encoder, const int32_t* const* input, uint32_t num_samples)
 {
-  uint32_t ch, smpl, abs, minabs_bits;
-  uint32_t minabs = UINT32_MAX;
+  uint32_t ch, smpl, minabs_bits;
+  uint32_t mask = 0;
 
   SLA_Assert(encoder != NULL);
   SLA_Assert(input != NULL);
 
-  /* 非ゼロの最小絶対値を求める */
+  /* 使用されているビットを検査 */
   for (ch = 0; ch < encoder->wave_format.num_channels; ch++) {
     for (smpl = 0; smpl < num_samples; smpl++) {
-      abs = (uint32_t)SLAUTILITY_ABS(input[ch][smpl]);
-      if ((abs != 0) && (abs < minabs)) {
-        minabs = abs;
-      }
+      mask |= (uint32_t)input[ch][smpl];
     }
   }
 
-  /* 32bit int基準でのオフセットビット幅（左シフト量） */
-  minabs_bits = SLAUtility_Log2Floor(minabs);
-  SLA_Assert(minabs_bits <= 32);
+  /* 全入力が0 */
+  if (mask == 0) {
+    return 0;
+  }
 
-  /* 32-offset_bitsはダイナミックレンジbitを示す */
+  /* ntz（末尾へ続く0の個数）を計算
+   * ntz(x) = 32 - nlz(~x & (x-1)), nlz(x) = 31 - log2ceil(x)を使用 */
+  minabs_bits = 1 + SLAUtility_Log2Floor(~mask & (mask - 1));
+  SLA_Assert(minabs_bits <= 31);
+
+  /* (32-minabs_bits)はダイナミックレンジbitを示す */
   /* 元のビット幅から引くことで元の左シフト量が求まる */
-  SLA_Assert(encoder->wave_format.bit_per_sample > (32 - minabs_bits));
+  SLA_Assert(encoder->wave_format.bit_per_sample >= (32 - minabs_bits));
   return encoder->wave_format.bit_per_sample - (32 - minabs_bits);
 }
 
@@ -735,7 +738,7 @@ SLAApiResult SLAEncoder_EncodeWhole(struct SLAEncoder* encoder,
   header.wave_format.offset_lshift
     = encoder->wave_format.offset_lshift
     = (uint8_t)SLAEncoder_CalculateLeftShiftOffset(encoder, input, num_samples);
-  SLA_Assert(encoder->wave_format.bit_per_sample > encoder->wave_format.offset_lshift);
+  SLA_Assert((encoder->wave_format.bit_per_sample + encoder->wave_format.offset_lshift) <= 32);
 
   /* 全ブロックを逐次エンコード */
   cur_output_size = SLA_HEADER_SIZE;
