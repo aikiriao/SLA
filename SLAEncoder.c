@@ -657,9 +657,9 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
       SLABitStream_PutBit(encoder->strm, 1);
       SLABitStream_PutBits(encoder->strm, 10, encoder->pitch_period[ch]);
       for (ord = 0; ord < longterm_order; ord++) {
-        /* FIXME:右シフトはマクロを使うべし */
         SLABitStream_PutBits(encoder->strm, 16, 
-            SLAUTILITY_SINT32_TO_UINT32(encoder->longterm_coef_int32[ch][ord] >> 16));
+            SLAUTILITY_SINT32_TO_UINT32(
+              SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(encoder->longterm_coef_int32[ch][ord], 16)));
       }
     } else {
       /* ロングターム未使用であることをマーク */
