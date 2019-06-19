@@ -643,12 +643,10 @@ SLABitStreamApiResult SLABitStream_GetZeroRunLength(struct SLABitStream* stream,
   /* バッファが空の時 */
   while (stream->bit_count == 0) {
     /* 1バイト読み込みとエラー処理 */
-    int32_t   ch;
+    int32_t   ch = -1;
     uint32_t  tmp_run;
     SLABitStreamError err;
     err = stream->stm_if->SGetChar(&(stream->stm), &ch);
-    SLA_Assert(ch >= 0);
-    SLA_Assert(ch <= 0xFF);
     switch (err) {
       case SLABITSTREAM_APIRESULT_OK:
         break;
@@ -660,6 +658,8 @@ SLABitStreamApiResult SLABitStream_GetZeroRunLength(struct SLABitStream* stream,
         return SLABITSTREAM_APIRESULT_IOERROR;
     }
 
+    SLA_Assert(ch >= 0);
+    SLA_Assert(ch <= 0xFF);
     /* ビットバッファにセットし直して再度ランを計測 */
     stream->bit_buffer  = (uint32_t)ch;
     tmp_run             = st_zerobit_runlength_table[ch];
