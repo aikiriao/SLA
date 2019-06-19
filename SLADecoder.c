@@ -318,15 +318,15 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
   }
   /* printf("next:%d crc16:%04X nsmpl:%d \n", next_block_offset, crc16, block_samples); */
 
-  /* 各チャンネルの無音フラグ/係数取得 */
+  /* 各チャンネルのブロックタイプ/係数取得 */
   for (ch = 0; ch < num_channels; ch++) {
     uint32_t rshift;
 
-    /* 無音フラグ取得 */
+    /* ブロックタイプ取得 */
     SLABitStream_GetBits(decoder->strm, 2, &bitsbuf);
     decoder->block_data_type[ch] = (SLABlockDataType)bitsbuf;
 
-    /* 無音ブロック/生データはスキップ */
+    /* 圧縮されたデータ以外ではスキップ */
     if (decoder->block_data_type[ch] != SLA_BLOCK_DATA_TYPE_COMPRESSDATA) {
       continue;
     }
@@ -366,31 +366,48 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     }
   }
 
-  /* チャンネル毎に残差を復号/音声合成 */
+  /* チャンネル毎にデータを復号 */
   for (ch = 0; ch < num_channels; ch++) {
-    /* 無音ブロック（生データ）を実際に無音（生データ）で埋め、以降の合成処理をスキップ */
     switch (decoder->block_data_type[ch]) {
       case SLA_BLOCK_DATA_TYPE_SILENT:
+        /* 無音で埋める */
         memset(decoder->output[ch], 0, sizeof(int32_t) * block_samples);
-        continue;
+        break;
       case SLA_BLOCK_DATA_TYPE_RAWDATA:
-        /* 左シフト量だけ減らして取得 */
-        SLA_Assert(decoder->wave_format.bit_per_sample > decoder->wave_format.offset_lshift);
-        for (smpl = 0; smpl < block_samples; smpl++) {
-          SLABitStream_GetBits(decoder->strm,
-              decoder->wave_format.bit_per_sample - decoder->wave_format.offset_lshift, &bitsbuf);
-          decoder->output[ch][smpl] = SLAUTILITY_UINT32_TO_SINT32((uint32_t)bitsbuf);
+        /* 生データ取得 */
+        {
+          uint32_t input_bits;
+          /* 左シフト量だけ減らして取得 */
+          SLA_Assert(decoder->wave_format.bit_per_sample > decoder->wave_format.offset_lshift);
+          input_bits = decoder->wave_format.bit_per_sample - decoder->wave_format.offset_lshift;
+          /* MS処理を行った場合の2ch目はL-Rが入っているのでビット幅が1増える */
+          if ((ch == 1)
+              && (decoder->encode_param.ch_process_method == SLA_CHPROCESSMETHOD_STEREO_MS)) {
+            input_bits += 1;
+          }
+          for (smpl = 0; smpl < block_samples; smpl++) {
+            SLABitStream_GetBits(decoder->strm, input_bits, &bitsbuf);
+            decoder->output[ch][smpl] = SLAUTILITY_UINT32_TO_SINT32((uint32_t)bitsbuf);
+          }
         }
-        continue;
-      case SLA_BLOCK_DATA_TYPE_COMPRESSDATA:  /* FALLTHRU */
+        break;
+      case SLA_BLOCK_DATA_TYPE_COMPRESSDATA:
+        /* 残差復号 */
+        SLACoder_GetDataArray(decoder->strm, decoder->residual[ch], block_samples);
+        break;
       default:
-        /* デコード処理へ */
+        /* ここに入ってきたらプログラミングミス */
+        SLA_Assert(0);
         break;
     }
+  }
 
-    /* 残差信号をデコード */
-    SLACoder_GetDataArray(decoder->strm, decoder->residual[ch], block_samples);
-
+  /* チャンネル毎に音声合成 */
+  for (ch = 0; ch < num_channels; ch++) {
+    /* 圧縮されたブロック以外ではスキップ */
+    if (decoder->block_data_type[ch] != SLA_BLOCK_DATA_TYPE_COMPRESSDATA) {
+      continue;
+    }
     /* LMSの残差分を合成 */
     for (ord = 0; ord < decoder->encode_param.num_lms_filter_cascade; ord++) {
       if (SLALMSCalculator_SynthesizeInt32(decoder->nlmsc,

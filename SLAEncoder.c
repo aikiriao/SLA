@@ -632,14 +632,6 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
         continue;
       case SLA_BLOCK_DATA_TYPE_RAWDATA:
         SLABitStream_PutBits(encoder->strm, 2, SLA_BLOCK_DATA_TYPE_RAWDATA);
-        /* 圧縮を断念している。生データを符号なし整数化して書き出す */
-        /* 左シフトしている場合があるのでその分は書き出しビット幅を減らす */
-        SLA_Assert(encoder->wave_format.bit_per_sample > encoder->wave_format.offset_lshift);
-        for (smpl = 0; smpl < num_samples; smpl++) {
-          SLABitStream_PutBits(encoder->strm,
-              encoder->wave_format.bit_per_sample - encoder->wave_format.offset_lshift,
-              SLAUTILITY_SINT32_TO_UINT32(encoder->input_int32[ch][smpl]));
-        }
         continue;
       case SLA_BLOCK_DATA_TYPE_COMPRESSDATA:  /* FALLTHRU */
       default:
@@ -665,6 +657,7 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
       SLABitStream_PutBit(encoder->strm, 1);
       SLABitStream_PutBits(encoder->strm, 10, encoder->pitch_period[ch]);
       for (ord = 0; ord < longterm_order; ord++) {
+        /* FIXME:右シフトはマクロを使うべし */
         SLABitStream_PutBits(encoder->strm, 16, 
             SLAUTILITY_SINT32_TO_UINT32(encoder->longterm_coef_int32[ch][ord] >> 16));
       }
@@ -674,11 +667,40 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
     }
   }
 
-  /* 各チャンネルごとに残差符号化 */
+  /* 各チャンネルごとにデータ符号化 */
   for (ch = 0; ch < num_channels; ch++) {
     /* 無音ブロック/生データならばスキップ */
-    if (encoder->block_data_type[ch] != SLA_BLOCK_DATA_TYPE_COMPRESSDATA) { continue; }
-    SLACoder_PutDataArray(encoder->strm, encoder->residual[ch], num_samples);
+    switch (encoder->block_data_type[ch]) {
+      case SLA_BLOCK_DATA_TYPE_RAWDATA:
+        {
+          uint32_t output_bits;
+          /* 圧縮を断念している。生データを符号なし整数化して書き出す */
+          /* 左シフトしている場合があるのでその分は書き出しビット幅を減らす */
+          SLA_Assert(encoder->wave_format.bit_per_sample > encoder->wave_format.offset_lshift);
+          output_bits = encoder->wave_format.bit_per_sample - encoder->wave_format.offset_lshift;
+          /* MS処理を行った場合の2ch目はL-Rが入っているのでビット幅が1増える */
+          if ((ch == 1)
+              && (encoder->encode_param.ch_process_method == SLA_CHPROCESSMETHOD_STEREO_MS)) {
+            output_bits += 1;
+          }
+          for (smpl = 0; smpl < num_samples; smpl++) {
+            SLABitStream_PutBits(encoder->strm, output_bits,
+                SLAUTILITY_SINT32_TO_UINT32(encoder->input_int32[ch][smpl]));
+          }
+        }
+        break;
+      case SLA_BLOCK_DATA_TYPE_COMPRESSDATA:
+        /* 残差符号化 */
+        SLACoder_PutDataArray(encoder->strm, encoder->residual[ch], num_samples);
+        break;
+      case SLA_BLOCK_DATA_TYPE_SILENT:
+        /* 無音の場合は何もしない */
+        break;
+      default:
+        /* ここに入ってきたらプログラミングミス */
+        SLA_Assert(0);
+        break;
+    }
   }
 
   /* バイト位置に揃える */
@@ -738,7 +760,7 @@ SLAApiResult SLAEncoder_EncodeWhole(struct SLAEncoder* encoder,
   header.wave_format.offset_lshift
     = encoder->wave_format.offset_lshift
     = (uint8_t)SLAEncoder_CalculateLeftShiftOffset(encoder, input, num_samples);
-  SLA_Assert((encoder->wave_format.bit_per_sample + encoder->wave_format.offset_lshift) <= 32);
+  SLA_Assert(encoder->wave_format.bit_per_sample > encoder->wave_format.offset_lshift);
 
   /* 全ブロックを逐次エンコード */
   cur_output_size = SLA_HEADER_SIZE;
