@@ -23,6 +23,8 @@
 #define SLAUTILITY_MAX(a,b) (((a) > (b)) ? (a) : (b))
 /* 最小値の取得 */
 #define SLAUTILITY_MIN(a,b) (((a) < (b)) ? (a) : (b))
+/* 最小値以上最小値以下に制限 */
+#define SLAUTILITY_INNER_VALUE(val, min, max) (SLAUTILITY_MIN((max), SLAUTILITY_MAX((min), (val))))
 /* 2の冪乗か？ */
 #define SLAUTILITY_IS_POWERED_OF_2(val) (!((val) & ((val) - 1)))
 /* 符号付き32bit数値を符号なし32bit数値に一意変換 */
