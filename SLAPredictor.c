@@ -407,15 +407,10 @@ SLAPredictorApiResult SLALPCCalculator_EstimateCodeLength(
   /* 整数PCMの振幅に変換（doubleの密度保障） */
   log2_mean_res_power *= pow(2, 2 * (bits_par_sample - 1));
   if (fabs(log2_mean_res_power) <= FLT_MIN) {
-    /* 無音だった場合は符号長を0とする */
+    /* ほぼ無音だった場合は符号長を0とする */
     *length_per_sample = 0.0;
     return SLAPREDICTOR_APIRESULT_OK;
-  } else if (log2_mean_res_power < num_samples) {
-    /* 限りなく無音に近い場合は、1サンプルあたり1ビットで符号化できることを期待する */
-    *length_per_sample = 1.0f / 8;
-    return SLAPREDICTOR_APIRESULT_OK;
-  }
-  SLA_Assert(log2_mean_res_power > num_samples);
+  } 
   log2_mean_res_power = SLAUtility_Log2(log2_mean_res_power) - SLAUtility_Log2(num_samples);
 
   /* sum(log2(1-parcor * parcor))の計算 */
@@ -432,7 +427,12 @@ SLAPredictorApiResult SLALPCCalculator_EstimateCodeLength(
   /* デバッグのしやすさのため、8で割ってバイト単位に換算 */
   *length_per_sample /= 8;
 
-  SLA_Assert((*length_per_sample) > 0);
+  /* 推定ビット数が負値の場合は、1サンプルあたり1ビットで符号化できることを期待する */
+  /* 補足）このケースは入力音声パワーが非常に低い */
+  if ((*length_per_sample) <= 0) {
+    (*length_per_sample) = 1.0f / 8;
+    return SLAPREDICTOR_APIRESULT_OK;
+  }
   
   return SLAPREDICTOR_APIRESULT_OK;
 }
