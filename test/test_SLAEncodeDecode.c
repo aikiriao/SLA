@@ -2,8 +2,6 @@
 #include "../SLAEncoder.h"
 #include "../SLADecoder.h"
 
-#include "SLA_TestUtility.h"
-
 #include <stdlib.h>
 #include <math.h>
 #include <assert.h>
@@ -11,18 +9,19 @@
 
 /* このテストは様々な波形がエンコード -> デコードが元に戻るかを確認する */
 /* ユニットテストは短く終わるのが大原則なので長尺の入力はNG */
+/* TODO: ユニットテストから外す */
 
 /* 波形生成関数 */
 typedef void (*GenerateWaveFunction)(
     double** data, uint32_t num_channels, uint32_t num_samples);
 
 /* テストケース */
-typedef struct EncodeDecodeTestCaseTag {
+struct EncodeDecodeTestCase {
   struct SLAWaveFormat      wave_format;        /* 入力波形データ */
   struct SLAEncodeParameter encode_parameter;   /* エンコードパラメータ */
   uint32_t                  num_samples;        /* サンプル数 */
   GenerateWaveFunction      gen_wave_func;      /* 波形生成関数 */
-} EncodeDecodeTestCase;
+};
 
 /* 無音の生成 */
 static void testSLAEncodeDecode_GenerateSilence(
@@ -71,6 +70,68 @@ static void testSLAEncodeDecode_GenerateWhiteNoise(
   }
 }
 
+/* チャープ信号の生成 */
+static void testSLAEncodeDecode_GenerateChirp(
+    double** data, uint32_t num_channels, uint32_t num_samples)
+{
+  uint32_t smpl, ch;
+  double period;
+
+  assert(data != NULL);
+
+  for (ch = 0; ch < num_channels; ch++) {
+    for (smpl = 0; smpl < num_samples; smpl++) {
+      period = num_samples - smpl;
+      data[ch][smpl] = sin((2.0f * M_PI * smpl) / period);
+    }
+  }
+}
+
+/* 正定数信号の生成 */
+static void testSLAEncodeDecode_GeneratePositiveConstant(
+    double** data, uint32_t num_channels, uint32_t num_samples)
+{
+  uint32_t smpl, ch;
+
+  assert(data != NULL);
+
+  for (ch = 0; ch < num_channels; ch++) {
+    for (smpl = 0; smpl < num_samples; smpl++) {
+      data[ch][smpl] = 1.0f;
+    }
+  }
+}
+
+/* 負定数信号の生成 */
+static void testSLAEncodeDecode_GenerateNegativeConstant(
+    double** data, uint32_t num_channels, uint32_t num_samples)
+{
+  uint32_t smpl, ch;
+
+  assert(data != NULL);
+
+  for (ch = 0; ch < num_channels; ch++) {
+    for (smpl = 0; smpl < num_samples; smpl++) {
+      data[ch][smpl] = -1.0f;
+    }
+  }
+}
+
+/* ナイキスト周期の振動の生成 */
+static void testSLAEncodeDecode_GenerateNyquistOsc(
+    double** data, uint32_t num_channels, uint32_t num_samples)
+{
+  uint32_t smpl, ch;
+
+  assert(data != NULL);
+
+  for (ch = 0; ch < num_channels; ch++) {
+    for (smpl = 0; smpl < num_samples; smpl++) {
+      data[ch][smpl] = (smpl % 2 == 0) ? 1.0f : -1.0f;
+    }
+  }
+}
+
 int testSLAEncodeDecode_Initialize(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
@@ -84,7 +145,7 @@ int testSLAEncodeDecode_Finalize(void *obj)
 }
 
 /* 単一のテストケースを実行 */
-static int32_t testSLAEncodeDecode_DoTestCase(const EncodeDecodeTestCase* test_case)
+static int32_t testSLAEncodeDecode_DoTestCase(const struct EncodeDecodeTestCase* test_case)
 {
   int32_t       ret;
   uint32_t      smpl, ch;
@@ -205,7 +266,7 @@ static int32_t testSLAEncodeDecode_DoTestCase(const EncodeDecodeTestCase* test_c
   for (ch = 0; ch < num_channels; ch++) {
     for (smpl = 0; smpl < num_samples; smpl++) {
       if (input[ch][smpl] != output[ch][smpl]) {
-        printf("%5d %12d vs %12d \n", smpl, input[ch][smpl], output[ch][smpl]);
+        printf("%5d %12d vs %12d \n", smpl, input[ch][smpl] >> 16, output[ch][smpl] >> 16);
         ret = 7;
         goto EXIT;
       }
@@ -241,7 +302,7 @@ static void testSLAEncodeDecode_EncodeDecodeTest(void *obj)
   uint32_t  test_no;
 
   /* テストケース配列 */
-  static const EncodeDecodeTestCase test_case[] = {
+  static const struct EncodeDecodeTestCase test_case[] = {
     /* 無音の部 */
     { { 1,  8, 0,  0 },
       { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
@@ -267,7 +328,7 @@ static void testSLAEncodeDecode_EncodeDecodeTest(void *obj)
       { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
       8192,
       testSLAEncodeDecode_GenerateSilence },
-    { { 2,  8, 0,  0 },
+    { { 2,  8,  0,  0 },
       { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
       8192,
       testSLAEncodeDecode_GenerateSilence },
@@ -290,6 +351,30 @@ static void testSLAEncodeDecode_EncodeDecodeTest(void *obj)
     { { 2, 24,  0, 16 },
       { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
       8192,
+      testSLAEncodeDecode_GenerateSilence },
+    { { 8,  8, 0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateSilence },
+    { { 8, 16,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateSilence },
+    { { 8, 16,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateSilence },
+    { { 8, 24,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateSilence },
+    { { 8, 24,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateSilence },
+    { { 8, 24,  0, 16 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
       testSLAEncodeDecode_GenerateSilence },
 
     /* サイン波の部 */
@@ -341,6 +426,30 @@ static void testSLAEncodeDecode_EncodeDecodeTest(void *obj)
       { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
       8192,
       testSLAEncodeDecode_GenerateSinWave },
+    { { 8,  8,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateSinWave },
+    { { 8, 16,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateSinWave },
+    { { 8, 16,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateSinWave },
+    { { 8, 24,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateSinWave },
+    { { 8, 24,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateSinWave },
+    { { 8, 24,  0, 16 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateSinWave },
 
     /* 白色雑音の部 */
     { { 1,  8,  0,  0 },
@@ -391,6 +500,326 @@ static void testSLAEncodeDecode_EncodeDecodeTest(void *obj)
       { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
       8192,
       testSLAEncodeDecode_GenerateWhiteNoise },
+    { { 8,  8,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateWhiteNoise },
+    { { 8, 16,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateWhiteNoise },
+    { { 8, 16,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateWhiteNoise },
+    { { 8, 24,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateWhiteNoise },
+    { { 8, 24,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateWhiteNoise },
+    { { 8, 24,  0, 16 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateWhiteNoise },
+
+    /* チャープ信号の部 */
+    { { 1,  8,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateChirp },
+    { { 1, 16,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateChirp },
+    { { 1, 16,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateChirp },
+    { { 1, 24,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateChirp },
+    { { 1, 24,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateChirp },
+    { { 1, 24,  0, 16 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateChirp },
+    { { 2,  8,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateChirp },
+    { { 2, 16,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateChirp },
+    { { 2, 16,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateChirp },
+    { { 2, 24,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateChirp },
+    { { 2, 24,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateChirp },
+    { { 2, 24,  0, 16 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateChirp },
+    { { 8,  8,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateChirp },
+    { { 8, 16,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateChirp },
+    { { 8, 16,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateChirp },
+    { { 8, 24,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateChirp },
+    { { 8, 24,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateChirp },
+    { { 8, 24,  0, 16 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateChirp },
+
+    /* 正定数信号の部 */
+    { { 1,  8,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GeneratePositiveConstant },
+    { { 1, 16,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GeneratePositiveConstant },
+    { { 1, 16,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GeneratePositiveConstant },
+    { { 1, 24,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GeneratePositiveConstant },
+    { { 1, 24,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GeneratePositiveConstant },
+    { { 1, 24,  0, 16 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GeneratePositiveConstant },
+    { { 2,  8,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GeneratePositiveConstant },
+    { { 2, 16,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GeneratePositiveConstant },
+    { { 2, 16,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GeneratePositiveConstant },
+    { { 2, 24,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GeneratePositiveConstant },
+    { { 2, 24,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GeneratePositiveConstant },
+    { { 2, 24,  0, 16 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GeneratePositiveConstant },
+    { { 8,  8,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GeneratePositiveConstant },
+    { { 8, 16,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GeneratePositiveConstant },
+    { { 8, 16,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GeneratePositiveConstant },
+    { { 8, 24,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GeneratePositiveConstant },
+    { { 8, 24,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GeneratePositiveConstant },
+    { { 8, 24,  0, 16 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GeneratePositiveConstant },
+
+    /* 負定数信号の部 */
+    { { 1,  8,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNegativeConstant },
+    { { 1, 16,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNegativeConstant },
+    { { 1, 16,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNegativeConstant },
+    { { 1, 24,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNegativeConstant },
+    { { 1, 24,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNegativeConstant },
+    { { 1, 24,  0, 16 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNegativeConstant },
+    { { 2,  8,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNegativeConstant },
+    { { 2, 16,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNegativeConstant },
+    { { 2, 16,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNegativeConstant },
+    { { 2, 24,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNegativeConstant },
+    { { 2, 24,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNegativeConstant },
+    { { 2, 24,  0, 16 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNegativeConstant },
+    { { 8,  8,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateNegativeConstant },
+    { { 8, 16,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateNegativeConstant },
+    { { 8, 16,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateNegativeConstant },
+    { { 8, 24,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateNegativeConstant },
+    { { 8, 24,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateNegativeConstant },
+    { { 8, 24,  0, 16 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateNegativeConstant },
+
+    /* ナイキスト周期振動信号の部 */
+    { { 1,  8,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNyquistOsc },
+    { { 1, 16,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNyquistOsc },
+    { { 1, 16,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNyquistOsc },
+    { { 1, 24,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNyquistOsc },
+    { { 1, 24,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNyquistOsc },
+    { { 1, 24,  0, 16 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNyquistOsc },
+    { { 2,  8,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNyquistOsc },
+    { { 2, 16,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNyquistOsc },
+    { { 2, 16,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNyquistOsc },
+    { { 2, 24,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNyquistOsc },
+    { { 2, 24,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNyquistOsc },
+    { { 2, 24,  0, 16 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_STEREO_MS, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      8192,
+      testSLAEncodeDecode_GenerateNyquistOsc },
+    { { 8,  8,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateNyquistOsc },
+    { { 8, 16,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateNyquistOsc },
+    { { 8, 16,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateNyquistOsc },
+    { { 8, 24,  0,  0 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateNyquistOsc },
+    { { 8, 24,  0,  8 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateNyquistOsc },
+    { { 8, 24,  0, 16 },
+      { 5, 1, 5, 1, SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_SIN, 16384 },
+      4096,
+      testSLAEncodeDecode_GenerateNyquistOsc },
   };
 
   /* テストケース数 */
