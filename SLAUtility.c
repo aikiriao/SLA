@@ -87,6 +87,12 @@ void SLAUtility_MakeHannWindow(double* window, uint32_t window_size)
 
   SLA_Assert(window != NULL);
 
+  /* 0除算対策 */
+  if (window_size == 1) {
+    window[0] = 1.0f;
+    return;
+  }
+
   for (smpl = 0; smpl < window_size; smpl++) {
     x = (double)smpl / (window_size - 1);
     window[smpl] = 0.5f - 0.5f * cos(2.0f * SLA_PI * x);
@@ -100,6 +106,12 @@ void SLAUtility_MakeBlackmanWindow(double* window, uint32_t window_size)
   double    x;
 
   SLA_Assert(window != NULL);
+
+  /* 0除算対策 */
+  if (window_size == 1) {
+    window[0] = 1.0f;
+    return;
+  }
 
   for (smpl = 0; smpl < window_size; smpl++) {
     x = (double)smpl / (window_size - 1);
@@ -115,6 +127,12 @@ void SLAUtility_MakeSinWindow(double* window, uint32_t window_size)
 
   SLA_Assert(window != NULL);
 
+  /* 0除算対策 */
+  if (window_size == 1) {
+    window[0] = 1.0f;
+    return;
+  }
+
   for (smpl = 0; smpl < window_size; smpl++) {
     x = (double)smpl / (window_size - 1);
     window[smpl] = sin(SLA_PI * x);
@@ -129,6 +147,12 @@ void SLAUtility_MakeVorbisWindow(double* window, uint32_t window_size)
 
   SLA_Assert(window != NULL);
 
+  /* 0除算対策 */
+  if (window_size == 1) {
+    window[0] = 1.0f;
+    return;
+  }
+
   for (smpl = 0; smpl < window_size; smpl++) {
     x = (double)smpl / (window_size - 1);
     window[smpl] = sin((SLA_PI / 2.0f) * sin(SLA_PI * x) * sin(SLA_PI * x));
@@ -142,6 +166,12 @@ void SLAUtility_MakeTukeyWindow(double* window, uint32_t window_size, double alp
   double    x;
 
   SLA_Assert(window != NULL);
+
+  /* 0除算対策 */
+  if (window_size == 1) {
+    window[0] = 1.0f;
+    return;
+  }
 
   for (smpl = 0; smpl < window_size; smpl++) {
     x = (double)smpl / (window_size - 1);
