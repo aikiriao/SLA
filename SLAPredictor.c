@@ -210,6 +210,16 @@ static SLAPredictorError LPC_CalculateCoef(
     return SLAPREDICTOR_ERROR_NG;
   }
 
+  /* 入力サンプル数が少ないときは、係数が発散することが多数
+   * => 無音データとして扱い、係数はすべて0とする */
+  if (num_samples < order) {
+    uint32_t ord;
+    for (ord = 0; ord < order + 1; ord++) {
+      lpc->lpc_coef[ord] = lpc->parcor_coef[ord] = 0.0f;
+    }
+    return SLAPREDICTOR_ERROR_OK;
+  }
+
   /* 再帰計算を実行 */
   if (LPC_LevinsonDurbinRecursion(
         lpc, lpc->auto_corr,
@@ -311,8 +321,9 @@ static SLAPredictorError LPC_CalculateAutoCorrelation(
   }
 
   /* 次数（最大ラグ）がサンプル数を超えている */
+  /* -> 次数をサンプル数に制限 */
   if (order > num_samples) {
-    return SLAPREDICTOR_ERROR_INVALID_ARGUMENT;
+    order = num_samples;
   }
 
   /* 自己相関初期化 */
