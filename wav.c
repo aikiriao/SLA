@@ -107,7 +107,8 @@ static int32_t WAV_Convert32bitPCMto32bitPCM(int32_t in_32bitpcm);
 static WAVError WAVParser_GetWAVFormat(
     struct WAVParser* parser, struct WAVFileFormat* format)
 {
-  uint64_t bitsbuf;
+  uint64_t  bitsbuf;
+  int32_t   fmt_chunk_size;
   struct WAVFileFormat tmp_format;
 
   /* 引数チェック */
@@ -133,13 +134,10 @@ static WAVError WAVParser_GetWAVFormat(
     return WAV_ERROR_INVALID_FORMAT;
   }
 
-  /* fmtチャンクのバイト数をチェック
-   * 補足）現在は16byte以外（拡張）対応していない */
+  /* fmtチャンクのバイト数を取得
+   * 補足/注意）16より大きいサイズのfmtチャンクの内容（拡張）は読み飛ばす */
   if (WAVParser_GetLittleEndianBytes(parser, 4, &bitsbuf) != WAV_ERROR_OK) { return WAV_ERROR_IO; }
-  if (bitsbuf != 16) {
-    /* fprintf(stderr, "Unsupported format: fmt chunk extension \n"); */
-    return WAV_ERROR_INVALID_FORMAT;
-  }
+  fmt_chunk_size = (int32_t)bitsbuf;
 
   /* フォーマットIDをチェック
    * 補足）1（リニアPCM）以外対応していない */
@@ -168,7 +166,11 @@ static WAVError WAVParser_GetWAVFormat(
   if (WAVParser_GetLittleEndianBytes(parser, 2, &bitsbuf) != WAV_ERROR_OK) { return WAV_ERROR_IO; }
   tmp_format.bits_per_sample = (uint32_t)bitsbuf;
 
-  /* 拡張部分の読み取りには未対応 */
+  /* 拡張部分の読み取りには未対応: 読み飛ばしを行う */
+  if (fmt_chunk_size > 16) {
+    fprintf(stderr, "Warning: skip fmt chunk extention (unsupported). \n");
+    if (WAVParser_Seek(parser, fmt_chunk_size - 16, SEEK_CUR) != WAV_ERROR_OK) { return WAV_ERROR_IO; }
+  }
   
   /* チャンク読み取り */
   while (1) {
