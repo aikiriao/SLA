@@ -577,7 +577,7 @@ static int32_t SLALESolver_LUDecomposion(
     }
 
     /* 行交換 
-     * 注意）これにより結果のAは求めるべき行列の行を交換したものに変化する。*/
+     * 注意）これにより結果のAは求めるべき行列の行を交換したものに変化する */
     if (col != max_index) {
       for (k = 0; k < dim; k++) {
         double tmp;
