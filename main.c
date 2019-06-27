@@ -44,11 +44,11 @@ static struct CommandLineParserSpecification command_line_spec[] = {
 /* エンコードプリセット */
 static const struct SLAEncodeParameter encode_preset[] = {
   /* parcor, longterm, lms, lms_cascade,             ch_porcess_method,                   window_func_type, max_block_size */
-  {       5,        1,   5,           1,      SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_RECTANGULAR,           4096 },
-  {       5,        1,   5,           1, SLA_CHPROCESSMETHOD_STEREO_MS,         SLA_WINDOWFUNCTIONTYPE_SIN,          12288 },
-  {      10,        1,  10,           1, SLA_CHPROCESSMETHOD_STEREO_MS,         SLA_WINDOWFUNCTIONTYPE_SIN,          12288 },
-  {      20,        1,  10,           2, SLA_CHPROCESSMETHOD_STEREO_MS,         SLA_WINDOWFUNCTIONTYPE_SIN,          12288 },
-  {      30,        3,  10,           2, SLA_CHPROCESSMETHOD_STEREO_MS,         SLA_WINDOWFUNCTIONTYPE_SIN,          16384 }
+  {       8,        1,   4,           1,      SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_RECTANGULAR,           4096 },
+  {       8,        1,   8,           1, SLA_CHPROCESSMETHOD_STEREO_MS,         SLA_WINDOWFUNCTIONTYPE_SIN,          12288 },
+  {      16,        1,   8,           1, SLA_CHPROCESSMETHOD_STEREO_MS,         SLA_WINDOWFUNCTIONTYPE_SIN,          12288 },
+  {      32,        3,   8,           1, SLA_CHPROCESSMETHOD_STEREO_MS,         SLA_WINDOWFUNCTIONTYPE_SIN,          12288 },
+  {      32,        3,   8,           1, SLA_CHPROCESSMETHOD_STEREO_MS,         SLA_WINDOWFUNCTIONTYPE_SIN,          16384 }
 };
 
 /* エンコードプリセット数 */
@@ -265,7 +265,7 @@ static void print_usage(char** argv)
 /* バージョン情報の表示 */
 static void print_version_info(void)
 {
-  printf("SLA - Solitary Lossless Audio Compressor (a.k.a. SHINING LINE*) \n"
+  printf("SLA - Solitary Lossless Audio Compressor \n"
       "Encoder Version: %d \n"
       "Decoder Version: %d \n"
       "CUI     Version: %d \n",
