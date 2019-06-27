@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 /* デコーダバージョン */
-#define SLA_DECODER_VERSION   1
+#define SLA_DECODER_VERSION_STRING   "0.0.1(beta)"
 
 /* デコーダハンドル */
 struct SLADecoder;

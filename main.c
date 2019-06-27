@@ -10,7 +10,7 @@
 #include <sys/stat.h>
 
 /* CUIインターフェースバージョン */
-#define SLA_CUI_VERSION     1
+#define SLA_CUI_VERSION_STRING     "0.0.1(beta)"
 
 /* コマンドライン仕様 */
 static struct CommandLineParserSpecification command_line_spec[] = {
@@ -266,10 +266,10 @@ static void print_usage(char** argv)
 static void print_version_info(void)
 {
   printf("SLA - Solitary Lossless Audio Compressor \n"
-      "Encoder Version: %d \n"
-      "Decoder Version: %d \n"
-      "CUI     Version: %d \n",
-      SLA_ENCODER_VERSION, SLA_DECODER_VERSION, SLA_CUI_VERSION);
+      "Encoder Version: %s \n"
+      "Decoder Version: %s \n"
+      "CUI     Version: %s \n",
+      SLA_ENCODER_VERSION_STRING, SLA_DECODER_VERSION_STRING, SLA_CUI_VERSION_STRING);
 }
 
 /* メインエントリ */
