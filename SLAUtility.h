@@ -70,9 +70,6 @@ uint32_t SLAUtility_Log2Ceil(uint32_t val);
 /* floor(log2(val))の計算 */
 uint32_t SLAUtility_Log2Floor(uint32_t val);
 
-/* 2の冪乗数に対するceil(log2(val))計算 */
-uint32_t SLAUtility_Log2CeilFor2PoweredValue(uint32_t val);
-
 /* 2の冪乗に切り上げる */
 uint32_t SLAUtility_RoundUp2Powered(uint32_t val);
 
