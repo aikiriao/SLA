@@ -88,15 +88,6 @@ double SLAUtility_Round(double d);
 /* log2関数（C89で定義されていない） */
 double SLAUtility_Log2(double x);
 
-/* プリエンファシス(double) */
-void SLAUtility_PreEmphasisDouble(double* data, uint32_t num_samples, int32_t coef_shift);
-
-/* プリエンファシス(int32) */
-void SLAUtility_PreEmphasisInt32(int32_t* data, uint32_t num_samples, int32_t coef_shift);
-
-/* デエンファシス(int32) */
-void SLAUtility_DeEmphasisInt32(int32_t* data, uint32_t num_samples, int32_t coef_shift);
-
 /* 連立一次方程式ソルバーの作成 */
 struct SLALESolver* SLALESolver_Create(uint32_t max_dim);
 

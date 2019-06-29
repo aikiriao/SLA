@@ -21,6 +21,9 @@ struct SLALMSCalculator;
 /* 最適ブロック分割探索ハンドル */
 struct SLAOptimalBlockPartitionEstimator;
 
+/* エンファシスフィルタハンドル */
+struct SLAEmphasisFilter;
+
 /* API結果型 */
 typedef enum SLAPredictorApiResultTag {
   SLAPREDICTOR_APIRESULT_OK,                     /* OK */
@@ -159,6 +162,28 @@ SLAPredictorApiResult SLAOptimalEncodeEstimator_SearchOptimalBlockPartitions(
 /* 最大分割数の取得 */
 uint32_t SLAOptimalEncodeEstimator_CalculateMaxNumPartitions(
     uint32_t max_num_samples, uint32_t delta_num_samples);
+
+/* エンファシスフィルタの作成 */
+struct SLAEmphasisFilter* SLAEmphasisFilter_Create(void);
+
+/* エンファシスフィルタのリセット */
+SLAPredictorApiResult SLAEmphasisFilter_Reset(struct SLAEmphasisFilter* emp);
+
+/* エンファシスフィルタの破棄 */
+void SLAEmphasisFilter_Destroy(struct SLAEmphasisFilter* emp);
+
+/* プリエンファシス(int32) */
+SLAPredictorApiResult SLAEmphasisFilter_PreEmphasisInt32(
+    struct SLAEmphasisFilter* emp,
+    int32_t* data, uint32_t num_samples, int32_t coef_shift);
+
+/* デエンファシス(int32) */
+SLAPredictorApiResult SLAEmphasisFilter_DeEmphasisInt32(
+    struct SLAEmphasisFilter* emp,
+    int32_t* data, uint32_t num_samples, int32_t coef_shift);
+
+/* プリエンファシス(double, 解析用) */
+void SLAEmphasisFilter_PreEmphasisDouble(double* data, uint32_t num_samples, int32_t coef_shift);
 
 #ifdef __cplusplus
 }

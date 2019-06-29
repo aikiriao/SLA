@@ -26,6 +26,7 @@ struct SLAEncoder {
   struct SLALongTermCalculator* ltc;
   struct SLALongTermSynthesizer* ltms;
   struct SLALMSCalculator*      nlmsc;
+  struct SLAEmphasisFilter*     emp;
   struct SLAOptimalBlockPartitionEstimator* oee;
   SLAChannelProcessMethod	      ch_proc_method;
   SLAWindowFunctionType         window_type;
@@ -110,6 +111,7 @@ struct SLAEncoder* SLAEncoder_Create(const struct SLAEncoderConfig* config)
   encoder->ltc    = SLALongTermCalculator_Create(SLAUtility_RoundUp2Powered(config->max_num_block_samples * 2), SLALONGTERM_MAX_PERIOD, SLALONGTERM_NUM_PITCH_CANDIDATES, config->max_longterm_order);
   encoder->ltms   = SLALongTermSynthesizer_Create();
   encoder->nlmsc  = SLALMSCalculator_Create(config->max_lms_order_par_filter);
+  encoder->emp    = SLAEmphasisFilter_Create();
   encoder->oee    = SLAOptimalEncodeEstimator_Create(config->max_num_block_samples, SLA_SEARCH_BLOCK_NUM_SAMPLES_DELTA);
   
   return encoder;
@@ -150,6 +152,7 @@ void SLAEncoder_Destroy(struct SLAEncoder* encoder)
     SLALongTermCalculator_Destroy(encoder->ltc);
     SLALongTermSynthesizer_Destroy(encoder->ltms);
     SLALMSCalculator_Destroy(encoder->nlmsc);
+    SLAEmphasisFilter_Destroy(encoder->emp);
     SLAOptimalEncodeEstimator_Destroy(encoder->oee);
     /* Closeを呼ぶと意図せずFlushされるのでメモリ領域だけ開放する */
     NULLCHECK_AND_FREE(encoder->strm_work);
@@ -506,8 +509,10 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
     SLAUtility_ApplyWindow(encoder->window, encoder->input_double[ch], num_samples); 
 
     /* プリエンファシス */
-    SLAUtility_PreEmphasisDouble(encoder->input_double[ch], num_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
-    SLAUtility_PreEmphasisInt32(encoder->input_int32[ch], num_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
+    SLAEmphasisFilter_Reset(encoder->emp);
+    SLAEmphasisFilter_PreEmphasisInt32(encoder->emp, encoder->input_int32[ch], num_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
+    /* doubleも同様のプリエンファシスフィルタを適用 */
+    SLAEmphasisFilter_PreEmphasisDouble(encoder->input_double[ch], num_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
 
     /* PARCOR係数を求める */
     if (SLALPCCalculator_CalculatePARCORCoefDouble(encoder->lpcc, 
@@ -528,7 +533,8 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
     /* 推定圧縮率が閾値以上ならば、予測を諦めて生データ出力を行う */
     if (estimated_code_length >= SLA_ESTIMATE_CODELENGTH_THRESHOLD) {
       /* PARCOR係数計算前にプリエンファシスをかけているのでデエンファシスして元に戻しておく */
-      SLAUtility_DeEmphasisInt32(encoder->input_int32[ch], num_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
+      SLAEmphasisFilter_Reset(encoder->emp);
+      SLAEmphasisFilter_DeEmphasisInt32(encoder->emp, encoder->input_int32[ch], num_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
       encoder->block_data_type[ch] = SLA_BLOCK_DATA_TYPE_RAWDATA;
       continue;
     }

@@ -94,6 +94,11 @@ struct SLAOptimalBlockPartitionEstimator {
   uint8_t*  used_flag;          /* 各ノードの使用状態フラグ */
 };
 
+/* エンファシスフィルタハンドル */
+struct SLAEmphasisFilter {
+  int32_t prev_int32;           /* 直前のサンプル */
+};
+
 /*（標本）自己相関の計算 */
 static SLAPredictorError LPC_CalculateAutoCorrelation(
     const double* data, uint32_t num_samples,
@@ -1459,4 +1464,109 @@ SLAPredictorApiResult SLAOptimalEncodeEstimator_SearchOptimalBlockPartitions(
   */
 
   return SLAPREDICTOR_APIRESULT_OK;
+}
+
+/* エンファシスフィルタの作成 */
+struct SLAEmphasisFilter* SLAEmphasisFilter_Create(void)
+{
+  struct SLAEmphasisFilter* emp;
+
+  emp = (struct SLAEmphasisFilter *)malloc(sizeof(struct SLAEmphasisFilter));
+
+  SLAEmphasisFilter_Reset(emp);
+
+  return emp;
+}
+
+/* エンファシスフィルタの破棄 */
+void SLAEmphasisFilter_Destroy(struct SLAEmphasisFilter* emp)
+{
+  NULLCHECK_AND_FREE(emp);
+}
+
+/* エンファシスフィルタのリセット */
+SLAPredictorApiResult SLAEmphasisFilter_Reset(struct SLAEmphasisFilter* emp)
+{
+  if (emp == NULL) {
+    return SLAPREDICTOR_APIRESULT_OK;
+  }
+
+  emp->prev_int32 = 0;
+
+  return SLAPREDICTOR_APIRESULT_OK;
+}
+
+/* プリエンファシス(int32) */
+SLAPredictorApiResult SLAEmphasisFilter_PreEmphasisInt32(
+    struct SLAEmphasisFilter* emp,
+    int32_t* data, uint32_t num_samples, int32_t coef_shift)
+{
+  uint32_t  smpl;
+  int32_t   prev_int32, tmp_int32;
+  const int32_t coef_numer = (1 << coef_shift) - 1;
+
+  /* 引数チェック */
+  if ((emp == NULL) || (data == NULL)) {
+    return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* フィルタ適用 */
+  prev_int32 = emp->prev_int32;
+  for (smpl = 0; smpl < num_samples; smpl++) {
+    tmp_int32   = data[smpl];
+    data[smpl] -= (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(prev_int32 * coef_numer, coef_shift);
+    prev_int32  = tmp_int32;
+  }
+
+  /* 直前の値を保存 */
+  emp->prev_int32 = prev_int32;
+  return SLAPREDICTOR_APIRESULT_OK;
+}
+
+/* デエンファシス(int32) */
+SLAPredictorApiResult SLAEmphasisFilter_DeEmphasisInt32(
+    struct SLAEmphasisFilter* emp,
+    int32_t* data, uint32_t num_samples, int32_t coef_shift)
+{
+  uint32_t  smpl;
+  const int32_t coef_numer = (1 << coef_shift) - 1;
+
+  /* 引数チェック */
+  if ((emp == NULL) || (data == NULL)) {
+    return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* 先頭サンプルはハンドルにある直前の値を使用 */
+  data[0] += (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(emp->prev_int32 * coef_numer, coef_shift);
+
+  /* フィルタ適用 */
+  for (smpl = 1; smpl < num_samples; smpl++) {
+    data[smpl] += (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(data[smpl - 1] * coef_numer, coef_shift);
+  }
+
+  /* 直前の値を保存 */
+  emp->prev_int32 = data[smpl - 1];
+  return SLAPREDICTOR_APIRESULT_OK;
+}
+
+/* プリエンファシス(double) */
+void SLAEmphasisFilter_PreEmphasisDouble(double* data, uint32_t num_samples, int32_t coef_shift)
+{
+  uint32_t  smpl;
+  double    prev, tmp;
+  double    coef;
+
+  SLA_Assert(data != NULL);
+
+  /* フィルタ係数の計算 */
+  coef = (pow(2, coef_shift) - 1.0f) * pow(2, -coef_shift);
+
+  /* フィルタ適用 */
+  prev = 0.0f;
+  for (smpl = 0; smpl < num_samples; smpl++) {
+    tmp         = data[smpl];
+    data[smpl] -= prev * coef;
+    prev        = tmp;
+  }
+
 }

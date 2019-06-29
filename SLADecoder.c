@@ -22,9 +22,10 @@ struct SLADecoder {
   struct SLABitStream*          strm;
   void*                         strm_work;
 
-  struct SLALPCSynthesizer*     lpcs;
-  struct SLALongTermSynthesizer* ltms;
-  struct SLALMSCalculator*      nlmsc;
+  struct SLALPCSynthesizer*       lpcs;
+  struct SLALongTermSynthesizer*  ltms;
+  struct SLALMSCalculator*        nlmsc;
+  struct SLAEmphasisFilter*       emp;
 
   int32_t**                     parcor_coef;
   int32_t**                     longterm_coef;
@@ -83,6 +84,7 @@ struct SLADecoder* SLADecoder_Create(const struct SLADecoderConfig* config)
   decoder->lpcs   = SLALPCSynthesizer_Create(config->max_parcor_order);
   decoder->ltms   = SLALongTermSynthesizer_Create();
   decoder->nlmsc  = SLALMSCalculator_Create(config->max_lms_order_par_filter);
+  decoder->emp    = SLAEmphasisFilter_Create();
    
   return decoder;
 }
@@ -109,6 +111,7 @@ void SLADecoder_Destroy(struct SLADecoder* decoder)
     SLALPCSynthesizer_Destroy(decoder->lpcs);
     SLALongTermSynthesizer_Destroy(decoder->ltms);
     SLALMSCalculator_Destroy(decoder->nlmsc);
+    SLAEmphasisFilter_Destroy(decoder->emp);
     NULLCHECK_AND_FREE(decoder->strm_work);
     free(decoder);
   }
@@ -462,7 +465,9 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     }
 
     /* デエンファシス */
-    SLAUtility_DeEmphasisInt32(decoder->output[ch], block_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
+    SLAEmphasisFilter_Reset(decoder->emp);
+    SLAEmphasisFilter_DeEmphasisInt32(decoder->emp, 
+        decoder->output[ch], block_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
   }
 
   /* チャンネル毎の処理をしていたら元に戻す */

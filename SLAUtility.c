@@ -429,62 +429,6 @@ double SLAUtility_Log2(double x)
 #undef INV_LOGE2
 }
 
-/* プリエンファシス(double) */
-void SLAUtility_PreEmphasisDouble(double* data, uint32_t num_samples, int32_t coef_shift)
-{
-  uint32_t  smpl;
-  double    prev, tmp;
-  double    coef;
-
-  SLA_Assert(data != NULL);
-
-  /* フィルタ係数の計算 */
-  coef = (pow(2, coef_shift) - 1.0f) * pow(2, -coef_shift);
-
-  /* フィルタ適用 */
-  prev = 0.0f;
-  for (smpl = 0; smpl < num_samples; smpl++) {
-    tmp         = data[smpl];
-    data[smpl] -= prev * coef;
-    prev        = tmp;
-  }
-
-}
-
-/* プリエンファシス(int32) */
-void SLAUtility_PreEmphasisInt32(int32_t* data, uint32_t num_samples, int32_t coef_shift)
-{
-  uint32_t  smpl;
-  int32_t   prev_int32, tmp_int32;
-  const int32_t coef_numer = (1 << coef_shift) - 1;
-
-  SLA_Assert(data != NULL);
-
-  /* フィルタ適用 */
-  prev_int32 = 0;
-  for (smpl = 0; smpl < num_samples; smpl++) {
-    tmp_int32   = data[smpl];
-    data[smpl] -= (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(prev_int32 * coef_numer, coef_shift);
-    prev_int32  = tmp_int32;
-  }
-
-}
-
-/* デエンファシス(int32) */
-void SLAUtility_DeEmphasisInt32(int32_t* data, uint32_t num_samples, int32_t coef_shift)
-{
-  uint32_t  smpl;
-  const int32_t coef_numer = (1 << coef_shift) - 1;
-
-  SLA_Assert(data != NULL);
-
-  /* フィルタ適用 */
-  for (smpl = 1; smpl < num_samples; smpl++) {
-    data[smpl] += (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(data[smpl - 1] * coef_numer, coef_shift);
-  }
-
-}
-
 /* 連立一次方程式ソルバーの作成 */
 struct SLALESolver* SLALESolver_Create(uint32_t max_dim)
 {
