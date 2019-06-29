@@ -471,6 +471,7 @@ void SLACoder_PutRecursiveRiceParameter(
   first_order_param = SLACODER_PARAMETER_GET(rice_parameter, 0);
 
   /* 書き出し */
+  SLA_Assert(first_order_param < (1UL << bitwidth));
   ret = SLABitStream_PutBits(strm, bitwidth, first_order_param);
   SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
 }
