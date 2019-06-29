@@ -231,6 +231,7 @@ static void testSLAPredictor_PredictInt32ByParcor(
 {
   struct SLALPCSynthesizer* lpcs = SLALPCSynthesizer_Create(order);
 
+  assert(SLALPCSynthesizer_Reset(lpcs) == SLAPREDICTOR_APIRESULT_OK);
   assert(SLALPCSynthesizer_PredictByParcorCoefInt32(
         lpcs, data, num_samples, parcor_coef, order, residual) == SLAPREDICTOR_APIRESULT_OK);
 
@@ -244,6 +245,7 @@ static void testSLAPredictor_SynthesizeInt32ByParcor(
 {
   struct SLALPCSynthesizer* lpcs = SLALPCSynthesizer_Create(order);
 
+  assert(SLALPCSynthesizer_Reset(lpcs) == SLAPREDICTOR_APIRESULT_OK);
   assert(SLALPCSynthesizer_SynthesizeByParcorCoefInt32(
         lpcs, residual, num_samples, parcor_coef, order, output) == SLAPREDICTOR_APIRESULT_OK);
 
@@ -261,6 +263,7 @@ static void testSLAPredictor_PredictInt32ByLMS(
   
   nlms = SLALMSCalculator_Create(order);
 
+  assert(SLALMSCalculator_Reset(nlms) == SLAPREDICTOR_APIRESULT_OK);
   assert(SLALMSCalculator_PredictInt32(
         nlms, order, data, num_samples, residual) == SLAPREDICTOR_APIRESULT_OK);
 
@@ -278,6 +281,7 @@ static void testSLAPredictor_SynthesizeInt32ByLMS(
 
   nlms = SLALMSCalculator_Create(order);
 
+  assert(SLALMSCalculator_Reset(nlms) == SLAPREDICTOR_APIRESULT_OK);
   assert(SLALMSCalculator_SynthesizeInt32(
         nlms, order, residual, num_samples, output) == SLAPREDICTOR_APIRESULT_OK);
 
@@ -545,6 +549,7 @@ static void testLPCLongTermCalculator_CalculateCoefTest(void* obj)
   uint32_t                      i, j, smpl, is_ok;
   const SLALongTermTestCase*    test_case_p;
   struct SLALongTermCalculator* lpcltmc;
+  struct SLALongTermSynthesizer* ltms;
   double*                       ltm_coef;
   int32_t*                      int32_ltm_coef;
   double*                       data;
@@ -584,6 +589,7 @@ static void testLPCLongTermCalculator_CalculateCoefTest(void* obj)
     lpcltmc     = SLALongTermCalculator_Create(
                     test_case->fft_size, test_case_p->max_pitch_num_samples,
                     test_case_p->num_taps, test_case_p->num_taps);
+    ltms        = SLALongTermSynthesizer_Create();
     ltm_coef        = (double *)malloc(sizeof(double) * test_case_p->num_taps);
     int32_ltm_coef  = (int32_t *)malloc(sizeof(int32_t) * test_case_p->num_taps);
     data            = (double *)malloc(sizeof(double) * test_case_p->num_samples);
@@ -648,16 +654,17 @@ static void testLPCLongTermCalculator_CalculateCoefTest(void* obj)
 
       /* 残差計算 */
       Test_AssertEqual(
-          SLALongTerm_PredictInt32(
-            int32_data, test_case_p->num_samples,
+          SLALongTermSynthesizer_PredictInt32(
+            ltms, int32_data, test_case_p->num_samples,
             pitch_period, int32_ltm_coef, test_case_p->num_taps,
             residual),
           SLAPREDICTOR_APIRESULT_OK);
 
       /* 合成 */
+      SLALongTermSynthesizer_Reset(ltms);
       Test_AssertEqual(
-          SLALongTerm_SynthesizeInt32(
-            residual, test_case_p->num_samples,
+          SLALongTermSynthesizer_SynthesizeInt32(
+            ltms, residual, test_case_p->num_samples,
             pitch_period, int32_ltm_coef, test_case_p->num_taps,
             output),
           SLAPREDICTOR_APIRESULT_OK);
@@ -682,6 +689,7 @@ static void testLPCLongTermCalculator_CalculateCoefTest(void* obj)
     free(int32_ltm_coef);
     free(ltm_coef);
     SLALongTermCalculator_Destroy(lpcltmc);
+    SLALongTermSynthesizer_Destroy(ltms);
   }
 }
 

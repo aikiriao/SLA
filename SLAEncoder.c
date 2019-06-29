@@ -24,6 +24,7 @@ struct SLAEncoder {
   struct SLALPCCalculator*      lpcc;   
   struct SLALPCSynthesizer*     lpcs;
   struct SLALongTermCalculator* ltc;
+  struct SLALongTermSynthesizer* ltms;
   struct SLALMSCalculator*      nlmsc;
   struct SLAOptimalBlockPartitionEstimator* oee;
   SLAChannelProcessMethod	      ch_proc_method;
@@ -107,6 +108,7 @@ struct SLAEncoder* SLAEncoder_Create(const struct SLAEncoderConfig* config)
   encoder->lpcc   = SLALPCCalculator_Create(config->max_parcor_order);
   encoder->lpcs   = SLALPCSynthesizer_Create(config->max_parcor_order);
   encoder->ltc    = SLALongTermCalculator_Create(SLAUtility_RoundUp2Powered(config->max_num_block_samples * 2), SLALONGTERM_MAX_PERIOD, SLALONGTERM_NUM_PITCH_CANDIDATES, config->max_longterm_order);
+  encoder->ltms   = SLALongTermSynthesizer_Create();
   encoder->nlmsc  = SLALMSCalculator_Create(config->max_lms_order_par_filter);
   encoder->oee    = SLAOptimalEncodeEstimator_Create(config->max_num_block_samples, SLA_SEARCH_BLOCK_NUM_SAMPLES_DELTA);
   
@@ -146,6 +148,7 @@ void SLAEncoder_Destroy(struct SLAEncoder* encoder)
     SLALPCCalculator_Destroy(encoder->lpcc);
     SLALPCSynthesizer_Destroy(encoder->lpcs);
     SLALongTermCalculator_Destroy(encoder->ltc);
+    SLALongTermSynthesizer_Destroy(encoder->ltms);
     SLALMSCalculator_Destroy(encoder->nlmsc);
     SLAOptimalEncodeEstimator_Destroy(encoder->oee);
     /* Closeを呼ぶと意図せずFlushされるのでメモリ領域だけ開放する */
@@ -555,6 +558,7 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
     } 
 
     /* PARCORで残差計算 */
+    SLALPCSynthesizer_Reset(encoder->lpcs);
     if (SLALPCSynthesizer_PredictByParcorCoefInt32(encoder->lpcs,
           encoder->input_int32[ch], num_samples,
           encoder->parcor_coef_int32[ch], parcor_order,
@@ -587,7 +591,9 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
 
     /* ロングタームで残差計算 */
     if (encoder->pitch_period[ch] >= SLALONGTERM_MIN_PITCH_THRESHOULD) {
-      if (SLALongTerm_PredictInt32(
+      SLALongTermSynthesizer_Reset(encoder->ltms);
+      if (SLALongTermSynthesizer_PredictInt32(
+            encoder->ltms,
             encoder->residual[ch], num_samples,
             encoder->pitch_period[ch], encoder->longterm_coef_int32[ch], longterm_order,
             encoder->tmp_residual[ch]) != SLAPREDICTOR_APIRESULT_OK) {
@@ -600,6 +606,7 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
 
     /* LMSで残差計算 - カスケード数だけ回す */
     for (ord = 0; ord < encoder->encode_param.num_lms_filter_cascade; ord++) {
+      SLALMSCalculator_Reset(encoder->nlmsc);
       if (SLALMSCalculator_PredictInt32(encoder->nlmsc,
             encoder->encode_param.lms_order_par_filter,
             encoder->residual[ch], num_samples,

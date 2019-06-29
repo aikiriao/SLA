@@ -56,15 +56,20 @@ struct SLALPCSynthesizer {
 
 /* ロングターム計算ハンドル */
 struct SLALongTermCalculator {
-  uint32_t            fft_size;                 /* FFTサイズ                */
-  uint32_t            max_num_taps;             /* 最大タップ数             */
-  double*             auto_corr;                /* 自己相関                 */
-  uint32_t            max_num_pitch_candidates; /* 最大のピッチ候補数       */
-  uint32_t            max_pitch_period;         /* 最大ピッチ               */
-  uint32_t*           pitch_candidate;          /* ピッチ候補配列           */
-  struct SLALESolver* lesolver;                 /* 連立一次方程式ソルバー   */
-  double**            R_mat;                    /* 自己相関行列             */
-  double*             ltm_coef_vec;             /* ロングターム係数ベクトル */
+  uint32_t            fft_size;                 /* FFTサイズ                  */
+  uint32_t            max_num_taps;             /* 最大タップ数               */
+  double*             auto_corr;                /* 自己相関                   */
+  uint32_t            max_num_pitch_candidates; /* 最大のピッチ候補数         */
+  uint32_t            max_pitch_period;         /* 最大ピッチ                 */
+  uint32_t*           pitch_candidate;          /* ピッチ候補配列             */
+  struct SLALESolver* lesolver;                 /* 連立一次方程式ソルバー     */
+  double**            R_mat;                    /* 自己相関行列               */
+  double*             ltm_coef_vec;             /* ロングターム係数ベクトル   */
+};
+
+/* ロングターム予測合成ハンドル */
+struct SLALongTermSynthesizer {
+  uint8_t             is_first_process;         /* リセット後最初の処理か否か */
 };
 
 /* LMS計算ハンドル */
@@ -75,7 +80,9 @@ struct SLALMSCalculator {
   int32_t*  fir_sign_buffer;          /* 入力信号の符号を記録したバッファ */
   int32_t*  iir_sign_buffer;          /* 予測信号の符号を記録したバッファ */
   int32_t*  iir_buffer;               /* 予測信号バッファ */
-  uint32_t  signal_sign_buffer_size;  /* バッファサイズ（2の冪） */
+  uint32_t  signal_sign_buffer_size;  /* バッファサイズ */
+  uint32_t  buffer_pos;               /* バッファ参照位置 */
+  uint8_t   is_first_process;         /* リセット後最初の処理か否か */
 };
 
 /* 最適ブロック分割探索ハンドル */
@@ -495,6 +502,9 @@ struct SLALPCSynthesizer* SLALPCSynthesizer_Create(uint32_t max_order)
   lpcs->forward_residual  = malloc(sizeof(int32_t) * (max_order + 1));
   lpcs->backward_residual = malloc(sizeof(int32_t) * (max_order + 1));
 
+  /* 状態リセット */
+  SLALPCSynthesizer_Reset(lpcs);
+
   return lpcs;
 }
 
@@ -506,6 +516,24 @@ void SLALPCSynthesizer_Destroy(struct SLALPCSynthesizer* lpc)
     NULLCHECK_AND_FREE(lpc->backward_residual);
     free(lpc);
   }
+}
+
+/* LPC音声合成ハンドルのリセット */
+SLAPredictorApiResult SLALPCSynthesizer_Reset(struct SLALPCSynthesizer* lpc)
+{
+  uint32_t ord;
+
+  /* 引数チェック */
+  if (lpc == NULL) {
+    return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* 誤差をゼロ初期化 */
+  for (ord = 0; ord < lpc->max_order + 1; ord++) {
+    lpc->forward_residual[ord] = lpc->backward_residual[ord] = 0;
+  }
+
+  return SLAPREDICTOR_APIRESULT_OK;
 }
 
 /* PARCOR係数により予測/誤差出力（32bit整数入出力）: 乗算時に32bit幅になるように修正 */
@@ -534,11 +562,6 @@ SLAPredictorApiResult SLALPCSynthesizer_PredictByParcorCoefInt32(
   /* オート変数にポインタをコピー */
   forward_residual  = lpc->forward_residual;
   backward_residual = lpc->backward_residual;
-
-  /* 誤差をゼロ初期化 */
-  for (ord = 0; ord < lpc->max_order + 1; ord++) {
-    forward_residual[ord] = backward_residual[ord] = 0;
-  }
 
   /* 誤差計算 */
   for (samp = 0; samp < num_samples; samp++) {
@@ -591,11 +614,6 @@ SLAPredictorApiResult SLALPCSynthesizer_SynthesizeByParcorCoefInt32(
 
   /* オート変数にポインタをコピー */
   backward_residual = lpc->backward_residual;
-
-  /* 誤差をゼロ初期化 */
-  for (ord = 0; ord < lpc->max_order + 1; ord++) {
-    backward_residual[ord] = 0;
-  }
 
   /* 格子型フィルタによる音声合成 */
   for (samp = 0; samp < num_samples; samp++) {
@@ -854,8 +872,40 @@ SLAPredictorApiResult SLALongTermCalculator_CalculateCoef(
   return SLAPREDICTOR_APIRESULT_OK;
 }
 
+/* ロングターム予測合成ハンドル作成 */
+struct SLALongTermSynthesizer* SLALongTermSynthesizer_Create(void)
+{
+  struct SLALongTermSynthesizer* ltm;
+
+  ltm = malloc(sizeof(struct SLALongTermSynthesizer));
+  
+  SLALongTermSynthesizer_Reset(ltm);
+
+  return ltm;
+}
+
+/* ロングターム予測合成ハンドル破棄 */
+void SLALongTermSynthesizer_Destroy(struct SLALongTermSynthesizer* ltm)
+{
+  NULLCHECK_AND_FREE(ltm);
+}
+
+/* ロングターム予測合成ハンドルリセット */
+SLAPredictorApiResult SLALongTermSynthesizer_Reset(struct SLALongTermSynthesizer* ltm)
+{
+  if (ltm == NULL) {
+    return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* 次の予測合成処理が最初の処理 */
+  ltm->is_first_process = 1;
+
+  return SLAPREDICTOR_APIRESULT_OK;
+}
+
 /* ロングタームを使用して残差信号の計算 */
-SLAPredictorApiResult SLALongTerm_PredictInt32(
+SLAPredictorApiResult SLALongTermSynthesizer_PredictInt32(
+  struct SLALongTermSynthesizer* ltm,
 	const int32_t* data, uint32_t num_samples,
 	uint32_t pitch_period, 
 	const int32_t* ltm_coef, uint32_t num_taps, int32_t* residual)
@@ -865,7 +915,7 @@ SLAPredictorApiResult SLALongTerm_PredictInt32(
   int64_t       predict;
 
   /* 引数チェック */
-  if ((data == NULL) || (ltm_coef == NULL) || (residual == NULL)) {
+  if ((ltm == NULL) || (data == NULL) || (ltm_coef == NULL) || (residual == NULL)) {
     return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
   }
 
@@ -876,8 +926,13 @@ SLAPredictorApiResult SLALongTerm_PredictInt32(
   }
 
   /* 予測が始まるまでのサンプルは単純コピー */
-  for (i = 0; i < pitch_period + num_taps / 2; i++) {
+  if (ltm->is_first_process == 1) {
+    for (i = 0; i < pitch_period + num_taps / 2; i++) {
       residual[i] = data[i];
+    }
+    ltm->is_first_process = 0;
+  } else {
+    i = 0;
   }
 
   /* ロングターム予測 */
@@ -894,7 +949,8 @@ SLAPredictorApiResult SLALongTerm_PredictInt32(
 }
 	
 /* ロングターム誤差信号から音声合成 */
-SLAPredictorApiResult SLALongTerm_SynthesizeInt32(
+SLAPredictorApiResult SLALongTermSynthesizer_SynthesizeInt32(
+  struct SLALongTermSynthesizer* ltm,
 	const int32_t* residual, uint32_t num_samples,
 	uint32_t pitch_period,
 	const int32_t* ltm_coef, uint32_t num_taps, int32_t* output)
@@ -904,7 +960,7 @@ SLAPredictorApiResult SLALongTerm_SynthesizeInt32(
   int64_t       predict;
 
   /* 引数チェック */
-  if ((residual == NULL) || (ltm_coef == NULL) || (output == NULL)) {
+  if ((ltm == NULL) || (residual == NULL) || (ltm_coef == NULL) || (output == NULL)) {
     return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
   }
 
@@ -914,9 +970,14 @@ SLAPredictorApiResult SLALongTerm_SynthesizeInt32(
     return SLAPREDICTOR_APIRESULT_OK;
   }
 
-  /* ピッチまでのサンプルは単純コピー */
-  for (i = 0; i < pitch_period + num_taps / 2; i++) {
+  /* 合成処理が始まるまでのサンプルは単純コピー */
+  if (ltm->is_first_process == 1) {
+    for (i = 0; i < pitch_period + num_taps / 2; i++) {
       output[i] = residual[i];
+    }
+    ltm->is_first_process = 0;
+  } else {
+    i = 0;
   }
 
   /* ロングターム予測 */
@@ -941,12 +1002,14 @@ struct SLALMSCalculator* SLALMSCalculator_Create(uint32_t max_num_coef)
   nlms->max_num_coef            = max_num_coef;
   nlms->signal_sign_buffer_size = SLAUtility_RoundUp2Powered(max_num_coef);
 
-  nlms->fir_coef        = malloc(sizeof(int64_t) * max_num_coef);
-  nlms->iir_coef        = malloc(sizeof(int64_t) * max_num_coef);
+  nlms->fir_coef                = malloc(sizeof(int64_t) * max_num_coef);
+  nlms->iir_coef                = malloc(sizeof(int64_t) * max_num_coef);
   /* バッファアクセスの高速化のため2倍確保 */
-  nlms->fir_sign_buffer = malloc(sizeof(int32_t) * 2 * max_num_coef);
-  nlms->iir_sign_buffer = malloc(sizeof(int32_t) * 2 * max_num_coef);
-  nlms->iir_buffer      = malloc(sizeof(int32_t) * 2 * max_num_coef);
+  nlms->fir_sign_buffer         = malloc(sizeof(int32_t) * 2 * max_num_coef);
+  nlms->iir_sign_buffer         = malloc(sizeof(int32_t) * 2 * max_num_coef);
+  nlms->iir_buffer              = malloc(sizeof(int32_t) * 2 * max_num_coef);
+
+  SLALMSCalculator_Reset(nlms);
 
   return nlms;
 }
@@ -962,6 +1025,23 @@ void SLALMSCalculator_Destroy(struct SLALMSCalculator* nlms)
     NULLCHECK_AND_FREE(nlms->iir_buffer);
     free(nlms);
   }
+}
+
+/* LMS計算ハンドルのリセット */
+SLAPredictorApiResult SLALMSCalculator_Reset(struct SLALMSCalculator* nlms)
+{
+  /* 引数チェック */
+  if (nlms == NULL) {
+    return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* 初回処理フラグを立てる */
+  nlms->is_first_process = 1;
+
+  /* バッファ参照位置の初期化 */
+  nlms->buffer_pos = 0;
+
+  return SLAPREDICTOR_APIRESULT_OK;
 }
 
 /* LMS処理のコア処理 */
@@ -984,17 +1064,19 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
   if (num_coef > nlms->max_num_coef) {
     return SLAPREDICTOR_APIRESULT_EXCEED_MAX_ORDER;
   }
-
+  
   /* 符号バッファの初期化 */
-  for (smpl = 0; smpl < num_coef; smpl++) {
-    /* 合成時は残差に符号情報が入っている */
-    nlms->fir_sign_buffer[smpl]
-      = nlms->fir_sign_buffer[smpl + num_coef]
-      = nlms->iir_sign_buffer[smpl]
-      = nlms->iir_sign_buffer[smpl + num_coef]
-      = (is_predict == 1) 
-      ? (SLAUTILITY_SIGN(original_signal[num_coef - smpl - 1]) + 1)
-      : (SLAUTILITY_SIGN(residual[num_coef - smpl - 1]) + 1);
+  if (nlms->is_first_process == 1) {
+    for (smpl = 0; smpl < num_coef; smpl++) {
+      /* 合成時は残差に符号情報が入っている */
+      nlms->fir_sign_buffer[smpl]
+        = nlms->fir_sign_buffer[smpl + num_coef]
+        = nlms->iir_sign_buffer[smpl]
+        = nlms->iir_sign_buffer[smpl + num_coef]
+        = (is_predict == 1) 
+        ? (SLAUTILITY_SIGN(original_signal[num_coef - smpl - 1]) + 1)
+        : (SLAUTILITY_SIGN(residual[num_coef - smpl - 1]) + 1);
+    }
   }
 
   /* 係数を0クリア */
@@ -1010,15 +1092,21 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
   }
 
   /* 出力バッファの初期化: 先頭coef分は残差と元信号は同一 */
-  for (smpl = 0; smpl < num_coef; smpl++) {
-    nlms->iir_buffer[smpl]
-      = nlms->iir_buffer[smpl + num_coef]
-      = residual[num_coef - smpl - 1];
+  if (nlms->is_first_process == 1) {
+    for (smpl = 0; smpl < num_coef; smpl++) {
+      nlms->iir_buffer[smpl]
+        = nlms->iir_buffer[smpl + num_coef]
+        = residual[num_coef - smpl - 1];
+    }
+    nlms->is_first_process = 0;
+    buffer_pos = num_coef;
+  } else {
+    smpl = 0;
+    buffer_pos = nlms->buffer_pos;
   }
 
   /* フィルタ処理実行 */
-  buffer_pos = num_coef;
-  for (smpl = num_coef; smpl < num_samples; smpl++) {
+  for (; smpl < num_samples; smpl++) {
     /* 予測 */
     predict = (1UL << 30);  /* 丸め誤差回避 */
     for (i = 0; i < num_coef; i++) {
@@ -1068,8 +1156,10 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
     nlms->fir_sign_buffer[buffer_pos]
       = nlms->fir_sign_buffer[buffer_pos + num_coef]
       = SLAUTILITY_SIGN(original_signal[smpl]) + 1;
-
   }
+
+  /* バッファ参照位置の記録 */
+  nlms->buffer_pos = buffer_pos;
 
   return SLAPREDICTOR_APIRESULT_OK;
 }

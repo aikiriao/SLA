@@ -23,6 +23,7 @@ struct SLADecoder {
   void*                         strm_work;
 
   struct SLALPCSynthesizer*     lpcs;
+  struct SLALongTermSynthesizer* ltms;
   struct SLALMSCalculator*      nlmsc;
 
   int32_t**                     parcor_coef;
@@ -80,6 +81,7 @@ struct SLADecoder* SLADecoder_Create(const struct SLADecoderConfig* config)
 
   /* 合成ハンドル作成 */
   decoder->lpcs   = SLALPCSynthesizer_Create(config->max_parcor_order);
+  decoder->ltms   = SLALongTermSynthesizer_Create();
   decoder->nlmsc  = SLALMSCalculator_Create(config->max_lms_order_par_filter);
    
   return decoder;
@@ -105,6 +107,7 @@ void SLADecoder_Destroy(struct SLADecoder* decoder)
     NULLCHECK_AND_FREE(decoder->block_data_type);
     NULLCHECK_AND_FREE(decoder->rice_parameter);
     SLALPCSynthesizer_Destroy(decoder->lpcs);
+    SLALongTermSynthesizer_Destroy(decoder->ltms);
     SLALMSCalculator_Destroy(decoder->nlmsc);
     NULLCHECK_AND_FREE(decoder->strm_work);
     free(decoder);
@@ -422,6 +425,7 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     }
     /* LMSの残差分を合成 */
     for (ord = 0; ord < decoder->encode_param.num_lms_filter_cascade; ord++) {
+      SLALMSCalculator_Reset(decoder->nlmsc);
       if (SLALMSCalculator_SynthesizeInt32(decoder->nlmsc,
             decoder->encode_param.lms_order_par_filter,
             decoder->residual[ch], block_samples,
@@ -435,7 +439,9 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
 
     /* ロングタームの残差分を合成 */
     if (decoder->pitch_period[ch] != 0) {
-      if (SLALongTerm_SynthesizeInt32(
+      SLALongTermSynthesizer_Reset(decoder->ltms);
+      if (SLALongTermSynthesizer_SynthesizeInt32(
+            decoder->ltms,
             decoder->residual[ch], block_samples,
             decoder->pitch_period[ch], decoder->longterm_coef[ch],
             longterm_order, decoder->output[ch]) != SLAPREDICTOR_APIRESULT_OK) {
@@ -447,6 +453,7 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     }
 
     /* PARCORの残差分を合成 */
+    SLALPCSynthesizer_Reset(decoder->lpcs);
     if (SLALPCSynthesizer_SynthesizeByParcorCoefInt32(decoder->lpcs,
           decoder->residual[ch], block_samples,
           decoder->parcor_coef[ch], parcor_order,

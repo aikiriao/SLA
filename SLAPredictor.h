@@ -12,6 +12,9 @@ struct SLALPCSynthesizer;
 /* ロングターム計算ハンドル */
 struct SLALongTermCalculator;
 
+/* ロングターム予測合成ハンドル */
+struct SLALongTermSynthesizer;
+
 /* LMS計算ハンドル */
 struct SLALMSCalculator;
 
@@ -62,6 +65,9 @@ struct SLALPCSynthesizer* SLALPCSynthesizer_Create(uint32_t max_order);
 /* LPC音声合成ハンドルの破棄 */
 void SLALPCSynthesizer_Destroy(struct SLALPCSynthesizer* lpc);
 
+/* LPC音声合成ハンドルのリセット */
+SLAPredictorApiResult SLALPCSynthesizer_Reset(struct SLALPCSynthesizer* lpc);
+
 /* PARCOR係数により予測/誤差出力（32bit整数入出力） */
 /* 係数parcor_coefはorder+1個の配列 */
 SLAPredictorApiResult SLALPCSynthesizer_PredictByParcorCoefInt32(
@@ -92,14 +98,25 @@ SLAPredictorApiResult SLALongTermCalculator_CalculateCoef(
 	const int32_t* data, uint32_t num_samples,
 	uint32_t* pitch_num_samples, double* ltm_coef, uint32_t num_taps);
 
+/* ロングターム予測合成ハンドル作成 */
+struct SLALongTermSynthesizer* SLALongTermSynthesizer_Create(void);
+
+/* ロングターム予測合成ハンドル破棄 */
+void SLALongTermSynthesizer_Destroy(struct SLALongTermSynthesizer* ltm);
+
+/* ロングターム予測合成ハンドルリセット */
+SLAPredictorApiResult SLALongTermSynthesizer_Reset(struct SLALongTermSynthesizer* ltm);
+
 /* ロングタームを使用して残差信号の計算 */
-SLAPredictorApiResult SLALongTerm_PredictInt32(
+SLAPredictorApiResult SLALongTermSynthesizer_PredictInt32(
+  struct SLALongTermSynthesizer* ltm,
 	const int32_t* data, uint32_t num_samples,
 	uint32_t pitch_period, 
 	const int32_t* ltm_coef, uint32_t num_taps, int32_t* residual);
 
 /* ロングターム誤差信号から音声合成 */
-SLAPredictorApiResult SLALongTerm_SynthesizeInt32(
+SLAPredictorApiResult SLALongTermSynthesizer_SynthesizeInt32(
+  struct SLALongTermSynthesizer* ltm,
 	const int32_t* residual, uint32_t num_samples,
 	uint32_t pitch_period,
 	const int32_t* ltm_coef, uint32_t num_taps, int32_t* output);
@@ -109,6 +126,9 @@ struct SLALMSCalculator* SLALMSCalculator_Create(uint32_t max_num_coef);
 
 /* LMS計算ハンドルの破棄 */
 void SLALMSCalculator_Destroy(struct SLALMSCalculator* nlms);
+
+/* LMS計算ハンドルの破棄 */
+SLAPredictorApiResult SLALMSCalculator_Reset(struct SLALMSCalculator* nlms);
 
 /* LMS予測 */
 SLAPredictorApiResult SLALMSCalculator_PredictInt32(
