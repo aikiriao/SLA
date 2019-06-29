@@ -207,9 +207,6 @@ SLAApiResult SLADecoder_DecodeHeader(
   /* LMS次数 */
   SLAByteArray_GetUint8(data_pos, &u8buf);
   tmp_header.encode_param.lms_order_par_filter = (uint32_t)u8buf;
-  /* LMSカスケード数 */
-  SLAByteArray_GetUint8(data_pos, &u8buf);
-  tmp_header.encode_param.num_lms_filter_cascade = (uint32_t)u8buf;
   /* チャンネル毎の処理法 */
   SLAByteArray_GetUint8(data_pos, &u8buf);
   tmp_header.encode_param.ch_process_method = (uint32_t)u8buf;
@@ -438,19 +435,17 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     if (decoder->block_data_type[ch] != SLA_BLOCK_DATA_TYPE_COMPRESSDATA) {
       continue;
     }
+
     /* LMSの残差分を合成 */
-    for (ord = 0; ord < decoder->encode_param.num_lms_filter_cascade; ord++) {
-      SLALMSFilter_Reset(decoder->nlmsc[ch]);
-      if (SLALMSFilter_SynthesizeInt32(decoder->nlmsc[ch],
-            decoder->encode_param.lms_order_par_filter,
-            decoder->residual[ch], block_samples,
-            decoder->output[ch]) != SLAPREDICTOR_APIRESULT_OK) {
-        return SLA_APIRESULT_FAILED_TO_SYNTHESIZE;
-      }
-      /* 合成した信号で残差を差し替え */
-      memcpy(decoder->residual[ch], 
-          decoder->output[ch], sizeof(int32_t) * block_samples);
+    SLALMSFilter_Reset(decoder->nlmsc[ch]);
+    if (SLALMSFilter_SynthesizeInt32(decoder->nlmsc[ch],
+          decoder->encode_param.lms_order_par_filter,
+          decoder->residual[ch], block_samples,
+          decoder->output[ch]) != SLAPREDICTOR_APIRESULT_OK) {
+      return SLA_APIRESULT_FAILED_TO_SYNTHESIZE;
     }
+    /* 合成した信号で残差を差し替え */
+    memcpy(decoder->residual[ch], decoder->output[ch], sizeof(int32_t) * block_samples);
 
     /* ロングタームの残差分を合成 */
     if (decoder->pitch_period[ch] != 0) {
@@ -463,8 +458,7 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
         return SLA_APIRESULT_FAILED_TO_SYNTHESIZE;
       }
       /* 合成した信号で残差を差し替え */
-      memcpy(decoder->residual[ch], 
-          decoder->output[ch], sizeof(int32_t) * block_samples);
+      memcpy(decoder->residual[ch], decoder->output[ch], sizeof(int32_t) * block_samples);
     }
 
     /* PARCORの残差分を合成 */

@@ -35,7 +35,6 @@
     (p_param)->parcor_order             = 10;        \
     (p_param)->longterm_order           = 1;         \
     (p_param)->lms_order_par_filter     = 10;        \
-    (p_param)->num_lms_filter_cascade   = 2;         \
     (p_param)->ch_process_method                     \
       = SLA_CHPROCESSMETHOD_NONE;                    \
     (p_param)->window_function_type                  \

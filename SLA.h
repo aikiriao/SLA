@@ -6,7 +6,7 @@
 /* フォーマットバージョン */
 #define SLA_FORMAT_VERSION			    1
 /* ヘッダのサイズ */
-#define SLA_HEADER_SIZE			        40
+#define SLA_HEADER_SIZE			        39
 /* ブロックヘッダのサイズ */
 #define SLA_BLOCK_HEADER_SIZE			  10
 /* 処理可能な最大チャンネル数（撤廃予定） */
@@ -68,7 +68,6 @@ struct SLAEncodeParameter {
 	uint32_t                parcor_order;			        /* PARCOR係数次数 */
 	uint32_t                longterm_order;		        /* ロングターム次数 */
 	uint32_t                lms_order_par_filter;	    /* LMS1フィルタあたりの次数 */
-  uint32_t                num_lms_filter_cascade;   /* NLMSフィルタの直列接続数 */
 	SLAChannelProcessMethod	ch_process_method;	      /* マルチチャンネル処理法 */
   SLAWindowFunctionType   window_function_type;     /* 窓関数の種類 */
 	uint32_t                max_num_block_samples;    /* ブロックあたりサンプル数 */

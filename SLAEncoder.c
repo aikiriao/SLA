@@ -259,8 +259,6 @@ SLAApiResult SLAEncoder_EncodeHeader(
   SLAByteArray_PutUint8(data_pos,  (uint8_t)header->encode_param.longterm_order);
   /* LMS次数 */
   SLAByteArray_PutUint8(data_pos,  (uint8_t)header->encode_param.lms_order_par_filter);
-  /* LMSカスケード数 */
-  SLAByteArray_PutUint8(data_pos,  (uint8_t)header->encode_param.num_lms_filter_cascade);
   /* チャンネル毎の処理法 */
   SLAByteArray_PutUint8(data_pos,  (uint8_t)header->encode_param.ch_process_method);
   /* SLAブロック数 */
@@ -617,23 +615,19 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
         return SLA_APIRESULT_FAILED_TO_PREDICT;
       }
       /* 残差をロングタームによる残差に差し替え */
-      memcpy(encoder->residual[ch],
-          encoder->tmp_residual[ch], sizeof(int32_t) * num_samples);
+      memcpy(encoder->residual[ch], encoder->tmp_residual[ch], sizeof(int32_t) * num_samples);
     }
 
     /* LMSで残差計算 - カスケード数だけ回す */
-    for (ord = 0; ord < encoder->encode_param.num_lms_filter_cascade; ord++) {
-      SLALMSFilter_Reset(encoder->nlmsc[ch]);
-      if (SLALMSFilter_PredictInt32(encoder->nlmsc[ch],
-            encoder->encode_param.lms_order_par_filter,
-            encoder->residual[ch], num_samples,
-            encoder->tmp_residual[ch]) == SLAPREDICTOR_APIRESULT_OK) {
-        /* 残差をLMSによる残差に差し替え */
-        memcpy(encoder->residual[ch],
-            encoder->tmp_residual[ch], sizeof(int32_t) * num_samples);
-      } else {
-        return SLA_APIRESULT_FAILED_TO_PREDICT;
-      }
+    SLALMSFilter_Reset(encoder->nlmsc[ch]);
+    if (SLALMSFilter_PredictInt32(encoder->nlmsc[ch],
+          encoder->encode_param.lms_order_par_filter,
+          encoder->residual[ch], num_samples,
+          encoder->tmp_residual[ch]) == SLAPREDICTOR_APIRESULT_OK) {
+      /* 残差をLMSによる残差に差し替え */
+      memcpy(encoder->residual[ch], encoder->tmp_residual[ch], sizeof(int32_t) * num_samples);
+    } else {
+      return SLA_APIRESULT_FAILED_TO_PREDICT;
     }
 
   }

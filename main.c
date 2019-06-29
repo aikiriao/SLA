@@ -43,12 +43,12 @@ static struct CommandLineParserSpecification command_line_spec[] = {
 
 /* エンコードプリセット */
 static const struct SLAEncodeParameter encode_preset[] = {
-  /* parcor, longterm, lms, lms_cascade,             ch_porcess_method,                   window_func_type, max_block_size */
-  {       8,        1,   4,           1,      SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_RECTANGULAR,           4096 },
-  {       8,        1,   8,           1, SLA_CHPROCESSMETHOD_STEREO_MS,         SLA_WINDOWFUNCTIONTYPE_SIN,          12288 },
-  {      16,        1,   8,           1, SLA_CHPROCESSMETHOD_STEREO_MS,         SLA_WINDOWFUNCTIONTYPE_SIN,          12288 },
-  {      32,        3,   8,           1, SLA_CHPROCESSMETHOD_STEREO_MS,         SLA_WINDOWFUNCTIONTYPE_SIN,          12288 },
-  {      32,        3,   8,           1, SLA_CHPROCESSMETHOD_STEREO_MS,         SLA_WINDOWFUNCTIONTYPE_SIN,          16384 }
+  /* parcor, longterm, lms,             ch_porcess_method,                   window_func_type, max_block_size */
+  {       8,        1,   4,      SLA_CHPROCESSMETHOD_NONE, SLA_WINDOWFUNCTIONTYPE_RECTANGULAR,           4096 },
+  {       8,        1,   8, SLA_CHPROCESSMETHOD_STEREO_MS,         SLA_WINDOWFUNCTIONTYPE_SIN,          12288 },
+  {      16,        1,   8, SLA_CHPROCESSMETHOD_STEREO_MS,         SLA_WINDOWFUNCTIONTYPE_SIN,          12288 },
+  {      32,        3,   8, SLA_CHPROCESSMETHOD_STEREO_MS,         SLA_WINDOWFUNCTIONTYPE_SIN,          12288 },
+  {      32,        3,   8, SLA_CHPROCESSMETHOD_STEREO_MS,         SLA_WINDOWFUNCTIONTYPE_SIN,          16384 }
 };
 
 /* エンコードプリセット数 */
@@ -103,7 +103,6 @@ int do_encode(const char* in_filename, const char* out_filename, uint32_t encode
   enc_param.parcor_order            = ppreset->parcor_order;
   enc_param.longterm_order          = ppreset->longterm_order;
   enc_param.lms_order_par_filter    = ppreset->lms_order_par_filter;
-  enc_param.num_lms_filter_cascade  = ppreset->num_lms_filter_cascade;
   if ((in_wav->format.num_channels == 2) 
       && (ppreset->ch_process_method == SLA_CHPROCESSMETHOD_STEREO_MS)) {
     /* 音源がステレオのときだけMSは有効 */
@@ -203,7 +202,6 @@ int do_decode(const char* in_filename, const char* out_filename, uint8_t enable_
     printf("PARCOR Order:                %d \n", header.encode_param.parcor_order);
     printf("Longterm Order:              %d \n", header.encode_param.longterm_order);
     printf("LMS Order Par Filter:        %d \n", header.encode_param.lms_order_par_filter);
-    printf("LMS Num Filter Cascades:     %d \n", header.encode_param.num_lms_filter_cascade);
     printf("Channel Process Method:      %d \n", header.encode_param.ch_process_method);
     printf("Max Number of Block Samples: %d \n", header.encode_param.max_num_block_samples);
     printf("Number of Samples:           %d \n", header.num_samples);
