@@ -22,10 +22,10 @@ struct SLADecoder {
   struct SLABitStream*          strm;
   void*                         strm_work;
 
-  struct SLALPCSynthesizer*       lpcs;
-  struct SLALongTermSynthesizer*  ltms;
-  struct SLALMSCalculator*        nlmsc;
-  struct SLAEmphasisFilter*       emp;
+  struct SLALPCSynthesizer**       lpcs;
+  struct SLALongTermSynthesizer**  ltms;
+  struct SLALMSCalculator**        nlmsc;
+  struct SLAEmphasisFilter**       emp;
 
   int32_t**                     parcor_coef;
   int32_t**                     longterm_coef;
@@ -81,10 +81,16 @@ struct SLADecoder* SLADecoder_Create(const struct SLADecoderConfig* config)
   }
 
   /* 合成ハンドル作成 */
-  decoder->lpcs   = SLALPCSynthesizer_Create(config->max_parcor_order);
-  decoder->ltms   = SLALongTermSynthesizer_Create();
-  decoder->nlmsc  = SLALMSCalculator_Create(config->max_lms_order_par_filter);
-  decoder->emp    = SLAEmphasisFilter_Create();
+  decoder->lpcs   = (struct SLALPCSynthesizer **)malloc(sizeof(struct SLALPCSynthesizer *) * max_num_channels);
+  decoder->ltms   = (struct SLALongTermSynthesizer **)malloc(sizeof(struct SLALongTermSynthesizer *) * max_num_channels);
+  decoder->nlmsc  = (struct SLALMSCalculator **)malloc(sizeof(struct SLALMSCalculator *) * max_num_channels);
+  decoder->emp    = (struct SLAEmphasisFilter **)malloc(sizeof(struct SLAEmphasisFilter *) * max_num_channels);
+  for (ch = 0; ch < max_num_channels; ch++) {
+    decoder->lpcs[ch]   = SLALPCSynthesizer_Create(config->max_parcor_order);
+    decoder->ltms[ch]   = SLALongTermSynthesizer_Create();
+    decoder->nlmsc[ch]  = SLALMSCalculator_Create(config->max_lms_order_par_filter);
+    decoder->emp[ch]    = SLAEmphasisFilter_Create();
+  }
    
   return decoder;
 }
@@ -108,10 +114,16 @@ void SLADecoder_Destroy(struct SLADecoder* decoder)
     NULLCHECK_AND_FREE(decoder->longterm_coef);
     NULLCHECK_AND_FREE(decoder->block_data_type);
     NULLCHECK_AND_FREE(decoder->rice_parameter);
-    SLALPCSynthesizer_Destroy(decoder->lpcs);
-    SLALongTermSynthesizer_Destroy(decoder->ltms);
-    SLALMSCalculator_Destroy(decoder->nlmsc);
-    SLAEmphasisFilter_Destroy(decoder->emp);
+    for (ch = 0; ch < decoder->max_num_channels; ch++) {
+      SLALPCSynthesizer_Destroy(decoder->lpcs[ch]);
+      SLALongTermSynthesizer_Destroy(decoder->ltms[ch]);
+      SLALMSCalculator_Destroy(decoder->nlmsc[ch]);
+      SLAEmphasisFilter_Destroy(decoder->emp[ch]);
+    }
+    NULLCHECK_AND_FREE(decoder->lpcs);
+    NULLCHECK_AND_FREE(decoder->ltms);
+    NULLCHECK_AND_FREE(decoder->nlmsc);
+    NULLCHECK_AND_FREE(decoder->emp);
     NULLCHECK_AND_FREE(decoder->strm_work);
     free(decoder);
   }
@@ -428,8 +440,8 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     }
     /* LMSの残差分を合成 */
     for (ord = 0; ord < decoder->encode_param.num_lms_filter_cascade; ord++) {
-      SLALMSCalculator_Reset(decoder->nlmsc);
-      if (SLALMSCalculator_SynthesizeInt32(decoder->nlmsc,
+      SLALMSCalculator_Reset(decoder->nlmsc[ch]);
+      if (SLALMSCalculator_SynthesizeInt32(decoder->nlmsc[ch],
             decoder->encode_param.lms_order_par_filter,
             decoder->residual[ch], block_samples,
             decoder->output[ch]) != SLAPREDICTOR_APIRESULT_OK) {
@@ -442,9 +454,9 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
 
     /* ロングタームの残差分を合成 */
     if (decoder->pitch_period[ch] != 0) {
-      SLALongTermSynthesizer_Reset(decoder->ltms);
+      SLALongTermSynthesizer_Reset(decoder->ltms[ch]);
       if (SLALongTermSynthesizer_SynthesizeInt32(
-            decoder->ltms,
+            decoder->ltms[ch],
             decoder->residual[ch], block_samples,
             decoder->pitch_period[ch], decoder->longterm_coef[ch],
             longterm_order, decoder->output[ch]) != SLAPREDICTOR_APIRESULT_OK) {
@@ -456,8 +468,8 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     }
 
     /* PARCORの残差分を合成 */
-    SLALPCSynthesizer_Reset(decoder->lpcs);
-    if (SLALPCSynthesizer_SynthesizeByParcorCoefInt32(decoder->lpcs,
+    SLALPCSynthesizer_Reset(decoder->lpcs[ch]);
+    if (SLALPCSynthesizer_SynthesizeByParcorCoefInt32(decoder->lpcs[ch],
           decoder->residual[ch], block_samples,
           decoder->parcor_coef[ch], parcor_order,
           decoder->output[ch]) != SLAPREDICTOR_APIRESULT_OK) {
@@ -465,8 +477,8 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     }
 
     /* デエンファシス */
-    SLAEmphasisFilter_Reset(decoder->emp);
-    SLAEmphasisFilter_DeEmphasisInt32(decoder->emp, 
+    SLAEmphasisFilter_Reset(decoder->emp[ch]);
+    SLAEmphasisFilter_DeEmphasisInt32(decoder->emp[ch], 
         decoder->output[ch], block_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
   }
 
