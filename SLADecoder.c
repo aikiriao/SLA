@@ -28,6 +28,7 @@ struct SLADecoder {
   int32_t**                     parcor_coef;
   int32_t**                     longterm_coef;
   uint32_t*                     pitch_period;
+  SLARecursiveRiceParameter**   rice_parameter;
 
   SLABlockDataType*             block_data_type;
   int32_t**                     residual;
@@ -68,11 +69,13 @@ struct SLADecoder* SLADecoder_Create(const struct SLADecoderConfig* config)
   decoder->residual      = (int32_t **)malloc(sizeof(int32_t*) * max_num_channels);
   decoder->output        = (int32_t **)malloc(sizeof(int32_t*) * max_num_channels);
   decoder->block_data_type     = (SLABlockDataType *)malloc(sizeof(SLABlockDataType) * max_num_channels);
+  decoder->rice_parameter = (SLARecursiveRiceParameter **)malloc(sizeof(SLARecursiveRiceParameter *) * max_num_channels);
   for (ch = 0; ch < max_num_channels; ch++) {
-    decoder->parcor_coef[ch]   = (int32_t *)malloc(sizeof(int32_t) * (config->max_parcor_order + 1));
-    decoder->longterm_coef[ch] = (int32_t *)malloc(sizeof(int32_t) * config->max_longterm_order);
-    decoder->residual[ch]      = (int32_t *)malloc(sizeof(int32_t) * max_num_block_samples);
-    decoder->output[ch]        = (int32_t *)malloc(sizeof(int32_t) * max_num_block_samples);
+    decoder->parcor_coef[ch]    = (int32_t *)malloc(sizeof(int32_t) * (config->max_parcor_order + 1));
+    decoder->longterm_coef[ch]  = (int32_t *)malloc(sizeof(int32_t) * config->max_longterm_order);
+    decoder->residual[ch]       = (int32_t *)malloc(sizeof(int32_t) * max_num_block_samples);
+    decoder->output[ch]         = (int32_t *)malloc(sizeof(int32_t) * max_num_block_samples);
+    decoder->rice_parameter[ch] = (SLARecursiveRiceParameter *)malloc(sizeof(SLARecursiveRiceParameter) * SLACODER_NUM_RECURSIVERICE_PARAMETER);
   }
 
   /* 合成ハンドル作成 */
@@ -93,12 +96,14 @@ void SLADecoder_Destroy(struct SLADecoder* decoder)
       NULLCHECK_AND_FREE(decoder->residual[ch]);
       NULLCHECK_AND_FREE(decoder->parcor_coef[ch]);
       NULLCHECK_AND_FREE(decoder->longterm_coef[ch]);
+      NULLCHECK_AND_FREE(decoder->rice_parameter[ch]);
     }
     NULLCHECK_AND_FREE(decoder->residual);
     NULLCHECK_AND_FREE(decoder->output);
     NULLCHECK_AND_FREE(decoder->parcor_coef);
     NULLCHECK_AND_FREE(decoder->longterm_coef);
     NULLCHECK_AND_FREE(decoder->block_data_type);
+    NULLCHECK_AND_FREE(decoder->rice_parameter);
     SLALPCSynthesizer_Destroy(decoder->lpcs);
     SLALMSCalculator_Destroy(decoder->nlmsc);
     NULLCHECK_AND_FREE(decoder->strm_work);
@@ -364,6 +369,11 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
         decoder->longterm_coef[ch][ord] <<= 16;
       }
     }
+
+    /* 再帰的ライスパラメータ復号 */
+    SLACoder_GetRecursiveRiceParameter(decoder->strm,
+        decoder->rice_parameter[ch], SLACODER_NUM_RECURSIVERICE_PARAMETER, 
+        decoder->wave_format.bit_per_sample);
   }
 
   /* チャンネル毎にデータを復号 */
@@ -393,7 +403,9 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
         break;
       case SLA_BLOCK_DATA_TYPE_COMPRESSDATA:
         /* 残差復号 */
-        SLACoder_GetDataArray(decoder->strm, decoder->residual[ch], block_samples);
+        SLACoder_GetDataArray(decoder->strm, 
+            decoder->rice_parameter[ch], SLACODER_NUM_RECURSIVERICE_PARAMETER,
+            decoder->residual[ch], block_samples);
         break;
       default:
         /* ここに入ってきたらプログラミングミス */

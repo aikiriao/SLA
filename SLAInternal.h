@@ -13,6 +13,10 @@
 #define SLA_SEARCH_BLOCK_NUM_SAMPLES_DELTA          1024                    /* ブロックサイズ探索時のブロックサイズ増分 */
 #define SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT          5                       /* プレエンファシスのシフト量               */
 #define SLALMS_DELTA_WEIGHT_SHIFT                   10                      /* LMSの更新量の固定小数値の右シフト量      */
+#define SLACODER_NUM_RECURSIVERICE_PARAMETER        2                       /* 再帰的ライス符号のパラメータ数 */
+#define SLACODER_LOW_THRESHOULD_PARAMETER           8  /* [-4,4] */         /* 固定パラメータ符号を使うか否かの閾値 */
+#define SLACODER_QUOTPART_THRESHOULD                16                      /* 再帰的ライス符号の商部分の閾値 これ以上の大きさの商はガンマ符号化 */
+
 /* パスの長さに対して与えるペナルティサイズ[byte]
  * 補足）分割を増やすと以下の要因でサイズが増える
  *  1. ブロック先頭における残差の収束

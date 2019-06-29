@@ -6,13 +6,6 @@
 #include <stdlib.h>
 #include <math.h>
 
-/* 固定パラメータ符号を使うか否かの閾値 */
-#define SLACODER_LOW_THRESHOULD_PARAMETER       8  /* [-4,4] */
-/* 再帰的ライス符号の商部分の閾値 これ以上の大きさの商はガンマ符号化 */
-#define SLACODER_QUOTPART_THRESHOULD            16
-/* 再帰的ライス符号のパラメータ数 */
-#define SLACODER_NUM_RECURSIVERICE_PARAMETER    2
-
 /* 固定小数の小数部ビット数 */
 #define SLACODER_NUM_FRACTION_PART_BITS         8
 /* 固定小数の0.5 */
@@ -36,9 +29,6 @@
 /* Rice符号のパラメータ計算 2 ** ceil(log2(E(x)/2)) = E(x)/2の2の冪乗切り上げ */
 #define SLARICE_CALCULATE_RICE_PARAMETER(param_array, order) \
   SLAUtility_RoundUp2Powered(SLAUTILITY_MAX(SLACODER_FIXED_FLOAT_TO_UINT32((param_array)[(order)] >> 1), 1UL))
-
-/* 再帰的ライス符号パラメータ型 */
-typedef uint64_t SLARecursiveRiceParameter;
 
 /* 2の冪数に対するlog2計算のためのテーブル */
 static const uint8_t log2_for_2powered_val_table[4][0x100] = {
@@ -440,86 +430,131 @@ static uint32_t SLARecursiveRice_GetCode(
   return val;
 }
 
-/* 符号付き整数配列の符号化 */
-void SLACoder_PutDataArray(struct SLABitStream* strm, const int32_t* data, uint32_t num_data)
+/* 初期パラメータの計算 */
+void SLACoder_CalculateInitialRecursiveRiceParameter(
+    SLARecursiveRiceParameter* rice_parameter, uint32_t num_parameters,
+    const int32_t* data, uint32_t num_data)
 {
-  uint32_t i, init_param;
+  uint32_t i;
+  SLARecursiveRiceParameter init_param;
   uint64_t sum;
-  SLABitStreamApiResult ret;
-  SLARecursiveRiceParameter rice_parameter[SLACODER_NUM_RECURSIVERICE_PARAMETER];
 
-  SLA_Assert((strm != NULL) && (data != NULL));
-  SLA_Assert(num_data != 0);
+  SLA_Assert((rice_parameter != NULL) && (data != NULL));
 
   /* パラメータ初期値（平均値）の計算 */
   sum = 0;
   for (i = 0; i < num_data; i++) {
     sum += SLAUTILITY_SINT32_TO_UINT32(data[i]);
   }
-  init_param = SLAUTILITY_MAX((uint32_t)(sum / num_data), 1);
-
-  /* FIXME: ここで固定24bitは大きい。ビットレートから分かるから省略できる */
-  SLA_Assert(init_param != 0);
-  SLA_Assert(init_param < (1UL << 24));
-
-  /* 初期パラメータの書き込み */
-  ret = SLABitStream_PutBits(strm, 24, init_param);
-  SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
-
-  /* パラメータが小さい場合はパラメータ固定で符号化 */
-  if (init_param <= SLACODER_LOW_THRESHOULD_PARAMETER) {
-    for (i = 0; i < num_data; i++) {
-      SLAGolomb_PutCode(strm, init_param, SLAUTILITY_SINT32_TO_UINT32(data[i]));
-    }
-    return;
-  }
+  init_param = SLAUTILITY_MAX(sum / num_data, 1);
 
   /* 初期パラメータのセット */
-  for (i = 0; i < SLACODER_NUM_RECURSIVERICE_PARAMETER; i++) {
+  for (i = 0; i < num_parameters; i++) {
     SLACODER_PARAMETER_SET(rice_parameter, i, init_param);
+  }
+
+}
+
+/* 再帰的ライス符号のパラメータを符号化 */
+void SLACoder_PutRecursiveRiceParameter(
+    struct SLABitStream* strm,
+    SLARecursiveRiceParameter* rice_parameter, uint32_t num_parameters,
+    uint32_t bitwidth)
+{
+  SLABitStreamApiResult ret;
+  uint32_t first_order_param;
+
+  SLAUTILITY_UNUSED_ARGUMENT(num_parameters);
+  SLA_Assert((strm != NULL) && (rice_parameter != NULL));
+
+  /* 1次パラメータを取得 */
+  first_order_param = SLACODER_PARAMETER_GET(rice_parameter, 0);
+
+  /* 書き出し */
+  ret = SLABitStream_PutBits(strm, bitwidth, first_order_param);
+  SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
+}
+
+/* 再帰的ライス符号のパラメータを取得 */
+void SLACoder_GetRecursiveRiceParameter(
+    struct SLABitStream* strm,
+    SLARecursiveRiceParameter* rice_parameter, uint32_t num_parameters,
+    uint32_t bitwidth)
+{
+  SLABitStreamApiResult ret;
+  uint32_t i;
+  uint64_t first_order_param;
+
+  SLA_Assert((strm != NULL) && (rice_parameter != NULL));
+
+  /* 初期パラメータの取得 */
+  ret = SLABitStream_GetBits(strm, bitwidth, &first_order_param);
+  SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
+  SLA_Assert(first_order_param < (1UL << bitwidth));
+
+  /* 初期パラメータの取得 */
+  for (i = 0; i < num_parameters; i++) {
+    SLACODER_PARAMETER_SET(rice_parameter, i, (uint32_t)first_order_param);
+  }
+}
+
+/* 符号付き整数配列の符号化 */
+void SLACoder_PutDataArray(
+    struct SLABitStream* strm, SLARecursiveRiceParameter* rice_parameter, uint32_t num_parameters,
+    const int32_t* data, uint32_t num_data)
+{
+  uint32_t i;
+  uint32_t first_order_param;
+
+  SLA_Assert((strm != NULL) && (data != NULL) && (rice_parameter != NULL));
+  SLA_Assert(num_data != 0);
+  SLA_Assert(num_parameters != 0);
+
+  /* 1次パラメータの取得 */
+  first_order_param = SLACODER_PARAMETER_GET(rice_parameter, 0);
+
+  /* パラメータが小さい場合はパラメータ固定で符号化 */
+  if (first_order_param <= SLACODER_LOW_THRESHOULD_PARAMETER) {
+    for (i = 0; i < num_data; i++) {
+      SLAGolomb_PutCode(strm, first_order_param, SLAUTILITY_SINT32_TO_UINT32(data[i]));
+    }
+    return;
   }
 
   /* パラメータを適応的に変更しつつ符号化 */
   for (i = 0; i < num_data; i++) {
     SLARecursiveRice_PutCode(strm,
-        rice_parameter, SLACODER_NUM_RECURSIVERICE_PARAMETER, SLAUTILITY_SINT32_TO_UINT32(data[i]));
+        rice_parameter, num_parameters, SLAUTILITY_SINT32_TO_UINT32(data[i]));
   }
 }
 
 /* 符号付き整数配列の復号 */
-void SLACoder_GetDataArray(struct SLABitStream* strm, int32_t* data, uint32_t num_data)
+void SLACoder_GetDataArray(struct SLABitStream* strm, 
+    SLARecursiveRiceParameter* rice_parameter, uint32_t num_parameters,
+    int32_t* data, uint32_t num_data)
 {
   uint32_t  i, abs;
-  uint64_t  init_param;
-  SLABitStreamApiResult ret;
-  SLARecursiveRiceParameter rice_parameter[SLACODER_NUM_RECURSIVERICE_PARAMETER];
+  uint32_t  first_order_param;
 
-  SLA_Assert((strm != NULL) && (data != NULL));
+  SLA_Assert((strm != NULL) && (data != NULL) && (rice_parameter != NULL));
+  SLA_Assert((num_parameters != 0) && (num_data != 0));
 
-  /* 初期パラメータの取得 */
-  /* FIXME: ここで固定24bitは大きい。ビットレートから分かるから省略できる */
-  ret = SLABitStream_GetBits(strm, 24, &init_param);
-  SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
-  SLA_Assert(init_param != 0);
+  /* 1次パラメータの取得 */
+  first_order_param = SLACODER_PARAMETER_GET(rice_parameter, 0);
 
   /* パラメータが小さい場合はパラメータ固定で復号 */
-  if (init_param <= SLACODER_LOW_THRESHOULD_PARAMETER) {
+  /* FIXME: 途中からデコードするときにこっちに入るケースがありうる */
+  if (first_order_param <= SLACODER_LOW_THRESHOULD_PARAMETER) {
     for (i = 0; i < num_data; i++) {
-      abs     = SLAGolomb_GetCode(strm, (uint32_t)init_param);
+      abs     = SLAGolomb_GetCode(strm, (uint32_t)first_order_param);
       data[i] = SLAUTILITY_UINT32_TO_SINT32(abs);
     }
     return;
   }
 
-  /* 初期パラメータの取得 */
-  for (i = 0; i < SLACODER_NUM_RECURSIVERICE_PARAMETER; i++) {
-    SLACODER_PARAMETER_SET(rice_parameter, i, (uint32_t)init_param);
-  }
-
   /* サンプル毎に復号 */
   for (i = 0; i < num_data; i++) {
-    abs = SLARecursiveRice_GetCode(strm, 
-        rice_parameter, SLACODER_NUM_RECURSIVERICE_PARAMETER);
+    abs = SLARecursiveRice_GetCode(strm, rice_parameter, num_parameters);
     data[i] = SLAUTILITY_UINT32_TO_SINT32(abs);
   }
 

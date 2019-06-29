@@ -28,6 +28,7 @@ struct SLAEncoder {
   struct SLAOptimalBlockPartitionEstimator* oee;
   SLAChannelProcessMethod	      ch_proc_method;
   SLAWindowFunctionType         window_type;
+  SLARecursiveRiceParameter**   rice_parameter;
   double**                      input_double;
   int32_t**                     input_int32;
   double**                      parcor_coef;
@@ -81,6 +82,7 @@ struct SLAEncoder* SLAEncoder_Create(const struct SLAEncoderConfig* config)
   encoder->parcor_rshift          = (uint32_t *)malloc(sizeof(uint32_t) * max_num_channels);
   encoder->longterm_coef          = (double **)malloc(sizeof(double *) * max_num_channels);
   encoder->longterm_coef_int32    = (int32_t **)malloc(sizeof(int32_t *) * max_num_channels);
+  encoder->rice_parameter         = (SLARecursiveRiceParameter **)malloc(sizeof(SLARecursiveRiceParameter *) * max_num_channels);
 
   for (ch = 0; ch < max_num_channels; ch++) {
     encoder->input_double[ch]         = (double *)malloc(sizeof(double) * max_num_block_samples);
@@ -92,12 +94,14 @@ struct SLAEncoder* SLAEncoder_Create(const struct SLAEncoderConfig* config)
     encoder->parcor_coef_int32[ch]    = (int32_t *)malloc(sizeof(int32_t) * (config->max_parcor_order + 1));
     encoder->longterm_coef[ch]        = (double *)malloc(sizeof(double) * config->max_longterm_order);
     encoder->longterm_coef_int32[ch]  = (int32_t *)malloc(sizeof(int32_t) * config->max_longterm_order);
+    encoder->rice_parameter[ch]       = (SLARecursiveRiceParameter *)malloc(sizeof(SLARecursiveRiceParameter) * SLACODER_NUM_RECURSIVERICE_PARAMETER);
   }
 
   encoder->pitch_period                 = (uint32_t *)malloc(sizeof(uint32_t) * max_num_channels);
   encoder->block_data_type              = (SLABlockDataType *)malloc(sizeof(SLABlockDataType) * max_num_channels);
   encoder->window                       = (double *)malloc(sizeof(double) * max_num_block_samples);
   encoder->num_block_partition_samples  = (uint32_t *)malloc(sizeof(uint32_t) * SLAOptimalEncodeEstimator_CalculateMaxNumPartitions(config->max_num_block_samples, SLA_SEARCH_BLOCK_NUM_SAMPLES_DELTA));
+
 
   /* ハンドル領域作成 */
   encoder->lpcc   = SLALPCCalculator_Create(config->max_parcor_order);
@@ -125,6 +129,7 @@ void SLAEncoder_Destroy(struct SLAEncoder* encoder)
       NULLCHECK_AND_FREE(encoder->parcor_coef_code[ch]);
       NULLCHECK_AND_FREE(encoder->longterm_coef[ch]);
       NULLCHECK_AND_FREE(encoder->longterm_coef_int32[ch]);
+      NULLCHECK_AND_FREE(encoder->rice_parameter[ch]);
     }
     NULLCHECK_AND_FREE(encoder->input_double);
     NULLCHECK_AND_FREE(encoder->input_int32);
@@ -137,6 +142,7 @@ void SLAEncoder_Destroy(struct SLAEncoder* encoder)
     NULLCHECK_AND_FREE(encoder->longterm_coef_int32);
     NULLCHECK_AND_FREE(encoder->num_block_partition_samples);
     NULLCHECK_AND_FREE(encoder->parcor_rshift);
+    NULLCHECK_AND_FREE(encoder->rice_parameter);
     SLALPCCalculator_Destroy(encoder->lpcc);
     SLALPCSynthesizer_Destroy(encoder->lpcs);
     SLALongTermCalculator_Destroy(encoder->ltc);
@@ -668,6 +674,15 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
       /* ロングターム未使用であることをマーク */
       SLABitStream_PutBit(encoder->strm, 0);
     }
+
+    /* 再帰的ライス符号パラメータ */
+    /* 初期パラメータの計算/セット */
+    SLACoder_CalculateInitialRecursiveRiceParameter(encoder->rice_parameter[ch], 
+        SLACODER_NUM_RECURSIVERICE_PARAMETER, encoder->residual[ch], num_samples);
+    /* パラメータを符号化 */
+    SLACoder_PutRecursiveRiceParameter(encoder->strm,
+        encoder->rice_parameter[ch], SLACODER_NUM_RECURSIVERICE_PARAMETER, 
+        encoder->wave_format.bit_per_sample);
   }
 
   /* 各チャンネルごとにデータ符号化 */
@@ -694,7 +709,9 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
         break;
       case SLA_BLOCK_DATA_TYPE_COMPRESSDATA:
         /* 残差符号化 */
-        SLACoder_PutDataArray(encoder->strm, encoder->residual[ch], num_samples);
+        SLACoder_PutDataArray(encoder->strm, 
+            encoder->rice_parameter[ch], SLACODER_NUM_RECURSIVERICE_PARAMETER,
+            encoder->residual[ch], num_samples);
         break;
       case SLA_BLOCK_DATA_TYPE_SILENT:
         /* 無音の場合は何もしない */
