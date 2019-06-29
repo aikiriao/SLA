@@ -73,7 +73,7 @@ struct SLALongTermSynthesizer {
 };
 
 /* LMS計算ハンドル */
-struct SLALMSCalculator {
+struct SLALMSFilter {
 	int64_t* 	fir_coef;			            /* FIR係数 */
 	int64_t* 	iir_coef;			            /* IIR係数 */
 	uint32_t	max_num_coef;	            /* 最大の係数個数 */
@@ -999,11 +999,11 @@ SLAPredictorApiResult SLALongTermSynthesizer_SynthesizeInt32(
 }
 
 /* LMS計算ハンドルの作成 */
-struct SLALMSCalculator* SLALMSCalculator_Create(uint32_t max_num_coef)
+struct SLALMSFilter* SLALMSFilter_Create(uint32_t max_num_coef)
 {
-  struct SLALMSCalculator* nlms;
+  struct SLALMSFilter* nlms;
 
-  nlms = malloc(sizeof(struct SLALMSCalculator));
+  nlms = malloc(sizeof(struct SLALMSFilter));
   nlms->max_num_coef            = max_num_coef;
   nlms->signal_sign_buffer_size = SLAUtility_RoundUp2Powered(max_num_coef);
 
@@ -1014,13 +1014,13 @@ struct SLALMSCalculator* SLALMSCalculator_Create(uint32_t max_num_coef)
   nlms->iir_sign_buffer         = malloc(sizeof(int32_t) * 2 * max_num_coef);
   nlms->iir_buffer              = malloc(sizeof(int32_t) * 2 * max_num_coef);
 
-  SLALMSCalculator_Reset(nlms);
+  SLALMSFilter_Reset(nlms);
 
   return nlms;
 }
 
 /* LMS計算ハンドルの破棄 */
-void SLALMSCalculator_Destroy(struct SLALMSCalculator* nlms)
+void SLALMSFilter_Destroy(struct SLALMSFilter* nlms)
 {
   if (nlms != NULL) {
     NULLCHECK_AND_FREE(nlms->fir_coef);
@@ -1033,7 +1033,7 @@ void SLALMSCalculator_Destroy(struct SLALMSCalculator* nlms)
 }
 
 /* LMS計算ハンドルのリセット */
-SLAPredictorApiResult SLALMSCalculator_Reset(struct SLALMSCalculator* nlms)
+SLAPredictorApiResult SLALMSFilter_Reset(struct SLALMSFilter* nlms)
 {
   /* 引数チェック */
   if (nlms == NULL) {
@@ -1050,8 +1050,8 @@ SLAPredictorApiResult SLALMSCalculator_Reset(struct SLALMSCalculator* nlms)
 }
 
 /* LMS処理のコア処理 */
-static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
-    struct SLALMSCalculator* nlms, uint32_t num_coef,
+static SLAPredictorApiResult SLALMSFilter_ProcessCore(
+    struct SLALMSFilter* nlms, uint32_t num_coef,
     int32_t* original_signal, int32_t* residual,
     uint32_t num_samples, uint8_t is_predict)
 {
@@ -1170,20 +1170,20 @@ static SLAPredictorApiResult SLALMSCalculator_ProcessCore(
 }
 
 /* LMS予測 */
-SLAPredictorApiResult SLALMSCalculator_PredictInt32(
-    struct SLALMSCalculator* nlms, uint32_t num_coef,
+SLAPredictorApiResult SLALMSFilter_PredictInt32(
+    struct SLALMSFilter* nlms, uint32_t num_coef,
     const int32_t* data, uint32_t num_samples, int32_t* residual)
 {
-  return SLALMSCalculator_ProcessCore(nlms,
+  return SLALMSFilter_ProcessCore(nlms,
       num_coef, (int32_t *)data, residual, num_samples, 1);
 }
     
 /* LMS合成 */
-SLAPredictorApiResult SLALMSCalculator_SynthesizeInt32(
-    struct SLALMSCalculator* nlms, uint32_t num_coef,
+SLAPredictorApiResult SLALMSFilter_SynthesizeInt32(
+    struct SLALMSFilter* nlms, uint32_t num_coef,
     const int32_t* residual, uint32_t num_samples, int32_t* output)
 {
-  return SLALMSCalculator_ProcessCore(nlms,
+  return SLALMSFilter_ProcessCore(nlms,
       num_coef, output, (int32_t *)residual, num_samples, 0);
 }
 

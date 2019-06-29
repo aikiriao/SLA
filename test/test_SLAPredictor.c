@@ -257,17 +257,17 @@ static void testSLAPredictor_PredictInt32ByLMS(
   const int32_t* data, uint32_t num_samples,
   const int32_t* coef, uint32_t order, int32_t* residual)
 {
-  struct SLALMSCalculator* nlms;
+  struct SLALMSFilter* nlms;
 
   TEST_UNUSED_PARAMETER(coef);
   
-  nlms = SLALMSCalculator_Create(order);
+  nlms = SLALMSFilter_Create(order);
 
-  assert(SLALMSCalculator_Reset(nlms) == SLAPREDICTOR_APIRESULT_OK);
-  assert(SLALMSCalculator_PredictInt32(
+  assert(SLALMSFilter_Reset(nlms) == SLAPREDICTOR_APIRESULT_OK);
+  assert(SLALMSFilter_PredictInt32(
         nlms, order, data, num_samples, residual) == SLAPREDICTOR_APIRESULT_OK);
 
-  SLALMSCalculator_Destroy(nlms);
+  SLALMSFilter_Destroy(nlms);
 }
 
 /* LMS係数による合成(int32_t) */
@@ -275,17 +275,17 @@ static void testSLAPredictor_SynthesizeInt32ByLMS(
     const int32_t* residual, uint32_t num_samples,
     const int32_t* coef, uint32_t order, int32_t* output)
 {
-  struct SLALMSCalculator* nlms;
+  struct SLALMSFilter* nlms;
 
   TEST_UNUSED_PARAMETER(coef);
 
-  nlms = SLALMSCalculator_Create(order);
+  nlms = SLALMSFilter_Create(order);
 
-  assert(SLALMSCalculator_Reset(nlms) == SLAPREDICTOR_APIRESULT_OK);
-  assert(SLALMSCalculator_SynthesizeInt32(
+  assert(SLALMSFilter_Reset(nlms) == SLAPREDICTOR_APIRESULT_OK);
+  assert(SLALMSFilter_SynthesizeInt32(
         nlms, order, residual, num_samples, output) == SLAPREDICTOR_APIRESULT_OK);
 
-  SLALMSCalculator_Destroy(nlms);
+  SLALMSFilter_Destroy(nlms);
 }
 
 /* 無音の生成 */

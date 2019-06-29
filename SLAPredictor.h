@@ -16,7 +16,7 @@ struct SLALongTermCalculator;
 struct SLALongTermSynthesizer;
 
 /* LMS計算ハンドル */
-struct SLALMSCalculator;
+struct SLALMSFilter;
 
 /* 最適ブロック分割探索ハンドル */
 struct SLAOptimalBlockPartitionEstimator;
@@ -125,22 +125,22 @@ SLAPredictorApiResult SLALongTermSynthesizer_SynthesizeInt32(
 	const int32_t* ltm_coef, uint32_t num_taps, int32_t* output);
 
 /* LMS計算ハンドルの作成 */
-struct SLALMSCalculator* SLALMSCalculator_Create(uint32_t max_num_coef);
+struct SLALMSFilter* SLALMSFilter_Create(uint32_t max_num_coef);
 
 /* LMS計算ハンドルの破棄 */
-void SLALMSCalculator_Destroy(struct SLALMSCalculator* nlms);
+void SLALMSFilter_Destroy(struct SLALMSFilter* nlms);
 
 /* LMS計算ハンドルの破棄 */
-SLAPredictorApiResult SLALMSCalculator_Reset(struct SLALMSCalculator* nlms);
+SLAPredictorApiResult SLALMSFilter_Reset(struct SLALMSFilter* nlms);
 
 /* LMS予測 */
-SLAPredictorApiResult SLALMSCalculator_PredictInt32(
-    struct SLALMSCalculator* nlms, uint32_t num_coef,
+SLAPredictorApiResult SLALMSFilter_PredictInt32(
+    struct SLALMSFilter* nlms, uint32_t num_coef,
     const int32_t* data, uint32_t num_samples, int32_t* residual);
 
 /* LMS合成 */
-SLAPredictorApiResult SLALMSCalculator_SynthesizeInt32(
-    struct SLALMSCalculator* nlms, uint32_t num_coef,
+SLAPredictorApiResult SLALMSFilter_SynthesizeInt32(
+    struct SLALMSFilter* nlms, uint32_t num_coef,
     const int32_t* residual, uint32_t num_samples, int32_t* output);
 
 /* 探索ハンドルの作成 */

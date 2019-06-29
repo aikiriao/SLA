@@ -25,7 +25,7 @@ struct SLAEncoder {
   struct SLALongTermCalculator*   ltc;
   struct SLALPCSynthesizer**      lpcs;
   struct SLALongTermSynthesizer** ltms;
-  struct SLALMSCalculator**       nlmsc;
+  struct SLALMSFilter**       nlmsc;
   struct SLAEmphasisFilter**      emp;
   struct SLAOptimalBlockPartitionEstimator* oee;
   SLAChannelProcessMethod	      ch_proc_method;
@@ -111,12 +111,12 @@ struct SLAEncoder* SLAEncoder_Create(const struct SLAEncoderConfig* config)
 
   encoder->lpcs     = (struct SLALPCSynthesizer **)malloc(sizeof(struct SLALPCSynthesizer *) * max_num_channels);
   encoder->ltms     = (struct SLALongTermSynthesizer **)malloc(sizeof(struct SLALongTermSynthesizer *) * max_num_channels);
-  encoder->nlmsc    = (struct SLALMSCalculator **)malloc(sizeof(struct SLALMSCalculator *) * max_num_channels);
+  encoder->nlmsc    = (struct SLALMSFilter **)malloc(sizeof(struct SLALMSFilter *) * max_num_channels);
   encoder->emp      = (struct SLAEmphasisFilter **)malloc(sizeof(struct SLAEmphasisFilter *) * max_num_channels);
   for (ch = 0; ch < max_num_channels; ch++) {
     encoder->lpcs[ch]   = SLALPCSynthesizer_Create(config->max_parcor_order);
     encoder->ltms[ch]   = SLALongTermSynthesizer_Create();
-    encoder->nlmsc[ch]  = SLALMSCalculator_Create(config->max_lms_order_par_filter);
+    encoder->nlmsc[ch]  = SLALMSFilter_Create(config->max_lms_order_par_filter);
     encoder->emp[ch]    = SLAEmphasisFilter_Create();
   }
   
@@ -159,7 +159,7 @@ void SLAEncoder_Destroy(struct SLAEncoder* encoder)
     for (ch = 0; ch < encoder->max_num_channels; ch++) {
       SLALPCSynthesizer_Destroy(encoder->lpcs[ch]);
       SLALongTermSynthesizer_Destroy(encoder->ltms[ch]);
-      SLALMSCalculator_Destroy(encoder->nlmsc[ch]);
+      SLALMSFilter_Destroy(encoder->nlmsc[ch]);
       SLAEmphasisFilter_Destroy(encoder->emp[ch]);
     }
     NULLCHECK_AND_FREE(encoder->ltms);
@@ -623,8 +623,8 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
 
     /* LMSで残差計算 - カスケード数だけ回す */
     for (ord = 0; ord < encoder->encode_param.num_lms_filter_cascade; ord++) {
-      SLALMSCalculator_Reset(encoder->nlmsc[ch]);
-      if (SLALMSCalculator_PredictInt32(encoder->nlmsc[ch],
+      SLALMSFilter_Reset(encoder->nlmsc[ch]);
+      if (SLALMSFilter_PredictInt32(encoder->nlmsc[ch],
             encoder->encode_param.lms_order_par_filter,
             encoder->residual[ch], num_samples,
             encoder->tmp_residual[ch]) == SLAPREDICTOR_APIRESULT_OK) {
