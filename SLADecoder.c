@@ -28,10 +28,10 @@ struct SLADecoder {
   struct SLABitStream*          strm;
   void*                         strm_work;
 
-  struct SLALPCSynthesizer**       lpcs;
-  struct SLALongTermSynthesizer**  ltms;
-  struct SLALMSFilter**        nlmsc;
-  struct SLAEmphasisFilter**       emp;
+  struct SLALPCSynthesizer**        lpcs;
+  struct SLALongTermSynthesizer**   ltms;
+  struct SLALMSFilter**             nlmsc;
+  struct SLAEmphasisFilter**        emp;
 
   int32_t**                     parcor_coef;
   int32_t**                     longterm_coef;
@@ -379,6 +379,127 @@ static SLAApiResult SLADecoder_DecodeBlockHeader(struct SLADecoder* decoder,
   return SLA_APIRESULT_OK;
 }
 
+/* ブロックデータ（波形データ）のデコード */
+/* FIXME: この関数内だけでストリームオープンとクローズを完結させたかったができていない */
+static SLAApiResult SLADecoder_DecodeWaveData(struct SLADecoder* decoder, 
+    int32_t** buffer, uint32_t num_decode_saples)
+{
+  uint32_t ch, smpl;
+  uint32_t num_channels;
+  uint64_t bitsbuf;
+
+  /* 引数チェック */
+  if ((decoder == NULL) || (buffer == NULL)) {
+    return SLA_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* 頻繁に参照する変数をオート変数に受ける */
+  num_channels = decoder->wave_format.num_channels;
+
+  /* チャンネル毎にデータを復号 */
+  for (ch = 0; ch < num_channels; ch++) {
+    switch (decoder->block_data_type[ch]) {
+      case SLA_BLOCK_DATA_TYPE_SILENT:
+        /* 無音で埋める */
+        memset(decoder->output[ch], 0, sizeof(int32_t) * num_decode_saples);
+        break;
+      case SLA_BLOCK_DATA_TYPE_RAWDATA:
+        /* 生データ取得 */
+        {
+          uint32_t input_bits;
+          /* 左シフト量だけ減らして取得 */
+          SLA_Assert(decoder->wave_format.bit_per_sample > decoder->wave_format.offset_lshift);
+          input_bits = decoder->wave_format.bit_per_sample - decoder->wave_format.offset_lshift;
+          /* MS処理を行った場合の2ch目はL-Rが入っているのでビット幅が1増える */
+          if ((ch == 1)
+              && (decoder->encode_param.ch_process_method == SLA_CHPROCESSMETHOD_STEREO_MS)) {
+            input_bits += 1;
+          }
+          for (smpl = 0; smpl < num_decode_saples; smpl++) {
+            SLABitStream_GetBits(decoder->strm, input_bits, &bitsbuf);
+            decoder->output[ch][smpl] = SLAUTILITY_UINT32_TO_SINT32((uint32_t)bitsbuf);
+          }
+        }
+        break;
+      case SLA_BLOCK_DATA_TYPE_COMPRESSDATA:
+        /* 残差復号 */
+        /* TODO:インターリーブにしないとブロックサイズ未満のデコードができない！！ */
+        SLACoder_GetDataArray(decoder->strm, 
+            decoder->rice_parameter[ch], SLACODER_NUM_RECURSIVERICE_PARAMETER,
+            decoder->residual[ch], num_decode_saples);
+        break;
+      default:
+        /* ここに入ってきたらプログラミングミス */
+        SLA_Assert(0);
+        break;
+    }
+  }
+
+  /* チャンネル毎に音声合成 */
+  for (ch = 0; ch < num_channels; ch++) {
+    /* 圧縮されたブロック以外ではスキップ */
+    if (decoder->block_data_type[ch] != SLA_BLOCK_DATA_TYPE_COMPRESSDATA) {
+      continue;
+    }
+
+    /* LMSの残差分を合成 */
+    if (SLALMSFilter_SynthesizeInt32(decoder->nlmsc[ch],
+          decoder->encode_param.lms_order_par_filter,
+          decoder->residual[ch], num_decode_saples,
+          decoder->output[ch]) != SLAPREDICTOR_APIRESULT_OK) {
+      return SLA_APIRESULT_FAILED_TO_SYNTHESIZE;
+    }
+    /* 合成した信号で残差を差し替え */
+    memcpy(decoder->residual[ch], decoder->output[ch], sizeof(int32_t) * num_decode_saples);
+
+    /* ロングタームの残差分を合成 */
+    if (decoder->pitch_period[ch] != 0) {
+      if (SLALongTermSynthesizer_SynthesizeInt32(
+            decoder->ltms[ch],
+            decoder->residual[ch], num_decode_saples,
+            decoder->pitch_period[ch], decoder->longterm_coef[ch],
+            decoder->encode_param.longterm_order, decoder->output[ch]) != SLAPREDICTOR_APIRESULT_OK) {
+        return SLA_APIRESULT_FAILED_TO_SYNTHESIZE;
+      }
+      /* 合成した信号で残差を差し替え */
+      memcpy(decoder->residual[ch], decoder->output[ch], sizeof(int32_t) * num_decode_saples);
+    }
+
+    /* PARCORの残差分を合成 */
+    if (SLALPCSynthesizer_SynthesizeByParcorCoefInt32(decoder->lpcs[ch],
+          decoder->residual[ch], num_decode_saples,
+          decoder->parcor_coef[ch], decoder->encode_param.parcor_order,
+          decoder->output[ch]) != SLAPREDICTOR_APIRESULT_OK) {
+      return SLA_APIRESULT_FAILED_TO_SYNTHESIZE;
+    }
+
+    /* デエンファシス */
+    SLAEmphasisFilter_DeEmphasisInt32(decoder->emp[ch], 
+        decoder->output[ch], num_decode_saples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
+  }
+
+  /* チャンネル毎の処理をしていたら元に戻す */
+  switch (decoder->encode_param.ch_process_method) {
+    case SLA_CHPROCESSMETHOD_STEREO_MS:
+      SLAUtility_MStoLRInt32(decoder->output, decoder->wave_format.num_channels, num_decode_saples);
+      break;
+    default:
+      break;
+  }
+
+  /* 最終結果をバッファにコピー */
+  SLA_Assert(decoder->wave_format.bit_per_sample > decoder->wave_format.offset_lshift);
+  SLA_Assert((decoder->wave_format.bit_per_sample - decoder->wave_format.offset_lshift) < 32);
+  for (ch = 0; ch < num_channels; ch++) {
+    for (smpl = 0; smpl < num_decode_saples; smpl++) {
+      buffer[ch][smpl]
+        = decoder->output[ch][smpl] << (32 - decoder->wave_format.bit_per_sample + decoder->wave_format.offset_lshift);
+    }
+  }
+
+  return SLA_APIRESULT_OK;
+}
+
 /* 全音声合成モジュールのリセット */
 static void SLADecoder_ResetAllSynthesizer(struct SLADecoder* decoder)
 {
@@ -393,15 +514,14 @@ static void SLADecoder_ResetAllSynthesizer(struct SLADecoder* decoder)
     SLALMSFilter_Reset(decoder->nlmsc[ch]);
   }
 }
+
 /* 1ブロックデコード */
 static SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     const uint8_t* data, uint32_t data_size,
     int32_t** buffer, uint32_t buffer_num_samples,
     uint32_t* output_block_size, uint32_t* output_num_samples)
 {
-  uint32_t ch, smpl;
-  uint32_t block_samples, num_channels, block_header_size;
-  uint64_t bitsbuf;
+  uint32_t block_samples, block_header_size;
   SLAApiResult ret;
   struct SLABlockHeaderInfo block_header;
 
@@ -421,9 +541,6 @@ static SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     default:
       break;
   }
-
-  /* 頻繁に参照する変数をオート変数に受ける */
-  num_channels    = decoder->wave_format.num_channels;
 
   /* ビットストリーム作成 */
   decoder->strm = SLABitStream_OpenMemory((uint8_t *)data,
@@ -447,111 +564,18 @@ static SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     return SLA_APIRESULT_INSUFFICIENT_BUFFER_SIZE;
   }
 
-  /* チャンネル毎にデータを復号 */
-  for (ch = 0; ch < num_channels; ch++) {
-    switch (decoder->block_data_type[ch]) {
-      case SLA_BLOCK_DATA_TYPE_SILENT:
-        /* 無音で埋める */
-        memset(decoder->output[ch], 0, sizeof(int32_t) * block_samples);
-        break;
-      case SLA_BLOCK_DATA_TYPE_RAWDATA:
-        /* 生データ取得 */
-        {
-          uint32_t input_bits;
-          /* 左シフト量だけ減らして取得 */
-          SLA_Assert(decoder->wave_format.bit_per_sample > decoder->wave_format.offset_lshift);
-          input_bits = decoder->wave_format.bit_per_sample - decoder->wave_format.offset_lshift;
-          /* MS処理を行った場合の2ch目はL-Rが入っているのでビット幅が1増える */
-          if ((ch == 1)
-              && (decoder->encode_param.ch_process_method == SLA_CHPROCESSMETHOD_STEREO_MS)) {
-            input_bits += 1;
-          }
-          for (smpl = 0; smpl < block_samples; smpl++) {
-            SLABitStream_GetBits(decoder->strm, input_bits, &bitsbuf);
-            decoder->output[ch][smpl] = SLAUTILITY_UINT32_TO_SINT32((uint32_t)bitsbuf);
-          }
-        }
-        break;
-      case SLA_BLOCK_DATA_TYPE_COMPRESSDATA:
-        /* 残差復号 */
-        SLACoder_GetDataArray(decoder->strm, 
-            decoder->rice_parameter[ch], SLACODER_NUM_RECURSIVERICE_PARAMETER,
-            decoder->residual[ch], block_samples);
-        break;
-      default:
-        /* ここに入ってきたらプログラミングミス */
-        SLA_Assert(0);
-        break;
-    }
-  }
-
   /* 全音声合成モジュールをリセット */
+  /* 補足）ブロック毎にリセット必須 */
   SLADecoder_ResetAllSynthesizer(decoder);
 
-  /* チャンネル毎に音声合成 */
-  for (ch = 0; ch < num_channels; ch++) {
-    /* 圧縮されたブロック以外ではスキップ */
-    if (decoder->block_data_type[ch] != SLA_BLOCK_DATA_TYPE_COMPRESSDATA) {
-      continue;
-    }
-
-    /* LMSの残差分を合成 */
-    if (SLALMSFilter_SynthesizeInt32(decoder->nlmsc[ch],
-          decoder->encode_param.lms_order_par_filter,
-          decoder->residual[ch], block_samples,
-          decoder->output[ch]) != SLAPREDICTOR_APIRESULT_OK) {
-      return SLA_APIRESULT_FAILED_TO_SYNTHESIZE;
-    }
-    /* 合成した信号で残差を差し替え */
-    memcpy(decoder->residual[ch], decoder->output[ch], sizeof(int32_t) * block_samples);
-
-    /* ロングタームの残差分を合成 */
-    if (decoder->pitch_period[ch] != 0) {
-      if (SLALongTermSynthesizer_SynthesizeInt32(
-            decoder->ltms[ch],
-            decoder->residual[ch], block_samples,
-            decoder->pitch_period[ch], decoder->longterm_coef[ch],
-            decoder->encode_param.longterm_order, decoder->output[ch]) != SLAPREDICTOR_APIRESULT_OK) {
-        return SLA_APIRESULT_FAILED_TO_SYNTHESIZE;
-      }
-      /* 合成した信号で残差を差し替え */
-      memcpy(decoder->residual[ch], decoder->output[ch], sizeof(int32_t) * block_samples);
-    }
-
-    /* PARCORの残差分を合成 */
-    if (SLALPCSynthesizer_SynthesizeByParcorCoefInt32(decoder->lpcs[ch],
-          decoder->residual[ch], block_samples,
-          decoder->parcor_coef[ch], decoder->encode_param.parcor_order,
-          decoder->output[ch]) != SLAPREDICTOR_APIRESULT_OK) {
-      return SLA_APIRESULT_FAILED_TO_SYNTHESIZE;
-    }
-
-    /* デエンファシス */
-    SLAEmphasisFilter_DeEmphasisInt32(decoder->emp[ch], 
-        decoder->output[ch], block_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
-  }
-
-  /* チャンネル毎の処理をしていたら元に戻す */
-  switch (decoder->encode_param.ch_process_method) {
-    case SLA_CHPROCESSMETHOD_STEREO_MS:
-      SLAUtility_MStoLRInt32(decoder->output, decoder->wave_format.num_channels, block_samples);
-      break;
-    default:
-      break;
-  }
-
-  /* 最終結果をバッファにコピー */
-  SLA_Assert(decoder->wave_format.bit_per_sample > decoder->wave_format.offset_lshift);
-  SLA_Assert((decoder->wave_format.bit_per_sample - decoder->wave_format.offset_lshift) < 32);
-  for (ch = 0; ch < num_channels; ch++) {
-    for (smpl = 0; smpl < block_samples; smpl++) {
-      buffer[ch][smpl]
-        = decoder->output[ch][smpl] << (32 - decoder->wave_format.bit_per_sample + decoder->wave_format.offset_lshift);
-    }
+  /* データ復号 */
+  if ((ret = SLADecoder_DecodeWaveData(decoder, buffer, block_samples)) != SLA_APIRESULT_OK) {
+    return ret;
   }
 
   /* 出力サンプル数の取得 */
   *output_num_samples = block_samples;
+
   /* 出力サイズの取得 */
   SLABitStream_Tell(decoder->strm, (int32_t *)output_block_size);
 
