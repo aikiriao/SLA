@@ -18,6 +18,9 @@ int main(int argc, char **argv)
 {
   int ret;
 
+  TEST_UNUSED_PARAMETER(argc);
+  TEST_UNUSED_PARAMETER(argv);
+
   Test_Initialize();
 
   testSLABitStream_Setup();
