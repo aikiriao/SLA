@@ -660,11 +660,14 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
       case SLA_BLOCK_DATA_TYPE_RAWDATA:
         SLABitStream_PutBits(encoder->strm, 2, SLA_BLOCK_DATA_TYPE_RAWDATA);
         continue;
-      case SLA_BLOCK_DATA_TYPE_COMPRESSDATA:  /* FALLTHRU */
-      default:
+      case SLA_BLOCK_DATA_TYPE_COMPRESSDATA:
         /* 圧縮処理を行ったブロック */
         SLABitStream_PutBits(encoder->strm, 2, SLA_BLOCK_DATA_TYPE_COMPRESSDATA);
         /* 予測処理へ */
+        break;
+      default:
+        /* ここに入ってきたらプログラミングミス */
+        SLA_Assert(0);
         break;
     }
 
