@@ -706,6 +706,9 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
         encoder->wave_format.bit_per_sample);
   }
 
+  /* ここまでがブロックヘッダ. バイト境界に揃える */
+  SLABitStream_Flush(encoder->strm);
+
   /* 各チャンネルごとにデータ符号化 */
   for (ch = 0; ch < num_channels; ch++) {
     /* 無音ブロック/生データならばスキップ */
@@ -744,7 +747,7 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
     }
   }
 
-  /* バイト位置に揃える */
+  /* バイト境界に揃える */
   SLABitStream_Flush(encoder->strm);
 
   /* 出力サイズの取得 */

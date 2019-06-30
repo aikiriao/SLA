@@ -278,7 +278,8 @@ SLAApiResult SLADecoder_SetEncodeParameter(struct SLADecoder* decoder,
 
 /* ブロックヘッダ（ヘッダ+係数パラメータ）のデコード */
 static SLAApiResult SLADecoder_DecodeBlockHeader(struct SLADecoder* decoder, 
-    const uint8_t* data, uint32_t data_size, struct SLABlockHeaderInfo* block_header_info)
+    const uint8_t* data, uint32_t data_size, 
+    struct SLABlockHeaderInfo* block_header_info, uint32_t* block_header_size)
 {
   uint8_t  bit;
   uint64_t bitsbuf;
@@ -304,8 +305,7 @@ static SLAApiResult SLADecoder_DecodeBlockHeader(struct SLADecoder* decoder,
   /* CRC16チェック: データ長がブロックサイズ分ないときはチェックできない */
   if ((decoder->enable_crc_check == 1) && (data_size >= block_header_info->block_size)) {
     uint16_t calc_crc16 = SLAUtility_CalculateCRC16(
-        &data[SLA_BLOCK_CRC16_CALC_START_OFFSET],
-        block_header_info->block_size - SLA_BLOCK_CRC16_CALC_START_OFFSET);
+        &data[SLA_BLOCK_CRC16_CALC_START_OFFSET], block_header_info->block_size - SLA_BLOCK_CRC16_CALC_START_OFFSET);
     if (calc_crc16 != crc16) {
       /* 不一致を検出 */
       return SLA_APIRESULT_DETECT_DATA_CORRUPTION;
@@ -369,6 +369,12 @@ static SLAApiResult SLADecoder_DecodeBlockHeader(struct SLADecoder* decoder,
         decoder->wave_format.bit_per_sample);
   }
 
+  /* バイト境界に揃える */
+  SLABitStream_Flush(decoder->strm);
+
+  /* ブロックヘッダサイズの取得 */
+  SLABitStream_Tell(decoder->strm, (int32_t *)block_header_size);
+
   return SLA_APIRESULT_OK;
 }
 
@@ -379,7 +385,7 @@ static SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     uint32_t* output_block_size, uint32_t* output_num_samples)
 {
   uint32_t ch, smpl;
-  uint32_t block_samples, num_channels;
+  uint32_t block_samples, num_channels, block_header_size;
   uint64_t bitsbuf;
   SLAApiResult ret;
   struct SLABlockHeaderInfo block_header;
@@ -410,7 +416,8 @@ static SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
   SLABitStream_Seek(decoder->strm, 0, SLABITSTREAM_SEEK_SET);
 
   /* ブロックヘッダを復号 */
-  if ((ret = SLADecoder_DecodeBlockHeader(decoder, data, data_size, &block_header)) != SLA_APIRESULT_OK) {
+  if ((ret = SLADecoder_DecodeBlockHeader(decoder,
+          data, data_size, &block_header, &block_header_size)) != SLA_APIRESULT_OK) {
     return ret;
   }
   block_samples = block_header.block_num_samples;
