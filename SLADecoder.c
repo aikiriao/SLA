@@ -378,6 +378,20 @@ static SLAApiResult SLADecoder_DecodeBlockHeader(struct SLADecoder* decoder,
   return SLA_APIRESULT_OK;
 }
 
+/* 全音声合成モジュールのリセット */
+static void SLADecoder_ResetAllSynthesizer(struct SLADecoder* decoder)
+{
+  uint32_t ch;
+
+  SLA_Assert(decoder != NULL);
+
+  for (ch = 0; ch < decoder->wave_format.num_channels; ch++) {
+    SLAEmphasisFilter_Reset(decoder->emp[ch]);
+    SLALPCSynthesizer_Reset(decoder->lpcs[ch]);
+    SLALongTermSynthesizer_Reset(decoder->ltms[ch]);
+    SLALMSFilter_Reset(decoder->nlmsc[ch]);
+  }
+}
 /* 1ブロックデコード */
 static SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     const uint8_t* data, uint32_t data_size,
@@ -470,6 +484,9 @@ static SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     }
   }
 
+  /* 全音声合成モジュールをリセット */
+  SLADecoder_ResetAllSynthesizer(decoder);
+
   /* チャンネル毎に音声合成 */
   for (ch = 0; ch < num_channels; ch++) {
     /* 圧縮されたブロック以外ではスキップ */
@@ -478,7 +495,6 @@ static SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     }
 
     /* LMSの残差分を合成 */
-    SLALMSFilter_Reset(decoder->nlmsc[ch]);
     if (SLALMSFilter_SynthesizeInt32(decoder->nlmsc[ch],
           decoder->encode_param.lms_order_par_filter,
           decoder->residual[ch], block_samples,
@@ -490,7 +506,6 @@ static SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
 
     /* ロングタームの残差分を合成 */
     if (decoder->pitch_period[ch] != 0) {
-      SLALongTermSynthesizer_Reset(decoder->ltms[ch]);
       if (SLALongTermSynthesizer_SynthesizeInt32(
             decoder->ltms[ch],
             decoder->residual[ch], block_samples,
@@ -503,7 +518,6 @@ static SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     }
 
     /* PARCORの残差分を合成 */
-    SLALPCSynthesizer_Reset(decoder->lpcs[ch]);
     if (SLALPCSynthesizer_SynthesizeByParcorCoefInt32(decoder->lpcs[ch],
           decoder->residual[ch], block_samples,
           decoder->parcor_coef[ch], decoder->encode_param.parcor_order,
@@ -512,7 +526,6 @@ static SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     }
 
     /* デエンファシス */
-    SLAEmphasisFilter_Reset(decoder->emp[ch]);
     SLAEmphasisFilter_DeEmphasisInt32(decoder->emp[ch], 
         decoder->output[ch], block_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
   }
