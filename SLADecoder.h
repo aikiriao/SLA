@@ -43,12 +43,6 @@ SLAApiResult SLADecoder_SetWaveFormat(struct SLADecoder* decoder,
 SLAApiResult SLADecoder_SetEncodeParameter(struct SLADecoder* decoder,
     const struct SLAEncodeParameter* encode_param);
 
-/* 1ブロックデコード */
-SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
-    const uint8_t* data, uint32_t data_size,
-    int32_t** buffer, uint32_t buffer_num_samples,
-    uint32_t* output_block_size, uint32_t* output_num_samples);
-
 /* ヘッダを含めて全ブロックデコード（波形パラメータ・エンコードパラメータも自動でセット） */
 SLAApiResult SLADecoder_DecodeWhole(struct SLADecoder* decoder,
     const uint8_t* data, uint32_t data_size,

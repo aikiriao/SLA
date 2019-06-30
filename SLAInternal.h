@@ -4,6 +4,7 @@
 #include <assert.h>
 
 /* 内部エンコードパラメータ */
+#define SLA_BLOCK_SYNC_CODE                         0xFFFF                  /* ブロック先頭の同期コード                 */
 #define SLALONGTERM_MAX_PERIOD                      1024                    /* ロングタームの最大周期                   */
 #define SLALONGTERM_PERIOD_NUM_BITS                 10                      /* ロングターム係数の記録に保存するビット数 */
 #define SLALONGTERM_NUM_PITCH_CANDIDATES            SLALONGTERM_MAX_PERIOD  /* ロングターム使用時の最大ピッチ候補数     */
@@ -55,5 +56,11 @@ typedef enum SLABlockDataTypeTag {
   SLA_BLOCK_DATA_TYPE_RAWDATA       = 2,     /* 生データ       */
   SLA_BLOCK_DATA_TYPE_INVAILD       = 3      /* 無効           */
 } SLABlockDataType;
+
+/* ブロックヘッダ */
+struct SLABlockHeaderInfo {
+  uint32_t  block_size;               /* ブロックサイズ                         */
+  uint32_t  block_num_samples;        /* ブロックに含まれるchあたりのサンプル数 */
+};
 
 #endif /* SLA_INTERNAL_H_INCLUDED */

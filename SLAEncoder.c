@@ -641,8 +641,8 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
 
   /* ブロックヘッダ書き出し */
   /* 同期コード */
-  SLABitStream_PutBits(encoder->strm, 16, 0xFFFF);
-  /* 次のブロックまでのオフセット:一旦飛ばす */
+  SLABitStream_PutBits(encoder->strm, 16, SLA_BLOCK_SYNC_CODE);
+  /* ブロックサイズ:一旦飛ばす */
   SLABitStream_PutBits(encoder->strm, 32, 0);
   /* CRC16:一旦飛ばす */
   SLABitStream_PutBits(encoder->strm, 16, 0);

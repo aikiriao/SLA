@@ -412,7 +412,7 @@ static void testSLADecoder_DecodeBlockTest(void *obj)
       }
     }
 
-    /* データサイズが足らない */
+    /* バッファサイズが足らない */
     Test_AssertEqual(
         SLAEncoder_EncodeBlock(encoder,
           (const int32_t **)input, num_samples, data, suff_size, &outsize),
@@ -420,7 +420,7 @@ static void testSLADecoder_DecodeBlockTest(void *obj)
     Test_AssertEqual(
         SLADecoder_DecodeBlock(decoder,
           data, suff_size, output, outsize - 1, &output_block_size, &output_num_samples),
-        SLA_APIRESULT_INSUFFICIENT_DATA_SIZE);
+        SLA_APIRESULT_INSUFFICIENT_BUFFER_SIZE);
 
     /* 同期コード（データ先頭16bit）が不正 */
     Test_AssertEqual(

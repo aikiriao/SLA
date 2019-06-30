@@ -270,61 +270,36 @@ SLAApiResult SLADecoder_SetEncodeParameter(struct SLADecoder* decoder,
   return SLA_APIRESULT_OK;
 }
 
-/* 1ブロックデコード */
-SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
-    const uint8_t* data, uint32_t data_size,
-    int32_t** buffer, uint32_t buffer_num_samples,
-    uint32_t* output_block_size, uint32_t* output_num_samples)
+/* ブロックヘッダ（ヘッダ+係数パラメータ）のデコード */
+static SLAApiResult SLADecoder_DecodeBlockHeader(struct SLADecoder* decoder, 
+    const uint8_t* data, uint32_t data_size, struct SLABlockHeaderInfo* block_header_info)
 {
   uint8_t  bit;
   uint64_t bitsbuf;
-  uint32_t ch, ord, smpl;
-  uint32_t block_samples, num_channels, parcor_order, longterm_order;
-  uint32_t next_block_offset;
   uint16_t crc16;
+  uint32_t ch, ord;
 
   /* 引数チェック */
-  if (decoder == NULL || data == NULL || buffer == NULL
-      || output_block_size == NULL || output_num_samples == NULL) {
+  if ((decoder == NULL) || (data == NULL) || (block_header_info == NULL)) {
     return SLA_APIRESULT_INVALID_ARGUMENT;
   }
 
-  /* チャンネル毎の処理に矛盾がないかチェック */
-  switch (decoder->encode_param.ch_process_method) {
-    case SLA_CHPROCESSMETHOD_STEREO_MS:
-      if (decoder->wave_format.num_channels != 2) {
-        return SLA_APIRESULT_INVAILD_CHPROCESSMETHOD;
-      }
-      break;
-    default:
-      break;
-  }
-
-  /* 頻繁に参照する変数をオート変数に受ける */
-  num_channels    = decoder->wave_format.num_channels;
-  parcor_order    = decoder->encode_param.parcor_order;
-  longterm_order  = decoder->encode_param.longterm_order;
-
-  /* ビットストリーム作成 */
-  decoder->strm = SLABitStream_OpenMemory((uint8_t *)data,
-      data_size, "r", decoder->strm_work, SLABitStream_CalculateWorkSize());
-  SLABitStream_Seek(decoder->strm, 0, SLABITSTREAM_SEEK_SET);
-
   /* 同期コード */
   SLABitStream_GetBits(decoder->strm, 16, &bitsbuf);
-  if (bitsbuf != 0xFFFF) {
+  if (bitsbuf != SLA_BLOCK_SYNC_CODE) {
     return SLA_APIRESULT_FAILED_TO_FIND_SYNC_CODE;
   }
   /* 次のブロックまでのオフセット */
   SLABitStream_GetBits(decoder->strm, 32, &bitsbuf);
-  next_block_offset = (uint32_t)bitsbuf;
+  block_header_info->block_size = (uint32_t)bitsbuf + 2 + 4;  /* 同期コード, オフセットを抜いた分足す */
   /* これ以降のフィールドのCRC16値 */
   SLABitStream_GetBits(decoder->strm, 16, &bitsbuf);
   crc16 = (uint16_t)bitsbuf;
-  /* CRC16チェック */
-  if (decoder->enable_crc_check == 1) {
+  /* CRC16チェック: データ長がブロックサイズ分ないときはチェックできない */
+  if ((decoder->enable_crc_check == 1) && (data_size >= block_header_info->block_size)) {
     uint16_t calc_crc16 = SLAUtility_CalculateCRC16(
-        &data[SLA_BLOCK_CRC16_CALC_START_OFFSET], next_block_offset - 2); /* CRC16を記録したフィールドを除く */
+        &data[SLA_BLOCK_CRC16_CALC_START_OFFSET],
+        block_header_info->block_size - SLA_BLOCK_CRC16_CALC_START_OFFSET);
     if (calc_crc16 != crc16) {
       /* 不一致を検出 */
       return SLA_APIRESULT_DETECT_DATA_CORRUPTION;
@@ -332,14 +307,11 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
   }
   /* ブロックサンプル数 */
   SLABitStream_GetBits(decoder->strm, 16, &bitsbuf);
-  block_samples = (uint32_t)bitsbuf;
-  if (block_samples > buffer_num_samples) {
-    return SLA_APIRESULT_INSUFFICIENT_DATA_SIZE;
-  }
+  block_header_info->block_num_samples = (uint32_t)bitsbuf;
   /* printf("next:%d crc16:%04X nsmpl:%d \n", next_block_offset, crc16, block_samples); */
 
   /* 各チャンネルのブロックタイプ/係数取得 */
-  for (ch = 0; ch < num_channels; ch++) {
+  for (ch = 0; ch < decoder->wave_format.num_channels; ch++) {
     uint32_t rshift;
 
     /* ブロックタイプ取得 */
@@ -357,7 +329,7 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     rshift = (uint32_t)bitsbuf;
     /* 0次は0で確定 */
     decoder->parcor_coef[ch][0] = 0;
-    for (ord = 1; ord < parcor_order + 1; ord++) {
+    for (ord = 1; ord < decoder->encode_param.parcor_order + 1; ord++) {
       /* 量子化ビット数 */
       uint32_t qbits = SLA_GET_PARCOR_QUANTIZE_BIT_WIDTH(ord);
       /* PARCOR係数 */
@@ -378,7 +350,7 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     } else {
       SLABitStream_GetBits(decoder->strm, SLALONGTERM_PERIOD_NUM_BITS, &bitsbuf);
       decoder->pitch_period[ch] = (uint32_t)bitsbuf;
-      for (ord = 0; ord < longterm_order; ord++) {
+      for (ord = 0; ord < decoder->encode_param.longterm_order; ord++) {
         SLABitStream_GetBits(decoder->strm, 16, &bitsbuf);
         decoder->longterm_coef[ch][ord] = SLAUTILITY_UINT32_TO_SINT32(bitsbuf);
         decoder->longterm_coef[ch][ord] <<= 16;
@@ -389,6 +361,62 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     SLACoder_GetRecursiveRiceParameter(decoder->strm,
         decoder->rice_parameter[ch], SLACODER_NUM_RECURSIVERICE_PARAMETER, 
         decoder->wave_format.bit_per_sample);
+  }
+
+  return SLA_APIRESULT_OK;
+}
+
+/* 1ブロックデコード */
+static SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
+    const uint8_t* data, uint32_t data_size,
+    int32_t** buffer, uint32_t buffer_num_samples,
+    uint32_t* output_block_size, uint32_t* output_num_samples)
+{
+  uint32_t ch, smpl;
+  uint32_t block_samples, num_channels;
+  uint64_t bitsbuf;
+  SLAApiResult ret;
+  struct SLABlockHeaderInfo block_header;
+
+  /* 引数チェック */
+  if (decoder == NULL || data == NULL || buffer == NULL
+      || output_block_size == NULL || output_num_samples == NULL) {
+    return SLA_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* チャンネル毎の処理に矛盾がないかチェック */
+  switch (decoder->encode_param.ch_process_method) {
+    case SLA_CHPROCESSMETHOD_STEREO_MS:
+      if (decoder->wave_format.num_channels != 2) {
+        return SLA_APIRESULT_INVAILD_CHPROCESSMETHOD;
+      }
+      break;
+    default:
+      break;
+  }
+
+  /* 頻繁に参照する変数をオート変数に受ける */
+  num_channels    = decoder->wave_format.num_channels;
+
+  /* ビットストリーム作成 */
+  decoder->strm = SLABitStream_OpenMemory((uint8_t *)data,
+      data_size, "r", decoder->strm_work, SLABitStream_CalculateWorkSize());
+  SLABitStream_Seek(decoder->strm, 0, SLABITSTREAM_SEEK_SET);
+
+  /* ブロックヘッダを復号 */
+  if ((ret = SLADecoder_DecodeBlockHeader(decoder, data, data_size, &block_header)) != SLA_APIRESULT_OK) {
+    return ret;
+  }
+  block_samples = block_header.block_num_samples;
+
+  /* データサイズ不足 */
+  if (block_header.block_size > data_size) {
+    return SLA_APIRESULT_INSUFFICIENT_DATA_SIZE;
+  }
+
+  /* バッファサイズ不足 */
+  if (block_header.block_num_samples > buffer_num_samples) {
+    return SLA_APIRESULT_INSUFFICIENT_BUFFER_SIZE;
   }
 
   /* チャンネル毎にデータを復号 */
@@ -454,7 +482,7 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
             decoder->ltms[ch],
             decoder->residual[ch], block_samples,
             decoder->pitch_period[ch], decoder->longterm_coef[ch],
-            longterm_order, decoder->output[ch]) != SLAPREDICTOR_APIRESULT_OK) {
+            decoder->encode_param.longterm_order, decoder->output[ch]) != SLAPREDICTOR_APIRESULT_OK) {
         return SLA_APIRESULT_FAILED_TO_SYNTHESIZE;
       }
       /* 合成した信号で残差を差し替え */
@@ -465,7 +493,7 @@ SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
     SLALPCSynthesizer_Reset(decoder->lpcs[ch]);
     if (SLALPCSynthesizer_SynthesizeByParcorCoefInt32(decoder->lpcs[ch],
           decoder->residual[ch], block_samples,
-          decoder->parcor_coef[ch], parcor_order,
+          decoder->parcor_coef[ch], decoder->encode_param.parcor_order,
           decoder->output[ch]) != SLAPREDICTOR_APIRESULT_OK) {
       return SLA_APIRESULT_FAILED_TO_SYNTHESIZE;
     }
