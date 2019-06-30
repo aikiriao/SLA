@@ -30,15 +30,15 @@ void SLACoder_GetRecursiveRiceParameter(
 
 /* 符号付き整数配列の符号化 */
 void SLACoder_PutDataArray(
-    struct SLABitStream* strm,
-    SLARecursiveRiceParameter* rice_parameter, uint32_t num_parameters,
-    const int32_t* data, uint32_t num_data);
+    struct SLABitStream* strm, 
+    SLARecursiveRiceParameter** rice_parameter, uint32_t num_parameters,
+    const int32_t** data, uint32_t num_channels, uint32_t num_samples);
 
 /* 符号付き整数配列の復号 */
 void SLACoder_GetDataArray(
     struct SLABitStream* strm, 
-    SLARecursiveRiceParameter* rice_parameter, uint32_t num_parameters,
-    int32_t* data, uint32_t num_data);
+    SLARecursiveRiceParameter** rice_parameter, uint32_t num_parameters,
+    int32_t** data, uint32_t num_channels, uint32_t num_samples);
 
 #ifdef __cplusplus
 }

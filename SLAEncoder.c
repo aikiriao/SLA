@@ -41,7 +41,7 @@ struct SLAEncoder {
   int32_t**                     longterm_coef_int32;
   uint32_t*                     pitch_period;
   double*                       window;
-  SLABlockDataType*             block_data_type;
+  SLABlockDataType              block_data_type;
   int32_t**                     residual;
   int32_t**                     tmp_residual;
   uint32_t*                     num_block_partition_samples;
@@ -100,7 +100,6 @@ struct SLAEncoder* SLAEncoder_Create(const struct SLAEncoderConfig* config)
   }
 
   encoder->pitch_period                 = (uint32_t *)malloc(sizeof(uint32_t) * max_num_channels);
-  encoder->block_data_type              = (SLABlockDataType *)malloc(sizeof(SLABlockDataType) * max_num_channels);
   encoder->window                       = (double *)malloc(sizeof(double) * max_num_block_samples);
   encoder->num_block_partition_samples  = (uint32_t *)malloc(sizeof(uint32_t) * SLAOptimalEncodeEstimator_CalculateMaxNumPartitions(config->max_num_block_samples, SLA_SEARCH_BLOCK_NUM_SAMPLES_DELTA));
 
@@ -348,6 +347,7 @@ static SLAApiResult SLAEncoder_SearchOptimalBlockPartitions(struct SLAEncoder* e
 {
   uint32_t ch, smpl;
   uint32_t num_channels, parcor_order;
+
   /* 引数チェック */
   if (encoder == NULL || input == NULL
       || optimal_num_partitions == NULL || optimal_num_block_samples == NULL) {
@@ -495,11 +495,11 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
   }
 
   /* 無音ブロック判定 */
+  encoder->block_data_type = SLA_BLOCK_DATA_TYPE_SILENT;
   for (ch = 0; ch < num_channels; ch++) {
-    encoder->block_data_type[ch] = SLA_BLOCK_DATA_TYPE_SILENT;
     for (smpl = 0; smpl < num_samples; smpl++) {
       if (encoder->input_int32[ch][smpl] != 0) {
-        encoder->block_data_type[ch] = SLA_BLOCK_DATA_TYPE_COMPRESSDATA;
+        encoder->block_data_type = SLA_BLOCK_DATA_TYPE_COMPRESSDATA;
         break;
       }
     }
@@ -507,8 +507,8 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
 
   /* ch毎に残差信号を計算 */
   for (ch = 0; ch < num_channels; ch++) {
-    /* 無音ブロックか否か？ */
-    if (encoder->block_data_type[ch] == SLA_BLOCK_DATA_TYPE_SILENT) {
+    /* 圧縮対象のブロックか否か？ */
+    if (encoder->block_data_type != SLA_BLOCK_DATA_TYPE_COMPRESSDATA) {
       /* 以下の処理を全てスキップ */
       continue;
     }
@@ -517,10 +517,7 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
     /* 補足）窓掛けとプリエンファシスはほぼ順不同だが、先に窓をかけたほうが僅かに性能が良い */
     SLAUtility_ApplyWindow(encoder->window, encoder->input_double[ch], num_samples); 
 
-    /* プリエンファシス */
-    SLAEmphasisFilter_Reset(encoder->emp[ch]);
-    SLAEmphasisFilter_PreEmphasisInt32(encoder->emp[ch], encoder->input_int32[ch], num_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
-    /* doubleも同様のプリエンファシスフィルタを適用 */
+    /* doubleデータに対してプリエンファシス処理 */
     SLAEmphasisFilter_PreEmphasisDouble(encoder->input_double[ch], num_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
 
     /* PARCOR係数を求める */
@@ -541,11 +538,8 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
 
     /* 推定圧縮率が閾値以上ならば、予測を諦めて生データ出力を行う */
     if (estimated_code_length >= SLA_ESTIMATE_CODELENGTH_THRESHOLD) {
-      /* PARCOR係数計算前にプリエンファシスをかけているのでデエンファシスして元に戻しておく */
-      SLAEmphasisFilter_Reset(encoder->emp[ch]);
-      SLAEmphasisFilter_DeEmphasisInt32(encoder->emp[ch], encoder->input_int32[ch], num_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
-      encoder->block_data_type[ch] = SLA_BLOCK_DATA_TYPE_RAWDATA;
-      continue;
+      encoder->block_data_type = SLA_BLOCK_DATA_TYPE_RAWDATA;
+      break;
     }
 
     /* データのビット幅 */
@@ -572,14 +566,25 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
         = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(encoder->parcor_coef_int32[ch][ord], encoder->parcor_rshift[ch]);
     } 
 
+    /* 残差を求める */
+
+    /* doubleデータに適用したものと同様のプリエンファシスフィルタを適用 */
+    SLAEmphasisFilter_Reset(encoder->emp[ch]);
+    memcpy(encoder->tmp_residual[ch], encoder->input_int32[ch], sizeof(int32_t) * num_samples);
+    SLAEmphasisFilter_PreEmphasisInt32(encoder->emp[ch], encoder->tmp_residual[ch], num_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
+    /* 残差をプリエンファシス予測による残差に差し替え */
+    memcpy(encoder->residual[ch], encoder->tmp_residual[ch], sizeof(int32_t) * num_samples);
+
     /* PARCORで残差計算 */
     SLALPCSynthesizer_Reset(encoder->lpcs[ch]);
     if (SLALPCSynthesizer_PredictByParcorCoefInt32(encoder->lpcs[ch],
-          encoder->input_int32[ch], num_samples,
+          encoder->residual[ch], num_samples,
           encoder->parcor_coef_int32[ch], parcor_order,
-          encoder->residual[ch]) != SLAPREDICTOR_APIRESULT_OK) {
+          encoder->tmp_residual[ch]) != SLAPREDICTOR_APIRESULT_OK) {
       return SLA_APIRESULT_FAILED_TO_PREDICT;
     }
+    /* 残差をPARCOR予測による残差に差し替え */
+    memcpy(encoder->residual[ch], encoder->tmp_residual[ch], sizeof(int32_t) * num_samples);
 
     /* 残差信号に対してロングターム係数計算 */
     predictor_ret = SLALongTermCalculator_CalculateCoef(encoder->ltc,
@@ -618,7 +623,7 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
       memcpy(encoder->residual[ch], encoder->tmp_residual[ch], sizeof(int32_t) * num_samples);
     }
 
-    /* LMSで残差計算 - カスケード数だけ回す */
+    /* LMSで残差計算 */
     SLALMSFilter_Reset(encoder->nlmsc[ch]);
     if (SLALMSFilter_PredictInt32(encoder->nlmsc[ch],
           encoder->encode_param.lms_order_par_filter,
@@ -648,27 +653,14 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
   SLABitStream_PutBits(encoder->strm, 16, 0);
   /* ブロックのサンプル数 */
   SLABitStream_PutBits(encoder->strm, 16, num_samples);
+  /* ブロックデータタイプ */
+  SLABitStream_PutBits(encoder->strm,  2, encoder->block_data_type);
 
   /* ch毎に係数情報を符号化 */
   for (ch = 0; ch < num_channels; ch++) {
-    /* 無音ブロックか否か？ */
-    switch (encoder->block_data_type[ch]) {
-      case SLA_BLOCK_DATA_TYPE_SILENT:
-        /* 以下の処理を全てスキップ */
-        SLABitStream_PutBits(encoder->strm, 2, SLA_BLOCK_DATA_TYPE_SILENT);
-        continue;
-      case SLA_BLOCK_DATA_TYPE_RAWDATA:
-        SLABitStream_PutBits(encoder->strm, 2, SLA_BLOCK_DATA_TYPE_RAWDATA);
-        continue;
-      case SLA_BLOCK_DATA_TYPE_COMPRESSDATA:
-        /* 圧縮処理を行ったブロック */
-        SLABitStream_PutBits(encoder->strm, 2, SLA_BLOCK_DATA_TYPE_COMPRESSDATA);
-        /* 予測処理へ */
-        break;
-      default:
-        /* ここに入ってきたらプログラミングミス */
-        SLA_Assert(0);
-        break;
+    /* 圧縮データ以外では係数出力をスキップ */
+    if (encoder->block_data_type != SLA_BLOCK_DATA_TYPE_COMPRESSDATA) {
+      break;
     }
 
     /* PARCOR係数 */
@@ -709,42 +701,45 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
   /* ここまでがブロックヘッダ. バイト境界に揃える */
   SLABitStream_Flush(encoder->strm);
 
-  /* 各チャンネルごとにデータ符号化 */
-  for (ch = 0; ch < num_channels; ch++) {
-    /* 無音ブロック/生データならばスキップ */
-    switch (encoder->block_data_type[ch]) {
-      case SLA_BLOCK_DATA_TYPE_RAWDATA:
-        {
-          uint32_t output_bits;
-          /* 圧縮を断念している。生データを符号なし整数化して書き出す */
+  /* データ符号化 */
+  switch (encoder->block_data_type) {
+    case SLA_BLOCK_DATA_TYPE_RAWDATA:
+      /* 圧縮を断念している。生データを符号なし整数化して書き出す */
+      {
+        uint32_t output_bits[SLA_MAX_CHANNELS];
+        /* ビット幅を設定 */
+        for (ch = 0; ch < num_channels; ch++) {
           /* 左シフトしている場合があるのでその分は書き出しビット幅を減らす */
           SLA_Assert(encoder->wave_format.bit_per_sample > encoder->wave_format.offset_lshift);
-          output_bits = encoder->wave_format.bit_per_sample - encoder->wave_format.offset_lshift;
+          output_bits[ch] = encoder->wave_format.bit_per_sample - encoder->wave_format.offset_lshift;
           /* MS処理を行った場合の2ch目はL-Rが入っているのでビット幅が1増える */
           if ((ch == 1)
               && (encoder->encode_param.ch_process_method == SLA_CHPROCESSMETHOD_STEREO_MS)) {
-            output_bits += 1;
+            output_bits[ch] += 1;
           }
-          for (smpl = 0; smpl < num_samples; smpl++) {
-            SLABitStream_PutBits(encoder->strm, output_bits,
+        }
+        /* チャンネルインターリーブしつつ符号化 */
+        for (smpl = 0; smpl < num_samples; smpl++) {
+          for (ch = 0; ch < num_channels; ch++) {
+            SLABitStream_PutBits(encoder->strm, output_bits[ch],
                 SLAUTILITY_SINT32_TO_UINT32(encoder->input_int32[ch][smpl]));
           }
         }
-        break;
-      case SLA_BLOCK_DATA_TYPE_COMPRESSDATA:
-        /* 残差符号化 */
-        SLACoder_PutDataArray(encoder->strm, 
-            encoder->rice_parameter[ch], SLACODER_NUM_RECURSIVERICE_PARAMETER,
-            encoder->residual[ch], num_samples);
-        break;
-      case SLA_BLOCK_DATA_TYPE_SILENT:
-        /* 無音の場合は何もしない */
-        break;
-      default:
-        /* ここに入ってきたらプログラミングミス */
-        SLA_Assert(0);
-        break;
-    }
+      }
+      break;
+    case SLA_BLOCK_DATA_TYPE_COMPRESSDATA:
+      /* 残差符号化 */
+      SLACoder_PutDataArray(encoder->strm, 
+          encoder->rice_parameter, SLACODER_NUM_RECURSIVERICE_PARAMETER,
+          (const int32_t **)encoder->residual, num_channels, num_samples);
+      break;
+    case SLA_BLOCK_DATA_TYPE_SILENT:
+      /* 無音の場合は何もしない */
+      break;
+    default:
+      /* ここに入ってきたらプログラミングミス */
+      SLA_Assert(0);
+      break;
   }
 
   /* バイト境界に揃える */

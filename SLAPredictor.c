@@ -1549,7 +1549,7 @@ SLAPredictorApiResult SLAEmphasisFilter_DeEmphasisInt32(
   return SLAPREDICTOR_APIRESULT_OK;
 }
 
-/* プリエンファシス(double) */
+/* プリエンファシス(double, in-place) */
 void SLAEmphasisFilter_PreEmphasisDouble(double* data, uint32_t num_samples, int32_t coef_shift)
 {
   uint32_t  smpl;

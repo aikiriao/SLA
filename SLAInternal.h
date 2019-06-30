@@ -3,6 +3,7 @@
 
 #include <assert.h>
 
+#define SLA_MAX_CHANNELS                            8                       /* 処理可能な最大チャンネル数（撤廃予定） */
 /* 内部エンコードパラメータ */
 #define SLA_BLOCK_SYNC_CODE                         0xFFFF                  /* ブロック先頭の同期コード                 */
 #define SLALONGTERM_MAX_PERIOD                      1024                    /* ロングタームの最大周期                   */
