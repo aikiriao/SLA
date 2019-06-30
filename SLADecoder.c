@@ -9,6 +9,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* ブロックヘッダ */
+struct SLABlockHeaderInfo {
+  uint32_t  block_size;               /* ブロックサイズ                         */
+  uint32_t  block_num_samples;        /* ブロックに含まれるchあたりのサンプル数 */
+};
+
 /* デコーダハンドル */
 struct SLADecoder {
   struct SLAWaveFormat          wave_format;

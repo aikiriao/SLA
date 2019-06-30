@@ -57,10 +57,4 @@ typedef enum SLABlockDataTypeTag {
   SLA_BLOCK_DATA_TYPE_INVAILD       = 3      /* 無効           */
 } SLABlockDataType;
 
-/* ブロックヘッダ */
-struct SLABlockHeaderInfo {
-  uint32_t  block_size;               /* ブロックサイズ                         */
-  uint32_t  block_num_samples;        /* ブロックに含まれるchあたりのサンプル数 */
-};
-
 #endif /* SLA_INTERNAL_H_INCLUDED */
