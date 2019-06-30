@@ -277,6 +277,7 @@ SLAApiResult SLADecoder_SetEncodeParameter(struct SLADecoder* decoder,
 }
 
 /* ブロックヘッダ（ヘッダ+係数パラメータ）のデコード */
+/* FIXME: この関数内だけでストリームオープンとクローズを完結させたかったができていない */
 static SLAApiResult SLADecoder_DecodeBlockHeader(struct SLADecoder* decoder, 
     const uint8_t* data, uint32_t data_size, 
     struct SLABlockHeaderInfo* block_header_info, uint32_t* block_header_size)
