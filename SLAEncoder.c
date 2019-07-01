@@ -859,8 +859,11 @@ SLAApiResult SLAEncoder_EncodeWhole(struct SLAEncoder* encoder,
 
     /* 進捗表示 */
     if (encoder->verpose_flag != 0) {
-      printf("progress:%2d%% (output size:%10d)\r",
-          (100 * encode_offset_sample) / num_samples, cur_output_size);
+      uint32_t output_original_size 
+        = encode_offset_sample * encoder->wave_format.num_channels * encoder->wave_format.bit_per_sample / 8;
+      printf("progress:%2d%% (compress ratio:%3.1f %%)\r",
+          (100 * encode_offset_sample) / num_samples,
+          ((double)cur_output_size / output_original_size) * 100);
       fflush(stdout);
     }
   }
