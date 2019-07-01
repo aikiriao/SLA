@@ -114,7 +114,7 @@ struct SLAEncoder* SLAEncoder_Create(const struct SLAEncoderConfig* config)
   encoder->emp      = (struct SLAEmphasisFilter **)malloc(sizeof(struct SLAEmphasisFilter *) * max_num_channels);
   for (ch = 0; ch < max_num_channels; ch++) {
     encoder->lpcs[ch]   = SLALPCSynthesizer_Create(config->max_parcor_order);
-    encoder->ltms[ch]   = SLALongTermSynthesizer_Create();
+    encoder->ltms[ch]   = SLALongTermSynthesizer_Create(config->max_longterm_order, SLALONGTERM_MAX_PERIOD);
     encoder->nlmsc[ch]  = SLALMSFilter_Create(config->max_lms_order_par_filter);
     encoder->emp[ch]    = SLAEmphasisFilter_Create();
   }

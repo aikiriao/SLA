@@ -69,7 +69,10 @@ struct SLALongTermCalculator {
 
 /* ロングターム予測合成ハンドル */
 struct SLALongTermSynthesizer {
-  uint8_t             is_first_process;         /* リセット後最初の処理か否か */
+  uint32_t            num_input_samples;        /* 入力サンプル数カウント     */
+  int32_t*            signal_buffer;            /* 入力データバッファ         */
+  uint32_t            signal_buffer_size;       /* 入力データサイズ           */
+  uint32_t            signal_buffer_pos;        /* バッファ参照位置           */
 };
 
 /* LMS計算ハンドル */
@@ -79,6 +82,7 @@ struct SLALMSFilter {
 	uint32_t	max_num_coef;	            /* 最大の係数個数 */
   int32_t*  fir_sign_buffer;          /* 入力信号の符号を記録したバッファ */
   int32_t*  iir_sign_buffer;          /* 予測信号の符号を記録したバッファ */
+  int32_t*  fir_buffer;               /* 入力信号バッファ */
   int32_t*  iir_buffer;               /* 予測信号バッファ */
   uint32_t  signal_sign_buffer_size;  /* バッファサイズ */
   uint32_t  buffer_pos;               /* バッファ参照位置 */
@@ -700,6 +704,7 @@ SLAPredictorApiResult SLALongTermCalculator_CalculateCoef(
   uint32_t  i, fft_size, num_peak;
   double*   auto_corr;
   double    max_peak;
+  uint32_t  tmp_pitch_period;
 
   /* 引数チェック */
   if ((ltm_calculator == NULL) || (data == NULL)
@@ -824,10 +829,15 @@ SLAPredictorApiResult SLALongTermCalculator_CalculateCoef(
       break;
     }
   }
+  tmp_pitch_period = ltm_calculator->pitch_candidate[i];
+
+  /* ピッチ候補の周期が近すぎる（フィルターで見ると現在〜未来のサンプルを参照してしまう） */
+  if (tmp_pitch_period < ((num_taps / 2) + 1)) {
+    return SLAPREDICTOR_APIRESULT_FAILED_TO_CALCULATION;
+  }
 
   /* ロングターム係数の導出 */
   {
-    uint32_t  tmp_pitch_period = ltm_calculator->pitch_candidate[i];
     uint32_t  j, k;
     double    ltm_coef_sum;
 
@@ -878,11 +888,17 @@ SLAPredictorApiResult SLALongTermCalculator_CalculateCoef(
 }
 
 /* ロングターム予測合成ハンドル作成 */
-struct SLALongTermSynthesizer* SLALongTermSynthesizer_Create(void)
+struct SLALongTermSynthesizer* SLALongTermSynthesizer_Create(uint32_t max_num_taps, uint32_t max_pitch_period)
 {
   struct SLALongTermSynthesizer* ltm;
+  uint32_t tmp_buffer_size;
 
   ltm = malloc(sizeof(struct SLALongTermSynthesizer));
+  
+  /* 計算効率化のために2倍確保 */
+  tmp_buffer_size = 2 * (max_num_taps + max_pitch_period);
+  ltm->signal_buffer_size = tmp_buffer_size;
+  ltm->signal_buffer      = (int32_t *)malloc(sizeof(int32_t) * tmp_buffer_size);
   
   SLALongTermSynthesizer_Reset(ltm);
 
@@ -892,6 +908,7 @@ struct SLALongTermSynthesizer* SLALongTermSynthesizer_Create(void)
 /* ロングターム予測合成ハンドル破棄 */
 void SLALongTermSynthesizer_Destroy(struct SLALongTermSynthesizer* ltm)
 {
+  NULLCHECK_AND_FREE(ltm->signal_buffer);
   NULLCHECK_AND_FREE(ltm);
 }
 
@@ -902,8 +919,14 @@ SLAPredictorApiResult SLALongTermSynthesizer_Reset(struct SLALongTermSynthesizer
     return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
   }
 
-  /* 次の予測合成処理が最初の処理 */
-  ltm->is_first_process = 1;
+  /* 入力サンプル数をリセット */
+  ltm->num_input_samples = 0;
+
+  /* バッファ参照位置をリセット */
+  ltm->signal_buffer_pos = 0;
+
+  /* バッファをリセット */
+  memset(ltm->signal_buffer, 0, sizeof(int32_t) * ltm->signal_buffer_size);
 
   return SLAPREDICTOR_APIRESULT_OK;
 }
@@ -915,9 +938,12 @@ SLAPredictorApiResult SLALongTermSynthesizer_PredictInt32(
 	uint32_t pitch_period, 
 	const int32_t* ltm_coef, uint32_t num_taps, int32_t* residual)
 {
-  uint32_t      i, j;
-  const int32_t half    = (1UL << 30); /* 丸め用定数(0.5) */
-  int64_t       predict;
+  uint32_t        i, j;
+  const int32_t   half    = (1UL << 30); /* 丸め用定数(0.5) */
+  int64_t         predict;
+  const uint32_t  max_delay = pitch_period + (num_taps >> 1);
+  uint32_t        buffer_pos;
+  int32_t*        signal_buffer;
 
   /* 引数チェック */
   if ((ltm == NULL) || (data == NULL) || (ltm_coef == NULL) || (residual == NULL)) {
@@ -930,12 +956,20 @@ SLAPredictorApiResult SLALongTermSynthesizer_PredictInt32(
     return SLAPREDICTOR_APIRESULT_OK;
   }
 
+  /* 頻繁に参照する変数をローカル変数に受ける */
+  signal_buffer = ltm->signal_buffer;
+  buffer_pos    = ltm->signal_buffer_pos;
+
   /* 予測が始まるまでのサンプルは単純コピー */
-  if (ltm->is_first_process == 1) {
-    for (i = 0; i < pitch_period + num_taps / 2; i++) {
-      residual[i] = data[i];
+  if (ltm->num_input_samples < max_delay) {
+    memcpy(residual, data, sizeof(int32_t) * max_delay);
+    for (i = 0; i < max_delay; i++) {
+      signal_buffer[buffer_pos + i]
+        = signal_buffer[buffer_pos + max_delay + i]
+        = data[max_delay - i - 1];
     }
-    ltm->is_first_process = 0;
+    ltm->num_input_samples += num_samples;
+    buffer_pos = max_delay;
   } else {
     i = 0;
   }
@@ -944,11 +978,19 @@ SLAPredictorApiResult SLALongTermSynthesizer_PredictInt32(
   for (; i < num_samples; i++) {
     predict = half;
     for (j = 0; j < num_taps; j++) {
-      predict += (int64_t)ltm_coef[j] * data[i + j - pitch_period - num_taps / 2];
+      predict += (int64_t)ltm_coef[j] * signal_buffer[buffer_pos + max_delay - 1 - j];
     }
     predict = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31);
     residual[i] = data[i] - (int32_t)predict;
+
+    /* バッファ更新 */
+    buffer_pos = (buffer_pos == 0) ? (max_delay - 1) : (buffer_pos - 1);
+    signal_buffer[buffer_pos]
+      = signal_buffer[buffer_pos + max_delay] = data[i];
   }
+
+  /* バッファ参照位置を記録 */
+  ltm->signal_buffer_pos = buffer_pos;
 
   return SLAPREDICTOR_APIRESULT_OK;
 }
@@ -960,9 +1002,12 @@ SLAPredictorApiResult SLALongTermSynthesizer_SynthesizeInt32(
 	uint32_t pitch_period,
 	const int32_t* ltm_coef, uint32_t num_taps, int32_t* output)
 {
-  uint32_t      i, j;
-  const int32_t half    = (1UL << 30); /* 丸め用定数(0.5) */
-  int64_t       predict;
+  uint32_t        i, j;
+  const int32_t   half    = (1UL << 30); /* 丸め用定数(0.5) */
+  int64_t         predict;
+  const uint32_t  max_delay = pitch_period + (num_taps >> 1);
+  uint32_t        buffer_pos;
+  int32_t*        signal_buffer;
 
   /* 引数チェック */
   if ((ltm == NULL) || (residual == NULL) || (ltm_coef == NULL) || (output == NULL)) {
@@ -975,12 +1020,20 @@ SLAPredictorApiResult SLALongTermSynthesizer_SynthesizeInt32(
     return SLAPREDICTOR_APIRESULT_OK;
   }
 
+  /* 頻繁に参照する変数をローカル変数に受ける */
+  signal_buffer = ltm->signal_buffer;
+  buffer_pos    = ltm->signal_buffer_pos;
+
   /* 合成処理が始まるまでのサンプルは単純コピー */
-  if (ltm->is_first_process == 1) {
-    for (i = 0; i < pitch_period + num_taps / 2; i++) {
-      output[i] = residual[i];
+  if (ltm->num_input_samples < max_delay) {
+    memcpy(output, residual, sizeof(int32_t) * max_delay);
+    for (i = 0; i < max_delay; i++) {
+      signal_buffer[buffer_pos + i]
+        = signal_buffer[buffer_pos + max_delay + i]
+        = output[max_delay - i - 1];
     }
-    ltm->is_first_process = 0;
+    ltm->num_input_samples += num_samples;
+    buffer_pos = max_delay;
   } else {
     i = 0;
   }
@@ -989,11 +1042,19 @@ SLAPredictorApiResult SLALongTermSynthesizer_SynthesizeInt32(
   for (; i < num_samples; i++) {
     predict = half;
     for (j = 0; j < num_taps; j++) {
-      predict += (int64_t)ltm_coef[j] * output[i + j - pitch_period - num_taps / 2];
+      predict += (int64_t)ltm_coef[j] * signal_buffer[buffer_pos + max_delay - 1 - j];
     }
     predict = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31);
     output[i] = residual[i] + (int32_t)predict;
+
+    /* バッファ更新 */
+    buffer_pos = (buffer_pos == 0) ? (max_delay - 1) : (buffer_pos - 1);
+    signal_buffer[buffer_pos]
+      = signal_buffer[buffer_pos + max_delay] = output[i];
   }
+
+  /* バッファ参照位置を記録 */
+  ltm->signal_buffer_pos = buffer_pos;
 
   return SLAPREDICTOR_APIRESULT_OK;
 }
@@ -1012,6 +1073,7 @@ struct SLALMSFilter* SLALMSFilter_Create(uint32_t max_num_coef)
   /* バッファアクセスの高速化のため2倍確保 */
   nlms->fir_sign_buffer         = malloc(sizeof(int32_t) * 2 * max_num_coef);
   nlms->iir_sign_buffer         = malloc(sizeof(int32_t) * 2 * max_num_coef);
+  nlms->fir_buffer              = malloc(sizeof(int32_t) * 2 * max_num_coef);
   nlms->iir_buffer              = malloc(sizeof(int32_t) * 2 * max_num_coef);
 
   SLALMSFilter_Reset(nlms);
@@ -1027,6 +1089,7 @@ void SLALMSFilter_Destroy(struct SLALMSFilter* nlms)
     NULLCHECK_AND_FREE(nlms->iir_coef);
     NULLCHECK_AND_FREE(nlms->fir_sign_buffer);
     NULLCHECK_AND_FREE(nlms->iir_sign_buffer);
+    NULLCHECK_AND_FREE(nlms->fir_buffer);
     NULLCHECK_AND_FREE(nlms->iir_buffer);
     free(nlms);
   }
@@ -1045,6 +1108,10 @@ SLAPredictorApiResult SLALMSFilter_Reset(struct SLALMSFilter* nlms)
 
   /* バッファ参照位置の初期化 */
   nlms->buffer_pos = 0;
+
+  /* 係数を0クリア */
+  memset(nlms->fir_coef, 0, sizeof(int64_t) * nlms->max_num_coef);
+  memset(nlms->iir_coef, 0, sizeof(int64_t) * nlms->max_num_coef);
 
   return SLAPREDICTOR_APIRESULT_OK;
 }
@@ -1084,10 +1151,6 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
     }
   }
 
-  /* 係数を0クリア */
-  memset(nlms->fir_coef, 0, sizeof(int64_t) * num_coef);
-  memset(nlms->iir_coef, 0, sizeof(int64_t) * num_coef);
-
   /* 一旦全部コピー */
   /* （残差のときは予測分で引くだけ、合成のときは足すだけで良くなる） */
   if (is_predict == 1) {
@@ -1102,6 +1165,9 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
       nlms->iir_buffer[smpl]
         = nlms->iir_buffer[smpl + num_coef]
         = residual[num_coef - smpl - 1];
+      nlms->fir_buffer[smpl]
+        = nlms->fir_buffer[smpl + num_coef]
+        = original_signal[num_coef - smpl - 1];
     }
     nlms->is_first_process = 0;
     buffer_pos = num_coef;
@@ -1115,7 +1181,7 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
     /* 予測 */
     predict = (1UL << 30);  /* 丸め誤差回避 */
     for (i = 0; i < num_coef; i++) {
-      predict += nlms->fir_coef[i] * original_signal[smpl - i - 1];
+      predict += nlms->fir_coef[i] * nlms->fir_buffer[buffer_pos + i];
       predict += nlms->iir_coef[i] * nlms->iir_buffer[buffer_pos + i];
       /* 値域チェック */
       SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31) <= (int64_t)INT32_MAX);
@@ -1148,8 +1214,11 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
     /* バッファ参照位置更新 */
     buffer_pos = (buffer_pos == 0) ? (num_coef - 1) : (buffer_pos - 1);
 
-    /* 出力バッファに記録 */
+    /* バッファに記録 */
     /* 補足）バッファアクセスの高速化のため係数分離れた場所にも記録 */
+    nlms->fir_buffer[buffer_pos]
+      = nlms->fir_buffer[buffer_pos + num_coef]
+      = original_signal[smpl];
     nlms->iir_buffer[buffer_pos]
       = nlms->iir_buffer[buffer_pos + num_coef]
       = (int32_t)predict;

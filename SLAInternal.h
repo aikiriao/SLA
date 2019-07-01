@@ -6,7 +6,7 @@
 #define SLA_MAX_CHANNELS                            8                       /* 処理可能な最大チャンネル数（撤廃予定） */
 /* 内部エンコードパラメータ */
 #define SLA_BLOCK_SYNC_CODE                         0xFFFF                  /* ブロック先頭の同期コード                 */
-#define SLALONGTERM_MAX_PERIOD                      1024                    /* ロングタームの最大周期                   */
+#define SLALONGTERM_MAX_PERIOD                      256                     /* ロングタームの最大周期                   */
 #define SLALONGTERM_PERIOD_NUM_BITS                 10                      /* ロングターム係数の記録に保存するビット数 */
 #define SLALONGTERM_NUM_PITCH_CANDIDATES            SLALONGTERM_MAX_PERIOD  /* ロングターム使用時の最大ピッチ候補数     */
 #define SLAPARCOR_COEF_LOW_ORDER_THRESHOULD         4                       /* 何次までのPARCOR係数に高ビットを割り当てるか */

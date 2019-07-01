@@ -589,7 +589,7 @@ static void testLPCLongTermCalculator_CalculateCoefTest(void* obj)
     lpcltmc     = SLALongTermCalculator_Create(
                     test_case->fft_size, test_case_p->max_pitch_num_samples,
                     test_case_p->num_taps, test_case_p->num_taps);
-    ltms        = SLALongTermSynthesizer_Create();
+    ltms            = SLALongTermSynthesizer_Create(test_case_p->num_taps, test_case_p->max_pitch_num_samples);
     ltm_coef        = (double *)malloc(sizeof(double) * test_case_p->num_taps);
     int32_ltm_coef  = (int32_t *)malloc(sizeof(int32_t) * test_case_p->num_taps);
     data            = (double *)malloc(sizeof(double) * test_case_p->num_samples);

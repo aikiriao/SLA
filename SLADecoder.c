@@ -92,7 +92,7 @@ struct SLADecoder* SLADecoder_Create(const struct SLADecoderConfig* config)
   decoder->emp    = (struct SLAEmphasisFilter **)malloc(sizeof(struct SLAEmphasisFilter *) * max_num_channels);
   for (ch = 0; ch < max_num_channels; ch++) {
     decoder->lpcs[ch]   = SLALPCSynthesizer_Create(config->max_parcor_order);
-    decoder->ltms[ch]   = SLALongTermSynthesizer_Create();
+    decoder->ltms[ch]   = SLALongTermSynthesizer_Create(config->max_longterm_order, SLALONGTERM_MAX_PERIOD);
     decoder->nlmsc[ch]  = SLALMSFilter_Create(config->max_lms_order_par_filter);
     decoder->emp[ch]    = SLAEmphasisFilter_Create();
   }

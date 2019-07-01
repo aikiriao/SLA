@@ -102,7 +102,7 @@ SLAPredictorApiResult SLALongTermCalculator_CalculateCoef(
 	uint32_t* pitch_num_samples, double* ltm_coef, uint32_t num_taps);
 
 /* ロングターム予測合成ハンドル作成 */
-struct SLALongTermSynthesizer* SLALongTermSynthesizer_Create(void);
+struct SLALongTermSynthesizer* SLALongTermSynthesizer_Create(uint32_t max_num_taps, uint32_t max_pitch_period);
 
 /* ロングターム予測合成ハンドル破棄 */
 void SLALongTermSynthesizer_Destroy(struct SLALongTermSynthesizer* ltm);
