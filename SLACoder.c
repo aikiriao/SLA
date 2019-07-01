@@ -557,12 +557,11 @@ void SLACoder_GetDataArray(
       if (first_order_param[ch] <= SLACODER_LOW_THRESHOULD_PARAMETER) {
         /* パラメータが小さい場合はパラメータ固定で復号 */
         abs = SLAGolomb_GetCode(strm, first_order_param[ch]);
-        data[ch][smpl] = SLAUTILITY_UINT32_TO_SINT32(abs);
       } else {
         /* パラメータを適応的に変更しつつ復号 */
         abs = SLARecursiveRice_GetCode(strm, rice_parameter[ch], num_parameters);
-        data[ch][smpl] = SLAUTILITY_UINT32_TO_SINT32(abs);
       }
+      data[ch][smpl] = SLAUTILITY_UINT32_TO_SINT32(abs);
     }
   }
 
