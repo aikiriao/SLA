@@ -69,10 +69,10 @@ struct SLALongTermCalculator {
 
 /* ロングターム予測合成ハンドル */
 struct SLALongTermSynthesizer {
-  uint32_t            num_input_samples;        /* 入力サンプル数カウント     */
-  int32_t*            signal_buffer;            /* 入力データバッファ         */
-  uint32_t            signal_buffer_size;       /* 入力データサイズ           */
-  uint32_t            signal_buffer_pos;        /* バッファ参照位置           */
+  uint32_t  num_input_samples;        /* 入力サンプル数カウント     */
+  int32_t*  signal_buffer;            /* 入力データバッファ         */
+  uint32_t  signal_buffer_size;       /* 入力データサイズ           */
+  uint32_t  signal_buffer_pos;        /* バッファ参照位置           */
 };
 
 /* LMS計算ハンドル */
@@ -86,7 +86,7 @@ struct SLALMSFilter {
   int32_t*  iir_buffer;               /* 予測信号バッファ */
   uint32_t  signal_sign_buffer_size;  /* バッファサイズ */
   uint32_t  buffer_pos;               /* バッファ参照位置 */
-  uint8_t   is_first_process;         /* リセット後最初の処理か否か */
+  uint32_t  num_input_samples;        /* 入力サンプル数カウント     */
 };
 
 /* 最適ブロック分割探索ハンドル */
@@ -1103,8 +1103,8 @@ SLAPredictorApiResult SLALMSFilter_Reset(struct SLALMSFilter* nlms)
     return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
   }
 
-  /* 初回処理フラグを立てる */
-  nlms->is_first_process = 1;
+  /* 入力サンプル数をリセット */
+  nlms->num_input_samples = 0;
 
   /* バッファ参照位置の初期化 */
   nlms->buffer_pos = 0;
@@ -1138,7 +1138,7 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
   }
   
   /* 符号バッファの初期化 */
-  if (nlms->is_first_process == 1) {
+  if (nlms->num_input_samples < num_coef) {
     for (smpl = 0; smpl < num_coef; smpl++) {
       /* 合成時は残差に符号情報が入っている */
       nlms->fir_sign_buffer[smpl]
@@ -1160,7 +1160,7 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
   }
 
   /* 出力バッファの初期化: 先頭coef分は残差と元信号は同一 */
-  if (nlms->is_first_process == 1) {
+  if (nlms->num_input_samples < num_coef) {
     for (smpl = 0; smpl < num_coef; smpl++) {
       nlms->iir_buffer[smpl]
         = nlms->iir_buffer[smpl + num_coef]
@@ -1169,8 +1169,8 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
         = nlms->fir_buffer[smpl + num_coef]
         = original_signal[num_coef - smpl - 1];
     }
-    nlms->is_first_process = 0;
     buffer_pos = num_coef;
+    nlms->num_input_samples += num_samples;
   } else {
     smpl = 0;
     buffer_pos = nlms->buffer_pos;
