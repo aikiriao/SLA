@@ -77,16 +77,16 @@ struct SLALongTermSynthesizer {
 
 /* LMS計算ハンドル */
 struct SLALMSFilter {
-	int64_t* 	fir_coef;			            /* FIR係数 */
-	int64_t* 	iir_coef;			            /* IIR係数 */
-	uint32_t	max_num_coef;	            /* 最大の係数個数 */
+	int64_t* 	fir_coef;			            /* FIR係数                          */
+	int64_t* 	iir_coef;			            /* IIR係数                          */
+	uint32_t	max_num_coef;	            /* 最大の係数個数                   */
   int32_t*  fir_sign_buffer;          /* 入力信号の符号を記録したバッファ */
   int32_t*  iir_sign_buffer;          /* 予測信号の符号を記録したバッファ */
-  int32_t*  fir_buffer;               /* 入力信号バッファ */
-  int32_t*  iir_buffer;               /* 予測信号バッファ */
-  uint32_t  signal_sign_buffer_size;  /* バッファサイズ */
-  uint32_t  buffer_pos;               /* バッファ参照位置 */
-  uint32_t  num_input_samples;        /* 入力サンプル数カウント     */
+  int32_t*  fir_buffer;               /* 入力信号バッファ                 */
+  int32_t*  iir_buffer;               /* 予測信号バッファ                 */
+  uint32_t  signal_sign_buffer_size;  /* バッファサイズ                   */
+  uint32_t  buffer_pos;               /* バッファ参照位置                 */
+  uint32_t  num_input_samples;        /* 入力サンプル数カウント           */
 };
 
 /* 最適ブロック分割探索ハンドル */
