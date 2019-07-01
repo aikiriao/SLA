@@ -1101,20 +1101,6 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
   if (num_coef > nlms->max_num_coef) {
     return SLAPREDICTOR_APIRESULT_EXCEED_MAX_ORDER;
   }
-  
-  /* 符号バッファの初期化 */
-  if (nlms->num_input_samples < num_coef) {
-    for (smpl = 0; smpl < num_coef; smpl++) {
-      /* 合成時は残差に符号情報が入っている */
-      nlms->fir_sign_buffer[smpl]
-        = nlms->fir_sign_buffer[smpl + num_coef]
-        = nlms->iir_sign_buffer[smpl]
-        = nlms->iir_sign_buffer[smpl + num_coef]
-        = (is_predict == 1) 
-        ? (SLAUTILITY_SIGN(original_signal[num_coef - smpl - 1]) + 1)
-        : (SLAUTILITY_SIGN(residual[num_coef - smpl - 1]) + 1);
-    }
-  }
 
   /* 一旦全部コピー */
   /* （残差のときは予測分で引くだけ、合成のときは足すだけで良くなる） */
@@ -1124,21 +1110,32 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
     memcpy(original_signal, residual, sizeof(int32_t) * num_samples);
   }
 
+  /* 頻繁に参照する変数をオート変数に受ける */
+  buffer_pos = nlms->buffer_pos;
+
   /* 出力バッファの初期化: 先頭coef分は残差と元信号は同一 */
   if (nlms->num_input_samples < num_coef) {
-    for (smpl = 0; smpl < num_coef; smpl++) {
-      nlms->iir_buffer[smpl]
-        = nlms->iir_buffer[smpl + num_coef]
-        = residual[num_coef - smpl - 1];
-      nlms->fir_buffer[smpl]
-        = nlms->fir_buffer[smpl + num_coef]
-        = original_signal[num_coef - smpl - 1];
+    for (buffer_pos = 0; buffer_pos < num_coef; buffer_pos++) {
+      /* 符号情報 */
+      nlms->fir_sign_buffer[buffer_pos]
+        = nlms->fir_sign_buffer[buffer_pos + num_coef]
+        = nlms->iir_sign_buffer[buffer_pos]
+        = nlms->iir_sign_buffer[buffer_pos + num_coef]
+        = (is_predict == 1) 
+        ? (SLAUTILITY_SIGN(original_signal[num_coef - buffer_pos - 1]) + 1)
+        : (SLAUTILITY_SIGN(residual[num_coef - buffer_pos - 1]) + 1);
+      /* 遅延信号 */
+      nlms->iir_buffer[buffer_pos]
+        = nlms->iir_buffer[buffer_pos + num_coef]
+        = residual[num_coef - buffer_pos - 1];
+      nlms->fir_buffer[buffer_pos]
+        = nlms->fir_buffer[buffer_pos + num_coef]
+        = original_signal[num_coef - buffer_pos - 1];
     }
-    buffer_pos = num_coef;
-    nlms->num_input_samples += num_samples;
+    smpl = num_coef;
   } else {
-    smpl = 0;
     buffer_pos = nlms->buffer_pos;
+    smpl = 0;
   }
 
   /* フィルタ処理実行 */
@@ -1199,6 +1196,9 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
 
   /* バッファ参照位置の記録 */
   nlms->buffer_pos = buffer_pos;
+
+  /* 入力サンプル数増加 */
+  nlms->num_input_samples += num_samples;
 
   return SLAPREDICTOR_APIRESULT_OK;
 }
