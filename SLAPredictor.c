@@ -956,19 +956,23 @@ static SLAPredictorApiResult SLALongTermSynthesizer_ProcessCore(
     return SLAPREDICTOR_APIRESULT_OK;
   }
 
+  /* 一旦全部コピー */
+  /* （残差のときは予測分で引くだけ、合成のときは足すだけで良くなる） */
+  memcpy(output, input, sizeof(int32_t) * num_samples);
+
   /* 頻繁に参照する変数をローカル変数に受ける */
   signal_buffer = ltm->signal_buffer;
   buffer_pos    = ltm->signal_buffer_pos;
 
   /* 予測が始まるまでのサンプルは単純コピー */
   if (ltm->num_input_samples < max_delay) {
-    memcpy(output, input, sizeof(int32_t) * max_delay);
-    for (smpl = 0; smpl < max_delay; smpl++) {
-      signal_buffer[buffer_pos + smpl]
-        = signal_buffer[buffer_pos + max_delay + smpl]
-        = input[max_delay - smpl - 1];
+    uint32_t num_processable_samples = SLAUTILITY_MIN(max_delay, num_samples);
+    for (buffer_pos = 0; buffer_pos < num_processable_samples; buffer_pos++) {
+      signal_buffer[buffer_pos]
+        = signal_buffer[buffer_pos + max_delay]
+        = input[max_delay - buffer_pos - 1];
     }
-    buffer_pos = max_delay;
+    smpl = num_processable_samples;
   } else {
     smpl = 0;
   }
@@ -983,8 +987,11 @@ static SLAPredictorApiResult SLALongTermSynthesizer_ProcessCore(
     predict = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31);
 
     /* 出力計算 */
-    output[smpl] = (is_predict == 1) ?
-      (input[smpl] - (int32_t)predict) : (input[smpl] + (int32_t)predict);
+    if (is_predict == 1) {
+      output[smpl] -= (int32_t)predict;
+    } else {
+      output[smpl] += (int32_t)predict;
+    }
 
     /* バッファ更新 */
     buffer_pos = (buffer_pos == 0) ? (max_delay - 1) : (buffer_pos - 1);
@@ -1115,7 +1122,8 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
 
   /* 出力バッファの初期化: 先頭coef分は残差と元信号は同一 */
   if (nlms->num_input_samples < num_coef) {
-    for (buffer_pos = 0; buffer_pos < num_coef; buffer_pos++) {
+    uint32_t num_processable_samples = SLAUTILITY_MIN(num_coef, num_samples);
+    for (buffer_pos = 0; buffer_pos < num_processable_samples; buffer_pos++) {
       /* 符号情報 */
       nlms->fir_sign_buffer[buffer_pos]
         = nlms->fir_sign_buffer[buffer_pos + num_coef]
@@ -1132,7 +1140,7 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
         = nlms->fir_buffer[buffer_pos + num_coef]
         = original_signal[num_coef - buffer_pos - 1];
     }
-    smpl = num_coef;
+    smpl = num_processable_samples;
   } else {
     buffer_pos = nlms->buffer_pos;
     smpl = 0;
