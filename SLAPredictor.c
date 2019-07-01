@@ -931,14 +931,14 @@ SLAPredictorApiResult SLALongTermSynthesizer_Reset(struct SLALongTermSynthesizer
   return SLAPREDICTOR_APIRESULT_OK;
 }
 
-/* ロングタームを使用して残差信号の計算 */
-SLAPredictorApiResult SLALongTermSynthesizer_PredictInt32(
+/* ロングタームを使用した音声予測/合成のコア処理 */
+static SLAPredictorApiResult SLALongTermSynthesizer_ProcessCore(
   struct SLALongTermSynthesizer* ltm,
-	const int32_t* data, uint32_t num_samples,
-	uint32_t pitch_period, 
-	const int32_t* ltm_coef, uint32_t num_taps, int32_t* residual)
+	const int32_t* input, uint32_t num_samples, 
+  uint32_t pitch_period, const int32_t* ltm_coef, uint32_t num_taps, 
+  int32_t* output, uint8_t is_predict)
 {
-  uint32_t        i, j;
+  uint32_t        smpl, j;
   const int32_t   half    = (1UL << 30); /* 丸め用定数(0.5) */
   int64_t         predict;
   const uint32_t  max_delay = pitch_period + (num_taps >> 1);
@@ -946,13 +946,13 @@ SLAPredictorApiResult SLALongTermSynthesizer_PredictInt32(
   int32_t*        signal_buffer;
 
   /* 引数チェック */
-  if ((ltm == NULL) || (data == NULL) || (ltm_coef == NULL) || (residual == NULL)) {
+  if ((ltm == NULL) || (input == NULL) || (ltm_coef == NULL) || (output == NULL)) {
     return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
   }
 
   /* ピッチ周期0は予測せず、そのまま誤差とする */
   if (pitch_period == 0) {
-    memcpy(residual, data, sizeof(int32_t) * num_samples);
+    memcpy(output, input, sizeof(int32_t) * num_samples);
     return SLAPREDICTOR_APIRESULT_OK;
   }
 
@@ -962,37 +962,55 @@ SLAPredictorApiResult SLALongTermSynthesizer_PredictInt32(
 
   /* 予測が始まるまでのサンプルは単純コピー */
   if (ltm->num_input_samples < max_delay) {
-    memcpy(residual, data, sizeof(int32_t) * max_delay);
-    for (i = 0; i < max_delay; i++) {
-      signal_buffer[buffer_pos + i]
-        = signal_buffer[buffer_pos + max_delay + i]
-        = data[max_delay - i - 1];
+    memcpy(output, input, sizeof(int32_t) * max_delay);
+    for (smpl = 0; smpl < max_delay; smpl++) {
+      signal_buffer[buffer_pos + smpl]
+        = signal_buffer[buffer_pos + max_delay + smpl]
+        = input[max_delay - smpl - 1];
     }
-    ltm->num_input_samples += num_samples;
     buffer_pos = max_delay;
   } else {
-    i = 0;
+    smpl = 0;
   }
 
   /* ロングターム予測 */
-  for (; i < num_samples; i++) {
+  for (; smpl < num_samples; smpl++) {
+    /* 予測/合成 */
     predict = half;
     for (j = 0; j < num_taps; j++) {
       predict += (int64_t)ltm_coef[j] * signal_buffer[buffer_pos + max_delay - 1 - j];
     }
     predict = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31);
-    residual[i] = data[i] - (int32_t)predict;
+
+    /* 出力計算 */
+    output[smpl] = (is_predict == 1) ?
+      (input[smpl] - (int32_t)predict) : (input[smpl] + (int32_t)predict);
 
     /* バッファ更新 */
     buffer_pos = (buffer_pos == 0) ? (max_delay - 1) : (buffer_pos - 1);
     signal_buffer[buffer_pos]
-      = signal_buffer[buffer_pos + max_delay] = data[i];
+      = signal_buffer[buffer_pos + max_delay]
+      = (is_predict == 1) ? input[smpl] : output[smpl];
   }
 
   /* バッファ参照位置を記録 */
   ltm->signal_buffer_pos = buffer_pos;
 
+  /* 入力サンプル数を増加 */
+  ltm->num_input_samples += num_samples;
+
   return SLAPREDICTOR_APIRESULT_OK;
+}
+
+/* ロングタームを使用して残差信号の計算 */
+SLAPredictorApiResult SLALongTermSynthesizer_PredictInt32(
+  struct SLALongTermSynthesizer* ltm,
+	const int32_t* data, uint32_t num_samples,
+	uint32_t pitch_period, 
+	const int32_t* ltm_coef, uint32_t num_taps, int32_t* residual)
+{
+  return SLALongTermSynthesizer_ProcessCore(ltm,
+      data, num_samples, pitch_period, ltm_coef, num_taps, residual, 1);
 }
 	
 /* ロングターム誤差信号から音声合成 */
@@ -1002,61 +1020,8 @@ SLAPredictorApiResult SLALongTermSynthesizer_SynthesizeInt32(
 	uint32_t pitch_period,
 	const int32_t* ltm_coef, uint32_t num_taps, int32_t* output)
 {
-  uint32_t        i, j;
-  const int32_t   half    = (1UL << 30); /* 丸め用定数(0.5) */
-  int64_t         predict;
-  const uint32_t  max_delay = pitch_period + (num_taps >> 1);
-  uint32_t        buffer_pos;
-  int32_t*        signal_buffer;
-
-  /* 引数チェック */
-  if ((ltm == NULL) || (residual == NULL) || (ltm_coef == NULL) || (output == NULL)) {
-    return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
-  }
-
-  /* ピッチ周期0は予測されていない */
-  if (pitch_period == 0) {
-    memcpy(output, residual, sizeof(int32_t) * num_samples);
-    return SLAPREDICTOR_APIRESULT_OK;
-  }
-
-  /* 頻繁に参照する変数をローカル変数に受ける */
-  signal_buffer = ltm->signal_buffer;
-  buffer_pos    = ltm->signal_buffer_pos;
-
-  /* 合成処理が始まるまでのサンプルは単純コピー */
-  if (ltm->num_input_samples < max_delay) {
-    memcpy(output, residual, sizeof(int32_t) * max_delay);
-    for (i = 0; i < max_delay; i++) {
-      signal_buffer[buffer_pos + i]
-        = signal_buffer[buffer_pos + max_delay + i]
-        = output[max_delay - i - 1];
-    }
-    ltm->num_input_samples += num_samples;
-    buffer_pos = max_delay;
-  } else {
-    i = 0;
-  }
-
-  /* ロングターム予測 */
-  for (; i < num_samples; i++) {
-    predict = half;
-    for (j = 0; j < num_taps; j++) {
-      predict += (int64_t)ltm_coef[j] * signal_buffer[buffer_pos + max_delay - 1 - j];
-    }
-    predict = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31);
-    output[i] = residual[i] + (int32_t)predict;
-
-    /* バッファ更新 */
-    buffer_pos = (buffer_pos == 0) ? (max_delay - 1) : (buffer_pos - 1);
-    signal_buffer[buffer_pos]
-      = signal_buffer[buffer_pos + max_delay] = output[i];
-  }
-
-  /* バッファ参照位置を記録 */
-  ltm->signal_buffer_pos = buffer_pos;
-
-  return SLAPREDICTOR_APIRESULT_OK;
+  return SLALongTermSynthesizer_ProcessCore(ltm,
+      residual, num_samples, pitch_period, ltm_coef, num_taps, output, 0);
 }
 
 /* LMS計算ハンドルの作成 */
