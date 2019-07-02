@@ -1085,6 +1085,12 @@ SLAPredictorApiResult SLALMSFilter_Reset(struct SLALMSFilter* nlms)
   memset(nlms->fir_coef, 0, sizeof(int64_t) * nlms->max_num_coef);
   memset(nlms->iir_coef, 0, sizeof(int64_t) * nlms->max_num_coef);
 
+  /* バッファを0クリア */
+  memset(nlms->fir_buffer,      0, sizeof(int32_t) * 2 * nlms->max_num_coef);
+  memset(nlms->iir_buffer,      0, sizeof(int32_t) * 2 * nlms->max_num_coef);
+  memset(nlms->fir_sign_buffer, 0, sizeof(int32_t) * 2 * nlms->max_num_coef);
+  memset(nlms->iir_sign_buffer, 0, sizeof(int32_t) * 2 * nlms->max_num_coef);
+
   return SLAPREDICTOR_APIRESULT_OK;
 }
 
