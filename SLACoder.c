@@ -551,7 +551,7 @@ void SLACoder_GetDataArray(
     first_order_param[ch] = SLACODER_PARAMETER_GET(rice_parameter[ch], 0);
   }
 
-  /* チャンネルインターリーブしつつ復号 */
+  /* チャンネルインターリーブで復号 */
   for (smpl = 0; smpl < num_samples; smpl++) {
     for (ch = 0; ch < num_channels; ch++) {
       if (first_order_param[ch] <= SLACODER_LOW_THRESHOULD_PARAMETER) {
