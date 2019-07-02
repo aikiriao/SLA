@@ -1216,8 +1216,7 @@ SLAPredictorApiResult SLALMSFilter_PredictInt32(
     struct SLALMSFilter* nlms, uint32_t num_coef,
     const int32_t* data, uint32_t num_samples, int32_t* residual)
 {
-  return SLALMSFilter_ProcessCore(nlms,
-      num_coef, data, residual, num_samples, 1);
+  return SLALMSFilter_ProcessCore(nlms, num_coef, data, residual, num_samples, 1);
 }
     
 /* LMS合成 */
@@ -1225,8 +1224,7 @@ SLAPredictorApiResult SLALMSFilter_SynthesizeInt32(
     struct SLALMSFilter* nlms, uint32_t num_coef,
     const int32_t* residual, uint32_t num_samples, int32_t* output)
 {
-  return SLALMSFilter_ProcessCore(nlms,
-      num_coef, residual, output, num_samples, 0);
+  return SLALMSFilter_ProcessCore(nlms, num_coef, residual, output, num_samples, 0);
 }
 
 /* 最大分割数計算 */
