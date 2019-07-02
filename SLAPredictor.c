@@ -966,13 +966,13 @@ static SLAPredictorApiResult SLALongTermSynthesizer_ProcessCore(
 
   /* 予測が始まるまでのサンプルは単純コピー */
   if (ltm->num_input_samples < max_delay) {
-    uint32_t num_processable_samples = SLAUTILITY_MIN(max_delay, num_samples);
-    for (buffer_pos = 0; buffer_pos < num_processable_samples; buffer_pos++) {
-      signal_buffer[buffer_pos]
-        = signal_buffer[buffer_pos + max_delay]
-        = input[num_processable_samples - buffer_pos - 1];
+    uint32_t num_processable_samples = SLAUTILITY_MIN(max_delay - ltm->num_input_samples, num_samples);
+    for (smpl = 0; smpl < num_processable_samples; smpl++) {
+      signal_buffer[buffer_pos + smpl]
+        = signal_buffer[buffer_pos + smpl + max_delay]
+        = input[num_processable_samples - smpl - 1];
     }
-    smpl = num_processable_samples;
+    buffer_pos += num_processable_samples;
   } else {
     smpl = 0;
   }
@@ -1118,24 +1118,23 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
 
   /* 出力バッファの初期化: 先頭coef分は残差と元信号は同一 */
   if (nlms->num_input_samples < num_coef) {
-    uint32_t num_processable_samples = SLAUTILITY_MIN(num_coef, num_samples);
-    for (buffer_pos = 0; buffer_pos < num_processable_samples; buffer_pos++) {
+    uint32_t num_processable_samples = SLAUTILITY_MIN(num_coef - nlms->num_input_samples, num_samples);
+    for (smpl = 0; smpl < num_processable_samples; smpl++) {
       /* 符号情報 */
-      nlms->fir_sign_buffer[buffer_pos]
-        = nlms->fir_sign_buffer[buffer_pos + num_coef]
-        = nlms->iir_sign_buffer[buffer_pos]
-        = nlms->iir_sign_buffer[buffer_pos + num_coef]
-        = SLAUTILITY_SIGN(input[num_processable_samples - buffer_pos - 1]) + 1;
+      nlms->fir_sign_buffer[buffer_pos + smpl]
+        = nlms->fir_sign_buffer[buffer_pos + smpl + num_coef]
+        = nlms->iir_sign_buffer[buffer_pos + smpl]
+        = nlms->iir_sign_buffer[buffer_pos + smpl + num_coef]
+        = SLAUTILITY_SIGN(input[num_processable_samples - smpl - 1]) + 1;
       /* 遅延信号 */
-      nlms->iir_buffer[buffer_pos]
-        = nlms->iir_buffer[buffer_pos + num_coef]
-        = nlms->fir_buffer[buffer_pos]
-        = nlms->fir_buffer[buffer_pos + num_coef]
-        = input[num_processable_samples - buffer_pos - 1];
+      nlms->iir_buffer[buffer_pos + smpl]
+        = nlms->iir_buffer[buffer_pos + smpl + num_coef]
+        = nlms->fir_buffer[buffer_pos + smpl]
+        = nlms->fir_buffer[buffer_pos + smpl + num_coef]
+        = input[num_processable_samples - smpl - 1];
     }
-    smpl = num_processable_samples;
+    buffer_pos += num_processable_samples;
   } else {
-    buffer_pos = nlms->buffer_pos;
     smpl = 0;
   }
 
