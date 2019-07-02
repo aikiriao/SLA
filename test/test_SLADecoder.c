@@ -467,6 +467,251 @@ static void testSLADecoder_DecodeBlockTest(void *obj)
   }
 }
 
+/* ストリーミングデコーダの生成破棄テスト */
+static void testSLAStreamingDecoder_CreateDestroyTest(void *obj)
+{
+  TEST_UNUSED_PARAMETER(obj);
+
+  /* 簡単な成功例 */
+  {
+    struct SLAStreamingDecoder* decoder;
+    struct SLAStreamingDecoderConfig config;
+
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    decoder = SLAStreamingDecoder_Create(&config);
+
+    Test_AssertCondition(decoder != NULL);
+    Test_AssertCondition(decoder->decoder_core != NULL);
+    Test_AssertCondition(decoder->data_buffer != NULL);
+    Test_AssertNotEqual(decoder->data_buffer_size, 0);
+    Test_AssertEqual(decoder->decode_interval_hz, config.decode_interval_hz);
+    Test_AssertEqual(decoder->max_bit_par_sample, config.max_bit_par_sample);
+
+    SLAStreamingDecoder_Destroy(decoder);
+    Test_AssertCondition(decoder->data_buffer == NULL);
+  }
+
+  /* 失敗ケース */
+  {
+    struct SLAStreamingDecoder*       decoder;
+    struct SLAStreamingDecoderConfig  config;
+
+    /* 引数が無効 */
+    decoder = SLAStreamingDecoder_Create(NULL);
+    Test_AssertCondition(decoder == NULL);
+
+    /* デコード処理間隔が異常 */
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    config.decode_interval_hz = 0.0f;
+    decoder = SLAStreamingDecoder_Create(&config);
+    Test_AssertCondition(decoder == NULL);
+  }
+}
+
+/* ストリーミングデコーダへのパラメータ設定テスト */
+static void testSLAStreamingDecoder_SetWaveFormatEncodeParameterTest(void *obj)
+{
+  TEST_UNUSED_PARAMETER(obj);
+
+  /* パラメータセット成功例 */
+  {
+    struct SLAStreamingDecoderConfig  config;
+    struct SLAStreamingDecoder*       decoder;
+    struct SLAWaveFormat              wave_format;
+    struct SLAEncodeParameter         encode_param;
+
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    SLATestUtility_SetValidWaveFormat(&wave_format);
+    SLATestUtility_SetValidEncodeParameter(&encode_param);
+    decoder = SLAStreamingDecoder_Create(&config);
+
+    /* 設定テスト */
+    Test_AssertEqual(SLAStreamingDecoder_SetWaveFormat(decoder, &wave_format), SLA_APIRESULT_OK);
+    Test_AssertEqual(SLAStreamingDecoder_SetEncodeParameter(decoder, &encode_param), SLA_APIRESULT_OK);
+    Test_AssertEqual(memcmp(&decoder->decoder_core->wave_format, &wave_format, sizeof(struct SLAWaveFormat)), 0);
+    Test_AssertEqual(memcmp(&decoder->decoder_core->encode_param, &encode_param, sizeof(struct SLAEncodeParameter)), 0);
+
+    SLAStreamingDecoder_Destroy(decoder);
+  }
+
+  /* 失敗テスト */
+  {
+    struct SLAStreamingDecoderConfig  config;
+    struct SLAStreamingDecoder*       decoder;
+    struct SLAWaveFormat              wave_format;
+    struct SLAEncodeParameter         encode_param;
+
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    SLATestUtility_SetValidWaveFormat(&wave_format);
+    SLATestUtility_SetValidEncodeParameter(&encode_param);
+    decoder = SLAStreamingDecoder_Create(&config);
+
+    /* 無効な引数 */
+    Test_AssertNotEqual(SLAStreamingDecoder_SetWaveFormat(decoder, NULL), SLA_APIRESULT_OK);
+    Test_AssertNotEqual(SLAStreamingDecoder_SetWaveFormat(NULL, &wave_format), SLA_APIRESULT_OK);
+    Test_AssertNotEqual(SLAStreamingDecoder_SetWaveFormat(NULL, NULL), SLA_APIRESULT_OK);
+    Test_AssertNotEqual(SLAStreamingDecoder_SetEncodeParameter(decoder, NULL), SLA_APIRESULT_OK);
+    Test_AssertNotEqual(SLAStreamingDecoder_SetEncodeParameter(NULL, &encode_param), SLA_APIRESULT_OK);
+    Test_AssertNotEqual(SLAStreamingDecoder_SetEncodeParameter(NULL, NULL), SLA_APIRESULT_OK);
+
+    SLAStreamingDecoder_Destroy(decoder);
+  }
+}
+
+/* デコード時の情報取得テスト */
+static void testSLAStreamingDecoder_GetDecodeInformationTest(void *obj)
+{
+  TEST_UNUSED_PARAMETER(obj);
+
+  /* 供給可能な最大データサイズのテスト */
+  {
+    struct SLAStreamingDecoderConfig  config;
+    struct SLAStreamingDecoder*       decoder;
+    uint32_t remain_data_size, tmp_remain_data_size;
+
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    decoder = SLAStreamingDecoder_Create(&config);
+
+    Test_AssertEqual(SLAStreamingDecoder_GetRemainDataSize(decoder, &remain_data_size), SLA_APIRESULT_OK);
+    Test_AssertNotEqual(remain_data_size, 0);
+
+    /* 100バイト消費 */
+    decoder->data_buffer_provided_size += 100;
+    Test_AssertEqual(SLAStreamingDecoder_GetRemainDataSize(decoder, &tmp_remain_data_size), SLA_APIRESULT_OK);
+    Test_AssertCondition(remain_data_size > tmp_remain_data_size);
+    Test_AssertEqual(remain_data_size - tmp_remain_data_size, 100);
+
+    SLAStreamingDecoder_Destroy(decoder);
+  }
+
+  /* デコード関数呼び出しあたりの出力サンプル数のテスト */
+  {
+    struct SLAStreamingDecoderConfig  config;
+    struct SLAWaveFormat              wave_format;
+    struct SLAStreamingDecoder*       decoder;
+    uint32_t output_num_samples, tmp_output_num_samples;
+
+    /* 通常の成功例 */
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    decoder = SLAStreamingDecoder_Create(&config);
+    SLATestUtility_SetValidWaveFormat(&wave_format);
+    SLAStreamingDecoder_SetWaveFormat(decoder, &wave_format);
+    Test_AssertEqual(SLAStreamingDecoder_GetOutputNumSamplesParDecode(decoder, &output_num_samples), SLA_APIRESULT_OK);
+    Test_AssertNotEqual(output_num_samples, 0);
+    SLAStreamingDecoder_Destroy(decoder);
+
+    /* サンプリングレートを2倍にしてみる */
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    decoder = SLAStreamingDecoder_Create(&config);
+    SLATestUtility_SetValidWaveFormat(&wave_format);
+    wave_format.sampling_rate *= 2;
+    SLAStreamingDecoder_SetWaveFormat(decoder, &wave_format);
+    Test_AssertEqual(SLAStreamingDecoder_GetOutputNumSamplesParDecode(decoder, &tmp_output_num_samples), SLA_APIRESULT_OK);
+    /* 2倍以上になるはず */
+    Test_AssertCondition(tmp_output_num_samples >= (2 * output_num_samples));
+    SLAStreamingDecoder_Destroy(decoder);
+
+    /* サンプリングレートを半分にしてみる */
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    decoder = SLAStreamingDecoder_Create(&config);
+    SLATestUtility_SetValidWaveFormat(&wave_format);
+    wave_format.sampling_rate /= 2;
+    SLAStreamingDecoder_SetWaveFormat(decoder, &wave_format);
+    Test_AssertEqual(SLAStreamingDecoder_GetOutputNumSamplesParDecode(decoder, &tmp_output_num_samples), SLA_APIRESULT_OK);
+    /* 半分以上になるはず */
+    Test_AssertCondition(tmp_output_num_samples >= (output_num_samples / 2));
+    SLAStreamingDecoder_Destroy(decoder);
+
+    /* デコード間隔を2倍にしてみる */
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    config.decode_interval_hz *= 2;
+    decoder = SLAStreamingDecoder_Create(&config);
+    SLATestUtility_SetValidWaveFormat(&wave_format);
+    SLAStreamingDecoder_SetWaveFormat(decoder, &wave_format);
+    Test_AssertEqual(SLAStreamingDecoder_GetOutputNumSamplesParDecode(decoder, &tmp_output_num_samples), SLA_APIRESULT_OK);
+    /* 半分以上になるはず */
+    Test_AssertCondition(tmp_output_num_samples >= (output_num_samples / 2));
+    SLAStreamingDecoder_Destroy(decoder);
+
+    /* デコード間隔を半分にしてみる */
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    config.decode_interval_hz /= 2;
+    decoder = SLAStreamingDecoder_Create(&config);
+    SLATestUtility_SetValidWaveFormat(&wave_format);
+    SLAStreamingDecoder_SetWaveFormat(decoder, &wave_format);
+    Test_AssertEqual(SLAStreamingDecoder_GetOutputNumSamplesParDecode(decoder, &tmp_output_num_samples), SLA_APIRESULT_OK);
+    /* 2倍以上になるはず */
+    Test_AssertCondition(tmp_output_num_samples >= (2 * output_num_samples));
+    SLAStreamingDecoder_Destroy(decoder);
+  }
+
+  /* 最低限供給すべきデータサイズの推定値計算テスト */
+  {
+    struct SLAStreamingDecoderConfig  config;
+    struct SLAWaveFormat              wave_format;
+    struct SLAStreamingDecoder*       decoder;
+    uint32_t estimate_data_size, tmp_estimate_data_size;
+    const struct SLABlockHeaderInfo tmp_block_header = { 2048, 1024 };
+
+    /* 通常の成功例 */
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    decoder = SLAStreamingDecoder_Create(&config);
+    SLATestUtility_SetValidWaveFormat(&wave_format);
+    decoder->current_block_header = tmp_block_header;
+    SLAStreamingDecoder_SetWaveFormat(decoder, &wave_format);
+    Test_AssertEqual(SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(decoder, &estimate_data_size), SLA_APIRESULT_OK);
+    Test_AssertNotEqual(estimate_data_size, 0);
+    Test_AssertCondition(estimate_data_size <= tmp_block_header.block_size);
+    SLAStreamingDecoder_Destroy(decoder);
+
+    /* サンプリングレートを2倍にしてみる */
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    decoder = SLAStreamingDecoder_Create(&config);
+    SLATestUtility_SetValidWaveFormat(&wave_format);
+    wave_format.sampling_rate *= 2;
+    decoder->current_block_header = tmp_block_header;
+    SLAStreamingDecoder_SetWaveFormat(decoder, &wave_format);
+    Test_AssertEqual(SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(decoder, &tmp_estimate_data_size), SLA_APIRESULT_OK);
+    Test_AssertCondition(tmp_estimate_data_size >= (2 * estimate_data_size));
+    SLAStreamingDecoder_Destroy(decoder);
+
+    /* サンプリングレートを半分にしてみる */
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    decoder = SLAStreamingDecoder_Create(&config);
+    SLATestUtility_SetValidWaveFormat(&wave_format);
+    wave_format.sampling_rate /= 2;
+    decoder->current_block_header = tmp_block_header;
+    SLAStreamingDecoder_SetWaveFormat(decoder, &wave_format);
+    Test_AssertEqual(SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(decoder, &tmp_estimate_data_size), SLA_APIRESULT_OK);
+    Test_AssertCondition(tmp_estimate_data_size >= (estimate_data_size / 2));
+    SLAStreamingDecoder_Destroy(decoder);
+
+    /* デコード間隔を2倍にしてみる */
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    config.decode_interval_hz *= 2;
+    decoder = SLAStreamingDecoder_Create(&config);
+    SLATestUtility_SetValidWaveFormat(&wave_format);
+    decoder->current_block_header = tmp_block_header;
+    SLAStreamingDecoder_SetWaveFormat(decoder, &wave_format);
+    Test_AssertEqual(SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(decoder, &tmp_estimate_data_size), SLA_APIRESULT_OK);
+    Test_AssertCondition(tmp_estimate_data_size >= (estimate_data_size / 2));
+    SLAStreamingDecoder_Destroy(decoder);
+
+    /* デコード間隔を半分にしてみる */
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    config.decode_interval_hz /= 2;
+    decoder = SLAStreamingDecoder_Create(&config);
+    SLATestUtility_SetValidWaveFormat(&wave_format);
+    decoder->current_block_header = tmp_block_header;
+    SLAStreamingDecoder_SetWaveFormat(decoder, &wave_format);
+    Test_AssertEqual(SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(decoder, &tmp_estimate_data_size), SLA_APIRESULT_OK);
+    Test_AssertCondition(tmp_estimate_data_size >= (2 * estimate_data_size));
+    SLAStreamingDecoder_Destroy(decoder);
+  }
+
+  /* TODO: SLAStreamingDecoder_AppendDataFragment, SLAStreamingDecoder_CollectRemainData は別テスト */
+}
+
 void testSLADecoder_Setup(void)
 {
   struct TestSuite *suite
@@ -475,4 +720,7 @@ void testSLADecoder_Setup(void)
 
   Test_AddTest(suite, testSLADecoder_DecodeHeaderTest);
   Test_AddTest(suite, testSLADecoder_DecodeBlockTest);
+  Test_AddTest(suite, testSLAStreamingDecoder_CreateDestroyTest);
+  Test_AddTest(suite, testSLAStreamingDecoder_SetWaveFormatEncodeParameterTest);
+  Test_AddTest(suite, testSLAStreamingDecoder_GetDecodeInformationTest);
 }

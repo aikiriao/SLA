@@ -22,6 +22,14 @@
   (p_config)->enable_crc_check          = 0;    \
 }
 
+/* ストリーミングデコーダデフォルトのコンフィグをセット */
+/* （将来的にSLADecoder.hに公開予定） */
+#define SLAStreamingDecoder_SetDefaultConfig(p_config) {  \
+  SLADecoder_SetDefaultConfig(&(p_config)->core_config);  \
+  (p_config)->decode_interval_hz = 60.0f;                 \
+  (p_config)->max_bit_par_sample = 24;                    \
+}
+
 /* ひとまず有効な波形情報を設定 */
 #define SLATestUtility_SetValidWaveFormat(p_format) {   \
     (p_format)->num_channels           = 2;         \
