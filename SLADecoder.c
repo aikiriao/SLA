@@ -720,6 +720,9 @@ struct SLAStreamingDecoder* SLAStreamingDecoder_Create(const struct SLAStreaming
   /* バッファ確保 */
   decoder->data_buffer = (uint8_t *)malloc(sizeof(uint8_t) * decoder->data_buffer_size);
 
+  /* 内部状態リセット */
+  SLAStreamingDecoder_Reset(decoder);
+
   return decoder;
 }
 
@@ -799,7 +802,7 @@ SLAApiResult SLAStreamingDecoder_GetRemainDataSize(struct SLAStreamingDecoder* d
     return SLA_APIRESULT_INVALID_ARGUMENT;
   }
 
-  SLA_Assert(decoder->data_buffer_size > decoder->data_buffer_provided_size);
+  SLA_Assert(decoder->data_buffer_size >= decoder->data_buffer_provided_size);
 
   /* 残りデータサイズを計算 */
   *remain_data_size = decoder->data_buffer_size - decoder->data_buffer_provided_size;
@@ -838,7 +841,7 @@ SLAApiResult SLAStreamingDecoder_AppendDataFragment(struct SLAStreamingDecoder* 
   }
 
   /* 供給データサイズがハンドルの持てるデータサイズを超えている */
-  if (data_size > decoder->data_buffer_size) {
+  if ((decoder->data_buffer_provided_size + data_size) > decoder->data_buffer_size) {
     return SLA_APIRESULT_EXCEED_HANDLE_CAPACITY;
   }
 
@@ -885,7 +888,7 @@ SLAApiResult SLAStreamingDecoder_GetOutputNumSamplesParDecode(struct SLAStreamin
 
 /* デコーダに残っているデータの回収 */
 SLAApiResult SLAStreamingDecoder_CollectRemainData(struct SLAStreamingDecoder* decoder,
-    uint8_t* buffer, uint8_t buffer_size, uint32_t* output_size)
+    uint8_t* buffer, uint32_t buffer_size, uint32_t* output_size)
 {
   /* 引数チェック */
   if ((decoder == NULL) || (buffer == NULL) || (output_size == NULL)) {

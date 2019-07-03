@@ -712,6 +712,219 @@ static void testSLAStreamingDecoder_GetDecodeInformationTest(void *obj)
   /* TODO: SLAStreamingDecoder_AppendDataFragment, SLAStreamingDecoder_CollectRemainData は別テスト */
 }
 
+static void testSLAStreamingDecoder_AppendCollectDataFragmentTest(void* obj)
+{
+  TEST_UNUSED_PARAMETER(obj);
+
+  /* データ片供給テスト */
+  {
+    uint32_t i;
+    struct SLAStreamingDecoderConfig  config;
+    struct SLAStreamingDecoder*       decoder;
+    uint8_t *data_fragment;
+    uint32_t tmp_data_size;
+
+    /* データを突っ込んで見る */
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    decoder = SLAStreamingDecoder_Create(&config);
+    tmp_data_size = decoder->data_buffer_size / 8;
+    data_fragment = malloc(sizeof(uint8_t) * tmp_data_size);
+    for (i = 0; i < tmp_data_size; i++) {
+      data_fragment[i] = i;
+    }
+    Test_AssertEqual(decoder->data_buffer_provided_size, 0);
+    Test_AssertEqual(
+        SLAStreamingDecoder_AppendDataFragment(decoder, data_fragment, tmp_data_size),
+        SLA_APIRESULT_OK);
+    Test_AssertEqual(
+        memcmp(decoder->data_buffer, data_fragment, sizeof(uint8_t) * tmp_data_size), 0);
+    Test_AssertEqual(decoder->data_buffer_provided_size, tmp_data_size);
+    free(data_fragment);
+    SLAStreamingDecoder_Destroy(decoder);
+
+    /* データがいっぱいになるまで突っ込んで見る */
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    decoder = SLAStreamingDecoder_Create(&config);
+    SLAStreamingDecoder_GetRemainDataSize(decoder, &tmp_data_size);
+    data_fragment = malloc(sizeof(uint8_t) * tmp_data_size);
+    for (i = 0; i < tmp_data_size; i++) {
+      data_fragment[i] = rand() & 0xFF;
+    }
+    Test_AssertEqual(decoder->data_buffer_provided_size, 0);
+    Test_AssertEqual(
+        SLAStreamingDecoder_AppendDataFragment(decoder, data_fragment, tmp_data_size),
+        SLA_APIRESULT_OK);
+    Test_AssertEqual(
+        memcmp(decoder->data_buffer, data_fragment, sizeof(uint8_t) * tmp_data_size), 0);
+    Test_AssertEqual(decoder->data_buffer_provided_size, tmp_data_size);
+    SLAStreamingDecoder_GetRemainDataSize(decoder, &tmp_data_size);
+    Test_AssertEqual(tmp_data_size, 0);
+    free(data_fragment);
+    SLAStreamingDecoder_Destroy(decoder);
+  }
+
+  /* データ片供給失敗テスト */
+  {
+    uint32_t i;
+    struct SLAStreamingDecoderConfig  config;
+    struct SLAStreamingDecoder*       decoder;
+    uint8_t *data_fragment;
+    uint32_t tmp_data_size;
+
+    /* 引数が不正 */
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    decoder = SLAStreamingDecoder_Create(&config);
+    tmp_data_size = decoder->data_buffer_size / 8;
+    data_fragment = malloc(sizeof(uint8_t) * tmp_data_size);
+    for (i = 0; i < tmp_data_size; i++) {
+      data_fragment[i] = i;
+    }
+    Test_AssertEqual(
+        SLAStreamingDecoder_AppendDataFragment(NULL, data_fragment, tmp_data_size), 
+        SLA_APIRESULT_INVALID_ARGUMENT);
+    Test_AssertEqual(
+        SLAStreamingDecoder_AppendDataFragment(decoder, NULL, tmp_data_size),
+        SLA_APIRESULT_INVALID_ARGUMENT);
+    free(data_fragment);
+    SLAStreamingDecoder_Destroy(decoder);
+
+    /* バッファサイズを超えるデータ入力 */
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    decoder = SLAStreamingDecoder_Create(&config);
+    tmp_data_size = decoder->data_buffer_size + 1;
+    data_fragment = malloc(sizeof(uint8_t) * tmp_data_size);
+    Test_AssertEqual(
+        SLAStreamingDecoder_AppendDataFragment(decoder, data_fragment, tmp_data_size), 
+        SLA_APIRESULT_EXCEED_HANDLE_CAPACITY);
+    free(data_fragment);
+    SLAStreamingDecoder_Destroy(decoder);
+
+    /* バッファサイズを超えるデータ入力 */
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    decoder = SLAStreamingDecoder_Create(&config);
+    tmp_data_size = decoder->data_buffer_size - 1;
+    data_fragment = malloc(sizeof(uint8_t) * tmp_data_size);
+    Test_AssertEqual(
+        SLAStreamingDecoder_AppendDataFragment(decoder, data_fragment, tmp_data_size), 
+        SLA_APIRESULT_OK);
+    Test_AssertEqual(
+        SLAStreamingDecoder_AppendDataFragment(decoder, data_fragment, 1), 
+        SLA_APIRESULT_OK);
+    /* ここでデータバッファがいっぱいになっている。トドメの一回 */
+    Test_AssertEqual(
+        SLAStreamingDecoder_AppendDataFragment(decoder, data_fragment, 1), 
+        SLA_APIRESULT_EXCEED_HANDLE_CAPACITY);
+    free(data_fragment);
+    SLAStreamingDecoder_Destroy(decoder);
+  }
+
+  /* データ片回収テスト */
+  {
+    uint32_t i;
+    struct SLAStreamingDecoderConfig  config;
+    struct SLAStreamingDecoder*       decoder;
+    uint8_t *data_fragment, *tmp_data_fragment;
+    uint32_t tmp_data_size, tmp_output_size;
+
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    decoder = SLAStreamingDecoder_Create(&config);
+    tmp_data_size = decoder->data_buffer_size / 8;
+    data_fragment = malloc(sizeof(uint8_t) * tmp_data_size);
+    tmp_data_fragment = malloc(sizeof(uint8_t) * tmp_data_size);
+    for (i = 0; i < tmp_data_size; i++) {
+      data_fragment[i] = rand() & 0xFF;
+    }
+
+    /* 投入したデータは戻ってくるか？ */
+    Test_AssertEqual(
+        SLAStreamingDecoder_AppendDataFragment(decoder, data_fragment, tmp_data_size), 
+        SLA_APIRESULT_OK);
+    Test_AssertEqual(decoder->data_buffer_provided_size, tmp_data_size);
+    Test_AssertEqual(
+        SLAStreamingDecoder_CollectRemainData(decoder, 
+          tmp_data_fragment, tmp_data_size, &tmp_output_size), SLA_APIRESULT_OK);
+    Test_AssertEqual(tmp_data_size, tmp_output_size);
+    Test_AssertEqual(memcmp(data_fragment, tmp_data_fragment, tmp_data_size), 0);
+
+    free(data_fragment);
+    free(tmp_data_fragment);
+    SLAStreamingDecoder_Destroy(decoder);
+
+
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    decoder = SLAStreamingDecoder_Create(&config);
+    tmp_data_size = decoder->data_buffer_size / 8;
+    data_fragment = malloc(sizeof(uint8_t) * tmp_data_size);
+    tmp_data_fragment = malloc(sizeof(uint8_t) * 2 * tmp_data_size);
+    for (i = 0; i < tmp_data_size; i++) {
+      data_fragment[i] = rand() & 0xFF;
+    }
+
+    /* 2回同じデータを投入したとき、まとまって戻ってくるか？ */
+    Test_AssertEqual(
+        SLAStreamingDecoder_AppendDataFragment(decoder, data_fragment, tmp_data_size), 
+        SLA_APIRESULT_OK);
+    Test_AssertEqual(
+        SLAStreamingDecoder_AppendDataFragment(decoder, data_fragment, tmp_data_size), 
+        SLA_APIRESULT_OK);
+    Test_AssertEqual(decoder->data_buffer_provided_size, 2 * tmp_data_size);
+    Test_AssertEqual(
+        SLAStreamingDecoder_CollectRemainData(decoder, 
+          tmp_data_fragment, 2 * tmp_data_size, &tmp_output_size), SLA_APIRESULT_OK);
+    Test_AssertEqual(2 * tmp_data_size, tmp_output_size);
+    Test_AssertEqual(memcmp(data_fragment, tmp_data_fragment, tmp_data_size), 0);
+    Test_AssertEqual(memcmp(data_fragment, &tmp_data_fragment[tmp_data_size], tmp_data_size), 0);
+
+    free(data_fragment);
+    free(tmp_data_fragment);
+    SLAStreamingDecoder_Destroy(decoder);
+  }
+
+
+  /* データ片回収失敗テスト */
+  {
+    struct SLAStreamingDecoderConfig  config;
+    struct SLAStreamingDecoder*       decoder;
+    uint8_t *data_fragment, *tmp_data_fragment;
+    uint32_t tmp_data_size, tmp_output_size;
+
+    SLAStreamingDecoder_SetDefaultConfig(&config);
+    decoder = SLAStreamingDecoder_Create(&config);
+    tmp_data_size = decoder->data_buffer_size / 8;
+    data_fragment = malloc(sizeof(uint8_t) * tmp_data_size);
+    tmp_data_fragment = malloc(sizeof(uint8_t) * tmp_data_size);
+
+    Test_AssertEqual(
+        SLAStreamingDecoder_AppendDataFragment(decoder, data_fragment, tmp_data_size), 
+        SLA_APIRESULT_OK);
+
+    /* 不正な引数 */
+    Test_AssertEqual(
+        SLAStreamingDecoder_CollectRemainData(NULL, 
+          tmp_data_fragment, tmp_data_size, &tmp_output_size),
+        SLA_APIRESULT_INVALID_ARGUMENT);
+    Test_AssertEqual(
+        SLAStreamingDecoder_CollectRemainData(decoder, 
+          NULL, tmp_data_size, &tmp_output_size),
+        SLA_APIRESULT_INVALID_ARGUMENT);
+    Test_AssertEqual(
+        SLAStreamingDecoder_CollectRemainData(decoder, 
+          tmp_data_fragment, tmp_data_size, NULL),
+        SLA_APIRESULT_INVALID_ARGUMENT);
+
+    /* バッファサイズ不足 */
+    Test_AssertEqual(
+        SLAStreamingDecoder_CollectRemainData(decoder, 
+          tmp_data_fragment, tmp_data_size - 1, &tmp_output_size),
+        SLA_APIRESULT_INSUFFICIENT_BUFFER_SIZE);
+
+    free(data_fragment);
+    free(tmp_data_fragment);
+    SLAStreamingDecoder_Destroy(decoder);
+  }
+
+}
+
 void testSLADecoder_Setup(void)
 {
   struct TestSuite *suite
@@ -723,4 +936,5 @@ void testSLADecoder_Setup(void)
   Test_AddTest(suite, testSLAStreamingDecoder_CreateDestroyTest);
   Test_AddTest(suite, testSLAStreamingDecoder_SetWaveFormatEncodeParameterTest);
   Test_AddTest(suite, testSLAStreamingDecoder_GetDecodeInformationTest);
+  Test_AddTest(suite, testSLAStreamingDecoder_AppendCollectDataFragmentTest);
 }

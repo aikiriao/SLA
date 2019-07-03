@@ -97,7 +97,7 @@ SLAApiResult SLAStreamingDecoder_GetOutputNumSamplesParDecode(struct SLAStreamin
 
 /* デコーダに残っているデータの回収 */
 SLAApiResult SLAStreamingDecoder_CollectRemainData(struct SLAStreamingDecoder* decoder,
-    uint8_t* buffer, uint8_t buffer_size, uint32_t* output_size);
+    uint8_t* buffer, uint32_t buffer_size, uint32_t* output_size);
 
 /* ストリーミングデコード */
 SLAApiResult SLAStreamingDecoder_Decode(struct SLAStreamingDecoder* decoder,
