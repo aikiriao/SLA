@@ -514,7 +514,7 @@ void SLACoder_PutInitialRecursiveRiceParameter(
     uint32_t num_parameters, uint32_t bitwidth, uint32_t channel_index)
 {
   SLABitStreamApiResult ret;
-  uint32_t first_order_param;
+  uint64_t first_order_param;
 
   SLAUTILITY_UNUSED_ARGUMENT(num_parameters);
   SLA_Assert((strm != NULL) && (coder != NULL));

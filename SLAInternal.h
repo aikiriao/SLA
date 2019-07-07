@@ -31,6 +31,7 @@
 #define SLA_HEADER_CRC16_CALC_START_OFFSET          (1 * 4 + 4 + 2)         /* シグネチャ + 先頭ブロックまでのオフセット + CRC16記録フィールド */
 /* ブロックのCRC16書き込み開始位置 */
 #define SLA_BLOCK_CRC16_CALC_START_OFFSET           (2 + 4 + 2)             /* 同期コード + 次のブロックまでのオフセット + CRC16記録フィールド */
+#define SLA_MINIMUM_BLOCK_HEADER_SIZE               (2 + 4 + 2 + 2 + 1)     /* 最小のブロックヘッダサイズ: 同期コード + オフセット + CRC16 + ブロックサンプル数 + ブロックデータタイプ をバイト境界に合わせた値 */
 
 /* PARCORの次数から係数のビット幅を取得 */
 #define SLA_GET_PARCOR_QUANTIZE_BIT_WIDTH(order)  (((order) < SLAPARCOR_COEF_LOW_ORDER_THRESHOULD) ? 16 : 8)

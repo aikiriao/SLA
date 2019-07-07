@@ -526,6 +526,7 @@ SLABitStreamApiResult SLABitStream_PutBits(struct SLABitStream* stream, uint32_t
 SLABitStreamApiResult SLABitStream_GetBit(struct SLABitStream* stream, uint8_t* bit)
 {
   int32_t ch;
+  SLABitStreamError err;
 
   /* 引数チェック */
   if (stream == NULL || bit == NULL) {
@@ -546,9 +547,14 @@ SLABitStreamApiResult SLABitStream_GetBit(struct SLABitStream* stream, uint8_t* 
   }
 
   /* 1バイト読み込みとエラー処理 */
-  if (stream->stm_if->SGetChar(
-        &(stream->stm), &ch) != SLABITSTREAM_ERROR_OK) {
-    return SLABITSTREAM_APIRESULT_IOERROR;
+  if ((err = stream->stm_if->SGetChar(
+          &(stream->stm), &ch)) != SLABITSTREAM_ERROR_OK) {
+    switch (err) {
+      case SLABITSTREAM_ERROR_EOS:
+        return SLABITSTREAM_APIRESULT_EOS;
+      default:
+        return SLABITSTREAM_APIRESULT_IOERROR;
+    }
   }
   SLA_Assert(ch >= 0);
   SLA_Assert(ch <= 0xFF);
@@ -560,6 +566,7 @@ SLABitStreamApiResult SLABitStream_GetBit(struct SLABitStream* stream, uint8_t* 
   /* 取得したバッファの最上位ビットを出力 */
   (*bit) = (stream->bit_buffer >> 7) & 1;
   /* (*bit) = (stream->bit_buffer & st_bit_mask[7]); */
+
   return SLABITSTREAM_APIRESULT_OK;
 }
 

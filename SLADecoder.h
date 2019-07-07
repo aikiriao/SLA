@@ -101,7 +101,7 @@ SLAApiResult SLAStreamingDecoder_CollectRemainData(struct SLAStreamingDecoder* d
 
 /* ストリーミングデコード */
 SLAApiResult SLAStreamingDecoder_Decode(struct SLAStreamingDecoder* decoder,
-    int32_t** buffer, uint32_t buffer_num_samples);
+    int32_t** buffer, uint32_t buffer_num_samples, uint32_t* num_output_samples);
 
 #ifdef __cplusplus
 }
