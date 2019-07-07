@@ -964,15 +964,17 @@ static SLAPredictorApiResult SLALongTermSynthesizer_ProcessCore(
   signal_buffer = ltm->signal_buffer;
   buffer_pos    = ltm->signal_buffer_pos;
 
-  /* 予測が始まるまでのサンプルは単純コピー */
+  /* 予測/合成が始まるまでのサンプルのバッファリング */
   if (ltm->num_input_samples < max_delay) {
-    uint32_t num_processable_samples = SLAUTILITY_MIN(max_delay - ltm->num_input_samples, num_samples);
-    for (smpl = 0; smpl < num_processable_samples; smpl++) {
-      signal_buffer[buffer_pos + smpl]
-        = signal_buffer[buffer_pos + smpl + max_delay]
-        = input[num_processable_samples - smpl - 1];
+    uint32_t num_buffering_samples  = SLAUTILITY_MIN(max_delay - ltm->num_input_samples, num_samples);
+    uint32_t buffer_offset          = (max_delay > (num_samples + ltm->num_input_samples)) 
+                                    ? (max_delay - (num_samples + ltm->num_input_samples)) : 0;
+    for (smpl = 0; smpl < num_buffering_samples; smpl++) {
+      signal_buffer[buffer_offset + smpl]
+        = signal_buffer[buffer_offset + smpl + max_delay]
+        = input[num_buffering_samples - smpl - 1];
     }
-    buffer_pos += num_processable_samples;
+    buffer_pos += num_buffering_samples;
   } else {
     smpl = 0;
   }
@@ -1122,24 +1124,26 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
   /* 頻繁に参照する変数をオート変数に受ける */
   buffer_pos = nlms->buffer_pos;
 
-  /* 出力バッファの初期化: 先頭coef分は残差と元信号は同一 */
+  /* 予測/合成が始まるまでのバッファリング */
   if (nlms->num_input_samples < num_coef) {
-    uint32_t num_processable_samples = SLAUTILITY_MIN(num_coef - nlms->num_input_samples, num_samples);
-    for (smpl = 0; smpl < num_processable_samples; smpl++) {
+    uint32_t num_buffering_samples = SLAUTILITY_MIN(num_coef - nlms->num_input_samples, num_samples);
+    uint32_t buffer_offset          = (num_coef > (num_samples + nlms->num_input_samples)) 
+                                    ? (num_coef - (num_samples + nlms->num_input_samples)) : 0;
+    for (smpl = 0; smpl < num_buffering_samples; smpl++) {
       /* 符号情報 */
-      nlms->fir_sign_buffer[buffer_pos + smpl]
-        = nlms->fir_sign_buffer[buffer_pos + smpl + num_coef]
-        = nlms->iir_sign_buffer[buffer_pos + smpl]
-        = nlms->iir_sign_buffer[buffer_pos + smpl + num_coef]
-        = SLAUTILITY_SIGN(input[num_processable_samples - smpl - 1]) + 1;
+      nlms->fir_sign_buffer[buffer_offset + smpl]
+        = nlms->fir_sign_buffer[buffer_offset + smpl + num_coef]
+        = nlms->iir_sign_buffer[buffer_offset + smpl]
+        = nlms->iir_sign_buffer[buffer_offset + smpl + num_coef]
+        = SLAUTILITY_SIGN(input[num_buffering_samples - smpl - 1]) + 1;
       /* 遅延信号 */
-      nlms->iir_buffer[buffer_pos + smpl]
-        = nlms->iir_buffer[buffer_pos + smpl + num_coef]
-        = nlms->fir_buffer[buffer_pos + smpl]
-        = nlms->fir_buffer[buffer_pos + smpl + num_coef]
-        = input[num_processable_samples - smpl - 1];
+      nlms->iir_buffer[buffer_offset + smpl]
+        = nlms->iir_buffer[buffer_offset + smpl + num_coef]
+        = nlms->fir_buffer[buffer_offset + smpl]
+        = nlms->fir_buffer[buffer_offset + smpl + num_coef]
+        = input[num_buffering_samples - smpl - 1];
     }
-    buffer_pos += num_processable_samples;
+    buffer_pos += num_buffering_samples;
   } else {
     smpl = 0;
   }
