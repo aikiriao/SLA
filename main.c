@@ -12,6 +12,9 @@
 /* CUIインターフェースバージョン */
 #define SLA_CUI_VERSION_STRING     "0.0.1(beta)"
 
+/* 2つのうち小さい値の選択 */
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+
 /* コマンドライン仕様 */
 static struct CommandLineParserSpecification command_line_spec[] = {
   { 'e', "encode", COMMAND_LINE_PARSER_FALSE, 
@@ -37,6 +40,9 @@ static struct CommandLineParserSpecification command_line_spec[] = {
     NULL, COMMAND_LINE_PARSER_FALSE },
   { 'v', "version", COMMAND_LINE_PARSER_FALSE, 
     "Show version information", 
+    NULL, COMMAND_LINE_PARSER_FALSE },
+  { 'r', "streaming", COMMAND_LINE_PARSER_FALSE, 
+    "Use streaming decode(for debug; 120fps)", 
     NULL, COMMAND_LINE_PARSER_FALSE },
   { 0, }
 };
@@ -254,6 +260,150 @@ int do_decode(const char* in_filename, const char* out_filename, uint8_t enable_
   return 0;
 }
 
+/* ストリーミングデコード */
+int do_streaming_decode(const char* in_filename, const char* out_filename, uint8_t enable_crc_check, uint8_t verpose_flag)
+{
+  FILE*                               in_fp;
+  struct WAVFile*                     out_wav;
+  struct WAVFileFormat                wav_format;
+  struct stat                         fstat;
+  struct SLAStreamingDecoder*         decoder;
+  struct SLADecoderConfig             core_config;
+  struct SLAStreamingDecoderConfig    streaming_config;
+  struct SLAHeaderInfo                header;
+  uint8_t*                            buffer;
+  uint32_t                            buffer_size, sample_progress, data_progress;
+  SLAApiResult                        ret;
+
+  /* デコーダハンドルの作成 */
+  core_config.max_num_channels         = 8;
+  core_config.max_num_block_samples    = 16384;
+  core_config.max_parcor_order         = 48;
+  core_config.max_longterm_order       = 5;
+  core_config.max_lms_order_par_filter = 40;
+  core_config.enable_crc_check         = enable_crc_check;
+  core_config.verpose_flag             = verpose_flag;
+
+  streaming_config.max_bit_par_sample = 24;
+  streaming_config.decode_interval_hz = 120.0f;
+  streaming_config.core_config = core_config;
+
+  if ((decoder = SLAStreamingDecoder_Create(&streaming_config)) == NULL) {
+    fprintf(stderr, "Failed to create decoder handle. \n");
+    return 1;
+  }
+
+  /* 入力ファイルオープン */
+  in_fp = fopen(in_filename, "rb");
+  /* 入力ファイルのサイズ取得 / バッファ領域割り当て */
+  stat(in_filename, &fstat);
+  buffer_size = (uint32_t)fstat.st_size;
+  buffer = (uint8_t *)malloc(buffer_size);
+  /* バッファ領域にデータをロード */
+  fread(buffer, sizeof(uint8_t), buffer_size, in_fp);
+  fclose(in_fp);
+
+  /* ヘッダデコード */
+  if ((ret = SLADecoder_DecodeHeader(buffer, buffer_size, &header))
+      != SLA_APIRESULT_OK) {
+    fprintf(stderr, "Failed to get header information: %d \n", ret);
+    return 1;
+  }
+
+  /* ヘッダから得られた情報を表示 */
+  if (verpose_flag != 0) {
+    printf("Num Channels:                %d \n", header.wave_format.num_channels);
+    printf("Bit Per Sample:              %d \n", header.wave_format.bit_per_sample);
+    printf("Sampling Rate:               %d \n", header.wave_format.sampling_rate);
+    printf("Offset Left Shift:           %d \n", header.wave_format.offset_lshift);
+    printf("PARCOR Order:                %d \n", header.encode_param.parcor_order);
+    printf("Longterm Order:              %d \n", header.encode_param.longterm_order);
+    printf("LMS Order Par Filter:        %d \n", header.encode_param.lms_order_par_filter);
+    printf("Channel Process Method:      %d \n", header.encode_param.ch_process_method);
+    printf("Max Number of Block Samples: %d \n", header.encode_param.max_num_block_samples);
+    printf("Number of Samples:           %d \n", header.num_samples);
+    printf("Number of Blocks:            %d \n", header.num_blocks);
+    printf("Max Block Size:              %d \n", header.max_block_size);
+  }
+
+  /* 出力wavハンドルの生成 */
+  wav_format.data_format     = WAV_DATA_FORMAT_PCM;
+  wav_format.num_channels    = header.wave_format.num_channels;
+  wav_format.sampling_rate   = header.wave_format.sampling_rate;
+  wav_format.bits_per_sample = header.wave_format.bit_per_sample;
+  wav_format.num_samples     = header.num_samples;
+  if ((out_wav = WAV_Create(&wav_format)) == NULL) {
+    fprintf(stderr, "Failed to create wav handle. \n");
+    return 1;
+  }
+
+  /* ヘッダから読み取ったパラメータをデコーダにセット */
+  if ((ret = SLAStreamingDecoder_SetWaveFormat(decoder, 
+          &header.wave_format)) != SLA_APIRESULT_OK) {
+    fprintf(stderr, "Failed to set wave parameter: %d \n", ret);
+    return 1;
+  }
+  if ((ret = SLAStreamingDecoder_SetEncodeParameter(decoder, 
+          &header.encode_param)) != SLA_APIRESULT_OK) {
+    fprintf(stderr, "Failed to set encode parameter: %d \n", ret);
+    return 1;
+  }
+
+  /* ストリーミングデコード */
+  sample_progress = 0;
+  data_progress = SLA_HEADER_SIZE;
+  while (sample_progress < header.num_samples) {
+    uint32_t ch;
+    uint32_t put_data_size, estimate_min_data_size, remain_data_size, tmp_output_samples;
+    int32_t  *output_ptr[8];
+
+    /* 供給データサイズの確定 */
+    SLAStreamingDecoder_GetRemainDataSize(decoder, &remain_data_size);
+    if (sample_progress == 0) {
+      /* 最初は最大ブロックサイズで見積もる */
+      estimate_min_data_size = header.max_block_size;
+    } else {
+      SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(decoder, &estimate_min_data_size);
+      estimate_min_data_size = MIN(estimate_min_data_size, remain_data_size);
+    }
+    put_data_size = MIN(estimate_min_data_size, buffer_size - data_progress);
+
+    /* データ供給 */
+    SLAStreamingDecoder_AppendDataFragment(decoder, &buffer[data_progress], put_data_size);
+
+    /* ストリーミングデコード */
+    for (ch = 0; ch < header.wave_format.num_channels; ch++) {
+      output_ptr[ch] = &out_wav->data[ch][sample_progress];
+    }
+    if ((ret = SLAStreamingDecoder_Decode(decoder,
+            output_ptr, header.num_samples - sample_progress, &tmp_output_samples)) != SLA_APIRESULT_OK) {
+      fprintf(stderr, "Streaming Decode failed! ret:%d \n", ret);
+      return 1;
+    }
+
+    /* 出力を進める */
+    data_progress     += put_data_size;
+    sample_progress   += tmp_output_samples;
+
+    if (verpose_flag != 0) {
+      printf("progress: %4.1f %% \r", (double)sample_progress / header.num_samples * 100.0f);
+      fflush(stdout);
+    }
+  }
+
+  /* WAVファイル書き出し */
+  if (WAV_WriteToFile(out_filename, out_wav) != WAV_APIRESULT_OK) {
+    fprintf(stderr, "Failed to write wav file. \n");
+    return 1;
+  }
+
+  free(buffer);
+  WAV_Destroy(out_wav);
+  SLAStreamingDecoder_Destroy(decoder);
+
+  return 0;
+}
+
 /* 使用法の表示 */
 static void print_usage(char** argv)
 {
@@ -338,9 +488,16 @@ int main(int argc, char** argv)
       enable_crc_check = (strcmp(crc_check_arg, "yes") == 0) ? 1 : 0;
     }
     /* 一括デコード実行 */
-    if (do_decode(input_file, output_file, enable_crc_check, verpose_flag) != 0) {
-      fprintf(stderr, "%s: failed to decode %s. \n", argv[0], input_file);
-      return 1;
+    if (CommandLineParser_GetOptionAcquired(command_line_spec, "streaming") == COMMAND_LINE_PARSER_TRUE) {
+      if (do_streaming_decode(input_file, output_file, enable_crc_check, verpose_flag) != 0) {
+        fprintf(stderr, "%s: failed to streaming decode %s. \n", argv[0], input_file);
+        return 1;
+      }
+    } else {
+      if (do_decode(input_file, output_file, enable_crc_check, verpose_flag) != 0) {
+        fprintf(stderr, "%s: failed to decode %s. \n", argv[0], input_file);
+        return 1;
+      }
     }
   } else if (CommandLineParser_GetOptionAcquired(command_line_spec, "encode") == COMMAND_LINE_PARSER_TRUE) {
     /* エンコード */
