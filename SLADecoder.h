@@ -64,9 +64,6 @@ struct SLAStreamingDecoder* SLAStreamingDecoder_Create(const struct SLAStreaming
 /* ストリーミングデコーダの破棄 */
 void SLAStreamingDecoder_Destroy(struct SLAStreamingDecoder* decoder);
 
-/* ストリーミングデコーダの内部状態リセット */
-SLAApiResult SLAStreamingDecoder_Reset(struct SLAStreamingDecoder* decoder);
-
 /* 波形パラメータをデコーダにセット */
 SLAApiResult SLAStreamingDecoder_SetWaveFormat(struct SLAStreamingDecoder* decoder,
     const struct SLAWaveFormat* wave_format);

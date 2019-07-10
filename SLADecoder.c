@@ -694,6 +694,23 @@ SLAApiResult SLADecoder_DecodeWhole(struct SLADecoder* decoder,
   return SLA_APIRESULT_OK;
 }
 
+/* ストリーミングデコーダの内部状態リセット */
+static SLAApiResult SLAStreamingDecoder_Reset(struct SLAStreamingDecoder* decoder)
+{
+  if (decoder == NULL) {
+    return SLA_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* ブロックオフセットをリセット */
+  decoder->current_block_sample_offset = 0;
+
+  /* データバッファをリセット */
+  memset(decoder->data_buffer, 0, sizeof(uint8_t) * decoder->data_buffer_size);
+  decoder->data_buffer_provided_size = 0;
+
+  return SLA_APIRESULT_NG;
+}
+
 /* ストリーミングデコーダの作成 */
 struct SLAStreamingDecoder* SLAStreamingDecoder_Create(const struct SLAStreamingDecoderConfig* config)
 {
@@ -721,10 +738,9 @@ struct SLAStreamingDecoder* SLAStreamingDecoder_Create(const struct SLAStreaming
   decoder->decode_interval_hz = config->decode_interval_hz;
   decoder->max_bit_par_sample = config->max_bit_par_sample;
 
-  /* バッファサイズ計算 */
-  /* 2ブロック分必要（デコード中にブロックをまたぐため） */
+  /* バッファサイズ計算: 1ブロック分確保 */
   decoder->data_buffer_size
-    = 2 * SLA_CalculateSufficientBlockSize(config->core_config.max_num_channels,
+    = SLA_CalculateSufficientBlockSize(config->core_config.max_num_channels,
         config->core_config.max_num_block_samples, config->max_bit_par_sample);
 
   /* バッファ確保 */
@@ -744,23 +760,6 @@ void SLAStreamingDecoder_Destroy(struct SLAStreamingDecoder* decoder)
     NULLCHECK_AND_FREE(decoder->data_buffer);
     NULLCHECK_AND_FREE(decoder);
   }
-}
-
-/* ストリーミングデコーダの内部状態リセット */
-SLAApiResult SLAStreamingDecoder_Reset(struct SLAStreamingDecoder* decoder)
-{
-  if (decoder == NULL) {
-    return SLA_APIRESULT_INVALID_ARGUMENT;
-  }
-
-  /* ブロックオフセットをリセット */
-  decoder->current_block_sample_offset = 0;
-
-  /* データバッファをリセット */
-  memset(decoder->data_buffer, 0, sizeof(uint8_t) * decoder->data_buffer_size);
-  decoder->data_buffer_provided_size = 0;
-
-  return SLA_APIRESULT_NG;
 }
 
 /* 波形パラメータをデコーダにセット */
