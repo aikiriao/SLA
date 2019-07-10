@@ -36,6 +36,14 @@
 /* 32bit整数演算のための右シフト量を計算 */
 #define SLAUTILITY_CALC_RSHIFT_FOR_SINT32(bitwidth) (((bitwidth) > 16) ? ((bitwidth) - 16) : 0)
 
+/* データパケットキューのAPI結果 */
+typedef enum SLADataPacketQueueApiResultTag {
+  SLA_DATAPACKETQUEUE_APIRESULT_OK = 0,
+  SLA_DATAPACKETQUEUE_APIRESULT_NG,
+  SLA_DATAPACKETQUEUE_APIRESULT_EXCEED_MAX_NUM_DATA_FRAGMENTS,
+  SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS
+} SLADataPacketQueueApiResult;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -104,6 +112,27 @@ int32_t SLALESolver_Solve(
 /* 入力データをもれなく表現できるビット幅の取得 */
 uint32_t SLAUtility_GetDataBitWidth(
     const int32_t* data, uint32_t num_samples);
+
+/* パケットキューの作成 */
+struct SLADataPacketQueue* SLADataPacketQueue_Create(uint32_t max_num_packets);
+
+/* パケットキューの破棄 */
+void SLADataPacketQueue_Destroy(struct SLADataPacketQueue* queue);
+
+/* データ片の追加 */
+SLADataPacketQueueApiResult SLADataPacketQueue_EnqueueDataFragment(
+    struct SLADataPacketQueue* queue, const uint8_t* data, uint32_t data_size);
+
+/* データ片の読み出し */
+SLADataPacketQueueApiResult SLADataPacketQueue_GetDataFragment(
+    struct SLADataPacketQueue* queue, const uint8_t** data_ptr, uint32_t* data_size, uint32_t max_data_size);
+
+/* 消費済みデータ片の回収 */
+SLADataPacketQueueApiResult SLADataPacketQueue_DequeueDataFragment(
+    struct SLADataPacketQueue* queue, const uint8_t** data_ptr, uint32_t* data_size);
+
+/* キューに余っているデータサイズの取得 */
+uint32_t SLADataPacketQueue_GetRemainDataSize(const struct SLADataPacketQueue* queue);
 
 #ifdef __cplusplus
 }

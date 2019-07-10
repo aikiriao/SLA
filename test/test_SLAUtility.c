@@ -420,6 +420,471 @@ static void testSLAUtility_SolveLinearEquationsTest(void *obj)
 
 }
 
+/* データパケットキューの生成破棄テスト */
+static void testSLADataPacketQueue_CreateDestroyTest(void* obj)
+{
+  TEST_UNUSED_PARAMETER(obj);
+
+  /* 簡単に生成と破棄 */
+  { 
+    struct SLADataPacketQueue* queue;
+
+    queue = SLADataPacketQueue_Create(1);
+    Test_AssertCondition(queue != NULL);
+    Test_AssertCondition(queue->packets != NULL);
+    Test_AssertEqual(queue->max_num_packets, 1);
+    Test_AssertEqual(queue->num_free_packets, queue->max_num_packets);
+    Test_AssertEqual(queue->write_pos, 0);
+    Test_AssertEqual(queue->read_pos, 0);
+    Test_AssertEqual(queue->collect_pos, 0);
+
+    SLADataPacketQueue_Destroy(queue);
+  }
+
+}
+
+/* データパケットキューにデータを追加・取得・回収するテスト */
+static void testSLADataPacketQueue_AppendCoollectDataTest(void* obj)
+{
+  TEST_UNUSED_PARAMETER(obj);
+
+  /* データ追加テスト */
+  {
+    struct SLADataPacketQueue* queue;
+    const uint8_t data[2] = { 1, 2 };
+
+    queue = SLADataPacketQueue_Create(2);
+
+    /* データを突っ込む */
+    Test_AssertEqual(
+        SLADataPacketQueue_EnqueueDataFragment(queue, &data[0], 1), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(queue->write_pos, 1);
+    Test_AssertEqual(queue->num_free_packets, 1);
+    Test_AssertCondition(queue->packets[0].data == &data[0]);
+    Test_AssertEqual(queue->packets[0].data_size, 1);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 1);
+
+    /* もう一度突っ込む */
+    Test_AssertEqual(
+        SLADataPacketQueue_EnqueueDataFragment(queue, &data[1], 1), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(queue->write_pos, 0);
+    Test_AssertEqual(queue->num_free_packets, 0);
+    Test_AssertCondition(queue->packets[1].data == &data[1]);
+    Test_AssertEqual(queue->packets[1].data_size, 1);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 2);
+
+    /* もう一度突っ込むことはできない */
+    Test_AssertEqual(SLADataPacketQueue_EnqueueDataFragment(queue, data, 1), SLA_DATAPACKETQUEUE_APIRESULT_EXCEED_MAX_NUM_DATA_FRAGMENTS);
+
+    SLADataPacketQueue_Destroy(queue);
+  }
+
+  /* データ取得テスト1: 全部突っ込んでから全部取得 */
+  {
+    struct SLADataPacketQueue* queue;
+    const uint8_t data[6] = { 1, 2, 3, 4, 5, 6 };
+    const uint8_t*  get_data;
+    uint32_t        get_data_size;
+
+    queue = SLADataPacketQueue_Create(3);
+
+    /* データを突っ込む */
+    Test_AssertEqual(
+        SLADataPacketQueue_EnqueueDataFragment(queue, &data[0], 1), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(queue->write_pos, 1);
+    Test_AssertEqual(queue->num_free_packets, 2);
+    Test_AssertCondition(queue->packets[0].data == &data[0]);
+    Test_AssertEqual(queue->packets[0].data_size, 1);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 1);
+    Test_AssertEqual(
+        SLADataPacketQueue_EnqueueDataFragment(queue, &data[1], 2), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(queue->write_pos, 2);
+    Test_AssertEqual(queue->num_free_packets, 1);
+    Test_AssertCondition(queue->packets[1].data == &data[1]);
+    Test_AssertEqual(queue->packets[1].data_size, 2);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 3);
+    Test_AssertEqual(
+        SLADataPacketQueue_EnqueueDataFragment(queue, &data[3], 3), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(queue->write_pos, 0);
+    Test_AssertEqual(queue->num_free_packets, 0);
+    Test_AssertCondition(queue->packets[2].data == &data[3]);
+    Test_AssertEqual(queue->packets[2].data_size, 3);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 6);
+
+    Test_AssertEqual(queue->read_pos, 0);
+
+    /* 取り出してみる 順番通りに取れるか？ */
+    Test_AssertEqual(
+        SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, sizeof(data)), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[0]);
+    Test_AssertEqual(get_data_size, 1);
+    Test_AssertEqual(queue->read_pos, 1);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 5);
+    Test_AssertEqual(queue->num_free_packets, 0); /* 回収していないから空きは増えない */
+    Test_AssertEqual(
+        SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, sizeof(data)), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[1]);
+    Test_AssertEqual(get_data_size, 2);
+    Test_AssertEqual(queue->read_pos, 2);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 3);
+    Test_AssertEqual(queue->num_free_packets, 0); /* 回収していないから空きは増えない */
+    Test_AssertEqual(
+        SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, sizeof(data)), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[3]);
+    Test_AssertEqual(get_data_size, 3);
+    Test_AssertEqual(queue->read_pos, 0);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 0);
+    Test_AssertEqual(queue->num_free_packets, 0); /* 回収していないから空きは増えない */
+
+    /* これ以上は取れない */
+    Test_AssertEqual(
+        SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, sizeof(data)), SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS);
+
+    SLADataPacketQueue_Destroy(queue);
+  }
+
+  /* データ取得テスト2: 追加しながら逐次取得 */
+  {
+    struct SLADataPacketQueue* queue;
+    const uint8_t data[6] = { 1, 2, 3, 4, 5, 6 };
+    const uint8_t*  get_data;
+    uint32_t        get_data_size;
+
+    queue = SLADataPacketQueue_Create(3);
+
+    /* データを突っ込む */
+    Test_AssertEqual(
+        SLADataPacketQueue_EnqueueDataFragment(queue, &data[0], 1), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(queue->write_pos, 1);
+    Test_AssertEqual(queue->num_free_packets, 2);
+    Test_AssertCondition(queue->packets[0].data == &data[0]);
+    Test_AssertEqual(queue->packets[0].data_size, 1);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 1);
+    /* 取り出す */
+    Test_AssertEqual(
+        SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, sizeof(data)), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[0]);
+    Test_AssertEqual(get_data_size, 1);
+    Test_AssertEqual(queue->read_pos, 1);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 0);
+    Test_AssertEqual(queue->num_free_packets, 2);
+    /* これ以上は取れない */
+    Test_AssertEqual(
+        SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, sizeof(data)), SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS);
+
+    /* データを突っ込む */
+    Test_AssertEqual(
+        SLADataPacketQueue_EnqueueDataFragment(queue, &data[1], 2), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(queue->write_pos, 2);
+    Test_AssertEqual(queue->num_free_packets, 1);
+    Test_AssertCondition(queue->packets[1].data == &data[1]);
+    Test_AssertEqual(queue->packets[1].data_size, 2);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 2);
+    /* 取り出す */
+    Test_AssertEqual(
+        SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, sizeof(data)), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[1]);
+    Test_AssertEqual(get_data_size, 2);
+    Test_AssertEqual(queue->read_pos, 2);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 0);
+    Test_AssertEqual(queue->num_free_packets, 1); 
+    /* これ以上は取れない */
+    Test_AssertEqual(
+        SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, sizeof(data)), SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS);
+
+    /* データを突っ込む */
+    Test_AssertEqual(
+        SLADataPacketQueue_EnqueueDataFragment(queue, &data[3], 3), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(queue->write_pos, 0);
+    Test_AssertEqual(queue->num_free_packets, 0);
+    Test_AssertCondition(queue->packets[2].data == &data[3]);
+    Test_AssertEqual(queue->packets[2].data_size, 3);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 3);
+    /* 取り出す */
+    Test_AssertEqual(
+        SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, sizeof(data)), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[3]);
+    Test_AssertEqual(get_data_size, 3);
+    Test_AssertEqual(queue->read_pos, 0);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 0);
+    Test_AssertEqual(queue->num_free_packets, 0);
+    /* これ以上は取れない */
+    Test_AssertEqual(
+        SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, sizeof(data)), SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS);
+
+    SLADataPacketQueue_Destroy(queue);
+  }
+
+  /* データ取得テスト3: 取れるサイズに制限 */
+  {
+    struct SLADataPacketQueue* queue;
+    const uint8_t data[6] = { 1, 2, 3, 4, 5, 6 };
+    const uint8_t*  get_data;
+    uint32_t        get_data_size;
+
+    queue = SLADataPacketQueue_Create(3);
+
+    /* データを突っ込む */
+    Test_AssertEqual(
+        SLADataPacketQueue_EnqueueDataFragment(queue, &data[0], sizeof(data)), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(queue->write_pos, 1);
+    Test_AssertEqual(queue->num_free_packets, 2);
+    Test_AssertCondition(queue->packets[0].data == &data[0]);
+    Test_AssertEqual(queue->packets[0].data_size, sizeof(data));
+    Test_AssertEqual(queue->packets[0].used_size, 0);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 6);
+
+    /* サイズ制限2で取り出す */
+    Test_AssertEqual(
+        SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, 2), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[0]);
+    Test_AssertEqual(get_data_size, 2);
+    Test_AssertEqual(queue->read_pos, 0);
+    Test_AssertEqual(queue->packets[0].data_size, sizeof(data));
+    Test_AssertEqual(queue->packets[0].used_size, 2);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 4);
+
+    /* サイズ制限3で取り出す */
+    Test_AssertEqual(
+        SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, 3), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[2]);
+    Test_AssertEqual(get_data_size, 3);
+    Test_AssertEqual(queue->read_pos, 0);
+    Test_AssertEqual(queue->packets[0].data_size, sizeof(data));
+    Test_AssertEqual(queue->packets[0].used_size, 5);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 1);
+
+    /* 残った分を取り出す */
+    Test_AssertEqual(
+        SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, sizeof(data)), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[5]);
+    Test_AssertEqual(get_data_size, 1);
+    Test_AssertEqual(queue->read_pos, 1);
+    Test_AssertEqual(queue->packets[0].data_size, sizeof(data));
+    Test_AssertEqual(queue->packets[0].used_size, 6);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 0);
+
+    /* これ以上は取り出せない */
+    Test_AssertEqual(
+        SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, sizeof(data)), SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS);
+
+    SLADataPacketQueue_Destroy(queue);
+  }
+
+  /* データ回収テスト: 簡単な成功例 */
+  {
+    struct SLADataPacketQueue* queue;
+    const uint8_t data[1] = { 1, };
+    const uint8_t*  get_data;
+    uint32_t        get_data_size;
+
+    queue = SLADataPacketQueue_Create(2);
+
+    /* データを突っ込む */
+    Test_AssertEqual(
+        SLADataPacketQueue_EnqueueDataFragment(queue, data, 1), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    /* 読み出し */
+    Test_AssertEqual(
+        SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, sizeof(data)), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(queue->collect_pos, 0);
+    Test_AssertEqual(queue->num_free_packets, 1);
+    /* 回収 */
+    Test_AssertEqual(
+        SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[0]);
+    Test_AssertEqual(get_data_size, 1);
+    Test_AssertEqual(queue->read_pos, 1);
+    Test_AssertEqual(queue->write_pos, 1);
+    Test_AssertEqual(queue->collect_pos, 1);
+    Test_AssertEqual(queue->num_free_packets, 2);
+    Test_AssertEqual(queue->packets[0].used_size, 0);
+    Test_AssertEqual(queue->packets[0].data_size, 0);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 0);
+
+    /* これ以上は回収できない */
+    Test_AssertEqual(
+        SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS);
+
+    SLADataPacketQueue_Destroy(queue);
+  }
+
+  /* データ回収テスト: キューを何周か回す */
+  {
+    struct SLADataPacketQueue* queue;
+    const uint8_t data[6] = { 1, 2, 3, 4, 5, 6 };
+    const uint8_t*  get_data;
+    uint32_t        get_data_size;
+
+    queue = SLADataPacketQueue_Create(3);
+
+    /* データ突っ込み->取得->回収を繰り返す */
+    Test_AssertEqual(SLADataPacketQueue_EnqueueDataFragment(queue, &data[0], 2), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, sizeof(data)), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[0]);
+    Test_AssertEqual(get_data_size, 2);
+    Test_AssertEqual(queue->collect_pos, 1);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 0);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS);
+
+    Test_AssertEqual(SLADataPacketQueue_EnqueueDataFragment(queue, &data[2], 2), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, sizeof(data)), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[2]);
+    Test_AssertEqual(get_data_size, 2);
+    Test_AssertEqual(queue->collect_pos, 2);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 0);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS);
+
+    Test_AssertEqual(SLADataPacketQueue_EnqueueDataFragment(queue, &data[4], 2), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, sizeof(data)), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[4]);
+    Test_AssertEqual(get_data_size, 2);
+    Test_AssertEqual(queue->collect_pos, 0);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 0);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS);
+
+    Test_AssertEqual(SLADataPacketQueue_EnqueueDataFragment(queue, &data[0], 1), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, sizeof(data)), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[0]);
+    Test_AssertEqual(get_data_size, 1);
+    Test_AssertEqual(queue->collect_pos, 1);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 0);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS);
+
+    Test_AssertEqual(SLADataPacketQueue_EnqueueDataFragment(queue, &data[1], 2), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, sizeof(data)), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[1]);
+    Test_AssertEqual(get_data_size, 2);
+    Test_AssertEqual(queue->collect_pos, 2);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 0);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS);
+
+    Test_AssertEqual(SLADataPacketQueue_EnqueueDataFragment(queue, &data[3], 3), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, sizeof(data)), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[3]);
+    Test_AssertEqual(get_data_size, 3);
+    Test_AssertEqual(queue->collect_pos, 0);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 0);
+
+    SLADataPacketQueue_Destroy(queue);
+  }
+
+  /* データ回収テスト: 一気に追加したデータを少しずつ回収する */
+  {
+    struct SLADataPacketQueue* queue;
+    const uint8_t data[6] = { 1, 2, 3, 4, 5, 6 };
+    const uint8_t*  get_data;
+    uint32_t        get_data_size;
+
+    queue = SLADataPacketQueue_Create(1);
+
+    Test_AssertEqual(SLADataPacketQueue_EnqueueDataFragment(queue, &data[0], sizeof(data)), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+
+    Test_AssertEqual(SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, 1), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[0]);
+    Test_AssertEqual(get_data_size, 1);
+    Test_AssertEqual(queue->packets[0].data_size, sizeof(data));
+    Test_AssertEqual(queue->packets[0].used_size, 1);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[0]);
+    Test_AssertEqual(get_data_size, 1);
+    Test_AssertEqual(queue->packets[0].data_size, sizeof(data) - 1);
+    Test_AssertEqual(queue->packets[0].used_size, 0);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), sizeof(data) - 1);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS);
+
+    Test_AssertEqual(SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, 1), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[1]);
+    Test_AssertEqual(get_data_size, 1);
+    Test_AssertEqual(queue->packets[0].data_size, sizeof(data) - 1);
+    Test_AssertEqual(queue->packets[0].used_size, 1);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[1]);
+    Test_AssertEqual(get_data_size, 1);
+    Test_AssertEqual(queue->packets[0].data_size, sizeof(data) - 2);
+    Test_AssertEqual(queue->packets[0].used_size, 0);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), sizeof(data) - 2);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS);
+
+    Test_AssertEqual(SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, 2), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[2]);
+    Test_AssertEqual(get_data_size, 2);
+    Test_AssertEqual(queue->packets[0].data_size, sizeof(data) - 2);
+    Test_AssertEqual(queue->packets[0].used_size, 2);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[2]);
+    Test_AssertEqual(get_data_size, 2);
+    Test_AssertEqual(queue->packets[0].data_size, sizeof(data) - 4);
+    Test_AssertEqual(queue->packets[0].used_size, 0);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), sizeof(data) - 4);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS);
+
+    Test_AssertEqual(SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, 2), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[4]);
+    Test_AssertEqual(get_data_size, 2);
+    Test_AssertEqual(queue->packets[0].data_size, sizeof(data) - 4);
+    Test_AssertEqual(queue->packets[0].used_size, 2);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data[4]);
+    Test_AssertEqual(get_data_size, 2);
+    Test_AssertEqual(queue->packets[0].data_size, 0);
+    Test_AssertEqual(queue->packets[0].used_size, 0);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 0);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS);
+
+    SLADataPacketQueue_Destroy(queue);
+  }
+
+  /* 複合テスト: 2つの連続したデータ片 */
+  {
+    struct SLADataPacketQueue* queue;
+    const uint8_t data1[6] = { 1, 2, 3,  4,  5,  6 };
+    const uint8_t data2[6] = { 7, 8, 9, 10, 11, 12 };
+    const uint8_t*  get_data;
+    uint32_t        get_data_size;
+
+    queue = SLADataPacketQueue_Create(4);
+
+    /* 交互にデータ片を挿入/取得/回収 */
+    Test_AssertEqual(SLADataPacketQueue_EnqueueDataFragment(queue, &data1[0], 3), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(SLADataPacketQueue_EnqueueDataFragment(queue, &data2[0], 3), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 6);
+    Test_AssertEqual(SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, 3), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data1[0]); Test_AssertEqual(get_data_size, 3);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 3);
+    Test_AssertEqual(SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, 3), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data2[0]); Test_AssertEqual(get_data_size, 3);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 0);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data1[0]); Test_AssertEqual(get_data_size, 3);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data2[0]); Test_AssertEqual(get_data_size, 3);
+
+    /* データ後半 */
+    Test_AssertEqual(SLADataPacketQueue_EnqueueDataFragment(queue, &data1[3], 3), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(SLADataPacketQueue_EnqueueDataFragment(queue, &data2[3], 3), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 6);
+    Test_AssertEqual(SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, 3), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data1[3]); Test_AssertEqual(get_data_size, 3);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 3);
+    Test_AssertEqual(SLADataPacketQueue_GetDataFragment(queue, &get_data, &get_data_size, 3), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data2[3]); Test_AssertEqual(get_data_size, 3);
+    Test_AssertEqual(SLADataPacketQueue_GetRemainDataSize(queue), 0);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data1[3]); Test_AssertEqual(get_data_size, 3);
+    Test_AssertEqual(SLADataPacketQueue_DequeueDataFragment(queue, &get_data, &get_data_size), SLA_DATAPACKETQUEUE_APIRESULT_OK);
+    Test_AssertCondition(get_data == &data2[3]); Test_AssertEqual(get_data_size, 3);
+
+    SLADataPacketQueue_Destroy(queue);
+  }
+
+}
+
 void testSLAUtility_Setup(void)
 {
   struct TestSuite *suite
@@ -428,4 +893,6 @@ void testSLAUtility_Setup(void)
 
   Test_AddTest(suite, testSLAUtility_CalculateCRC16Test);
   Test_AddTest(suite, testSLAUtility_SolveLinearEquationsTest);
+  Test_AddTest(suite, testSLADataPacketQueue_CreateDestroyTest);
+  Test_AddTest(suite, testSLADataPacketQueue_AppendCoollectDataTest);
 }

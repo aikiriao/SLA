@@ -17,6 +17,23 @@ struct SLALESolver {
   double**  A_lu;           /* LU分解した係数行列 */
 };
 
+/* データパケット */
+struct SLADataPacket {
+  const uint8_t*  data;       /* データ先頭ポインタ     */
+  uint32_t        data_size;  /* データサイズ           */
+  uint32_t        used_size;  /* 使用済みデータサイズ   */
+};
+
+/* データパケットキュー */
+struct SLADataPacketQueue {
+  struct SLADataPacket* packets;
+  uint32_t              write_pos;
+  uint32_t              read_pos;
+  uint32_t              collect_pos;
+  uint32_t              num_free_packets;
+  uint32_t              max_num_packets;
+};
+
 /* CRC16(IBM:多項式0x8005を反転した0xa001によるもの) の計算用テーブル */
 static const uint16_t CRC16_IBM_BYTE_TABLE[0x100] = { 
   0x0000, 0xc0c1, 0xc181, 0x0140, 0xc301, 0x03c0, 0x0280, 0xc241,
@@ -677,3 +694,196 @@ uint32_t SLAUtility_GetDataBitWidth(
   /* 符号ビットを付け加えてビット幅とする */
   return (maxabs > 0) ? (SLAUtility_Log2Ceil(maxabs) + 1) : 1;
 }
+
+/* パケットキューの作成 */
+struct SLADataPacketQueue* SLADataPacketQueue_Create(uint32_t max_num_packets)
+{
+  uint32_t pos;
+  struct SLADataPacketQueue* queue;
+
+  queue = malloc(sizeof(struct SLADataPacketQueue));
+
+  queue->packets          = malloc(sizeof(struct SLADataPacket) * max_num_packets);
+  queue->max_num_packets  = max_num_packets;
+  queue->num_free_packets = max_num_packets;
+  queue->write_pos        = 0;
+  queue->read_pos         = 0;
+  queue->collect_pos      = 0;
+
+  /* 全パケットをクリア */
+  for (pos = 0; pos < queue->max_num_packets; pos++) {
+    queue->packets[pos].data      = NULL;
+    queue->packets[pos].data_size = 0;
+    queue->packets[pos].used_size = 0;
+  }
+
+  return queue;
+}
+
+/* パケットキューの破棄 */
+void SLADataPacketQueue_Destroy(struct SLADataPacketQueue* queue)
+{
+  if (queue != NULL) {
+    NULLCHECK_AND_FREE(queue->packets);
+    free(queue);
+  }
+}
+
+/* データ片の追加 */
+SLADataPacketQueueApiResult SLADataPacketQueue_EnqueueDataFragment(
+    struct SLADataPacketQueue* queue, const uint8_t* data, uint32_t data_size)
+{
+  struct SLADataPacket* packet;
+
+  SLA_Assert(queue != NULL);
+  SLA_Assert(data != NULL);
+  SLA_Assert(data_size > 0);
+
+  /* キューに空きがない */
+  if (queue->num_free_packets == 0) {
+    return SLA_DATAPACKETQUEUE_APIRESULT_EXCEED_MAX_NUM_DATA_FRAGMENTS;
+  }
+
+  /* パケットを取得 */
+  packet = &queue->packets[queue->write_pos];
+
+  /* パケットにデータ情報を登録 */
+  packet->data      = data;
+  packet->data_size = data_size;
+  packet->used_size = 0;
+
+  /* 書き出し位置を更新 */
+  queue->write_pos  = (queue->write_pos + 1) % queue->max_num_packets;
+
+  /* 空きパケット数を減らす */
+  queue->num_free_packets--;
+
+  return SLA_DATAPACKETQUEUE_APIRESULT_OK;
+}
+
+/* データ片の読み出し */
+SLADataPacketQueueApiResult SLADataPacketQueue_GetDataFragment(
+    struct SLADataPacketQueue* queue, const uint8_t** data_ptr, uint32_t* data_size, uint32_t max_data_size)
+{
+  struct SLADataPacket* packet;
+  const uint8_t* tmp_data_ptr;
+  uint32_t tmp_data_size;
+
+  SLA_Assert(queue != NULL);
+  SLA_Assert(data_ptr != NULL);
+  SLA_Assert(data_size != NULL);
+  SLA_Assert(max_data_size > 0);
+
+  /* キューにパケットが一つも入っていない */
+  if (queue->num_free_packets == queue->max_num_packets) {
+    return SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS;
+  }
+
+  /* パケットを取得 */
+  packet = &queue->packets[queue->read_pos];
+
+  /* 読み出しが書き出しに追いついており、データもすべて消費している */
+  if ((queue->read_pos == queue->write_pos)
+      && (packet->data_size == packet->used_size)) {
+    return SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS;
+  }
+
+  /* 出力データを書き出し */
+  tmp_data_ptr  = &packet->data[packet->used_size];
+  SLA_Assert(packet->data_size >= packet->used_size);
+  tmp_data_size = SLAUTILITY_MIN(max_data_size, packet->data_size - packet->used_size);
+
+  /* パケットの内容を更新 */
+  packet->used_size += tmp_data_size;
+  SLA_Assert(packet->data_size >= packet->used_size);
+
+  /* パケットデータを消費し尽くした */
+  if (packet->data_size == packet->used_size) {
+    /* 読み出し位置を更新 */
+    queue->read_pos  = (queue->read_pos + 1) % queue->max_num_packets;
+  }
+
+  /* 出力に反映 */
+  (*data_ptr)   = tmp_data_ptr;
+  (*data_size)  = tmp_data_size;
+
+  return SLA_DATAPACKETQUEUE_APIRESULT_OK;
+}
+
+/* 消費済みデータ片の回収 */
+SLADataPacketQueueApiResult SLADataPacketQueue_DequeueDataFragment(
+    struct SLADataPacketQueue* queue, const uint8_t** data_ptr, uint32_t* data_size)
+{
+  struct SLADataPacket* packet;
+  const uint8_t* tmp_data_ptr;
+  uint32_t tmp_data_size;
+
+  SLA_Assert(queue != NULL);
+  SLA_Assert(data_ptr != NULL);
+  SLA_Assert(data_size != NULL);
+
+  /* キューにパケットが一つも入っていない */
+  if (queue->num_free_packets == queue->max_num_packets) {
+    return SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS;
+  }
+
+  /* パケットを取得 */
+  packet = &queue->packets[queue->collect_pos];
+
+  /* 回収できるデータがない */
+  if (packet->used_size == 0) {
+    return SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS;
+  }
+
+  /* 先に使用済みデータを書き出し */
+  tmp_data_ptr  = packet->data;
+  tmp_data_size = packet->used_size;
+
+  /* パケットデータを書き出した分先に進める */
+  SLA_Assert(packet->data_size >= packet->used_size);
+  packet->data_size -= packet->used_size;
+  packet->data      += packet->used_size;
+  packet->used_size = 0;
+
+  /* パケットデータを回収し尽くした */
+  if (packet->data_size == 0) {
+    SLA_Assert(packet->data_size == packet->used_size);
+    /* 読み出し位置を更新 */
+    queue->collect_pos  = (queue->collect_pos + 1) % queue->max_num_packets;
+    /* 空きパケット数を増やす */
+    queue->num_free_packets++;
+  }
+
+  /* 出力に反映 */
+  (*data_ptr)   = tmp_data_ptr;
+  (*data_size)  = tmp_data_size;
+
+  return SLA_DATAPACKETQUEUE_APIRESULT_OK;
+}
+
+/* キューに余っているデータサイズの取得 */
+uint32_t SLADataPacketQueue_GetRemainDataSize(const struct SLADataPacketQueue* queue)
+{
+  uint32_t pos, size;
+  const struct SLADataPacket* packet;
+
+  SLA_Assert(queue);
+
+  /* 一つもパケットが入っていない */
+  if (queue->num_free_packets == queue->max_num_packets) {
+    return 0;
+  }
+
+  /* キューに入っているパケットのデータサイズを合計（使用済みサイズは減じる） */
+  size = 0;
+  pos = queue->read_pos;
+  do {
+    packet = &queue->packets[pos];
+    SLA_Assert(packet->data_size >= packet->used_size);
+    size  += (packet->data_size - packet->used_size);
+    pos = (pos + 1) % queue->max_num_packets;
+  } while (pos != queue->write_pos);
+
+  return size;
+}
+
