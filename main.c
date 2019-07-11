@@ -416,11 +416,7 @@ static void print_usage(char** argv)
 /* バージョン情報の表示 */
 static void print_version_info(void)
 {
-  printf("SLA - Solitary Lossless Audio Compressor \n"
-      "Encoder Version: %s \n"
-      "Decoder Version: %s \n"
-      "CUI     Version: %s \n",
-      SLA_ENCODER_VERSION_STRING, SLA_DECODER_VERSION_STRING, SLA_CUI_VERSION_STRING);
+  printf("SLA - Solitary Lossless Audio Compressor Version %s \n", SLA_VERSION_STRING);
 }
 
 /* メインエントリ */
@@ -518,7 +514,7 @@ int main(int argc, char** argv)
       return 1;
     }
   } else {
-    fprintf(stderr, "%s: decode or encode option must be specified. \n", argv[0]);
+    fprintf(stderr, "%s: decode(-d) or encode(-e) option must be specified. \n", argv[0]);
     return 1;
   }
 

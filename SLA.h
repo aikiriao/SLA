@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+/* バージョン文字列 */
+#define SLA_VERSION_STRING          "0.0.1(beta)"
 /* フォーマットバージョン */
 #define SLA_FORMAT_VERSION			    1
 /* ヘッダのサイズ */
