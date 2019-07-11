@@ -183,7 +183,7 @@ SLAApiResult SLADecoder_DecodeHeader(
     SLAByteArray_GetUint8(data_pos, &signature[3]);
     /* 不正なシグネチャの場合は無条件でエラー */
     if (   (signature[0] != 'S') || (signature[1] != 'L')
-        || (signature[2] != '*') || (signature[3] != '\0')) {
+        || (signature[2] != '*') || (signature[3] != '\1')) {
       return SLA_APIRESULT_INVALID_HEADER_FORMAT;
     }
   }

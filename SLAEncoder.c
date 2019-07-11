@@ -232,7 +232,7 @@ SLAApiResult SLAEncoder_EncodeHeader(
   SLAByteArray_PutUint8(data_pos, (uint8_t)'S');
   SLAByteArray_PutUint8(data_pos, (uint8_t)'L');
   SLAByteArray_PutUint8(data_pos, (uint8_t)'*');
-  SLAByteArray_PutUint8(data_pos, (uint8_t)'\0');
+  SLAByteArray_PutUint8(data_pos, (uint8_t)'\1');
 
   /* 一番最初のデータブロックまでのオフセット */
   SLAByteArray_PutUint32(data_pos, SLA_HEADER_SIZE - 8);

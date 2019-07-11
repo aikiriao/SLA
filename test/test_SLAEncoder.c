@@ -52,7 +52,7 @@ static void testSLAEncoder_EncodeHeaderTest(void *obj)
     SLAByteArray_GetUint8(data_ptr, &u8buf);
     Test_AssertEqual(u8buf, '*');
     SLAByteArray_GetUint8(data_ptr, &u8buf);
-    Test_AssertEqual(u8buf, '\0');
+    Test_AssertEqual(u8buf, '\1');
     /* 一番最初のデータブロックまでのオフセット */
     SLAByteArray_GetUint32(data_ptr, &u32buf);
     Test_AssertCondition(u32buf <= SLA_HEADER_SIZE);
