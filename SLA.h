@@ -35,7 +35,8 @@ typedef enum SLAApiResultTag {
   SLA_APIRESULT_INVALID_HEADER_FORMAT,      /* ヘッダが不正 */
   SLA_APIRESULT_DETECT_DATA_CORRUPTION,     /* データ破壊を検出した */
   SLA_APIRESULT_FAILED_TO_FIND_SYNC_CODE,   /* 同期コードを発見できなかった */
-  SLA_APIRESULT_INVALID_WINDOWFUNCTION_TYPE /* 不正な窓関数が指定された */
+  SLA_APIRESULT_INVALID_WINDOWFUNCTION_TYPE, /* 不正な窓関数が指定された */
+  SLA_APIRESULT_NO_DATA_FRAGMENTS             /* 回収可能なデータ片が存在しない */
 } SLAApiResult;
 
 /* マルチチャンネル処理方法 */

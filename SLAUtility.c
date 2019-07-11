@@ -737,11 +737,15 @@ SLADataPacketQueueApiResult SLADataPacketQueue_EnqueueDataFragment(
 
   SLA_Assert(queue != NULL);
   SLA_Assert(data != NULL);
-  SLA_Assert(data_size > 0);
 
   /* キューに空きがない */
   if (queue->num_free_packets == 0) {
     return SLA_DATAPACKETQUEUE_APIRESULT_EXCEED_MAX_NUM_DATA_FRAGMENTS;
+  }
+
+  /* データサイズ0は何もせず成功 */
+  if (data_size == 0) {
+    return SLA_DATAPACKETQUEUE_APIRESULT_OK;
   }
 
   /* パケットを取得 */
@@ -772,10 +776,14 @@ SLADataPacketQueueApiResult SLADataPacketQueue_GetDataFragment(
   SLA_Assert(queue != NULL);
   SLA_Assert(data_ptr != NULL);
   SLA_Assert(data_size != NULL);
-  SLA_Assert(max_data_size > 0);
 
   /* キューにパケットが一つも入っていない */
   if (queue->num_free_packets == queue->max_num_packets) {
+    return SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS;
+  }
+
+  /* 最大データサイズ0のとき */
+  if (max_data_size == 0) {
     return SLA_DATAPACKETQUEUE_APIRESULT_NO_DATA_FRAGMENTS;
   }
 

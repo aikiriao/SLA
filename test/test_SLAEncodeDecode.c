@@ -477,20 +477,19 @@ static int32_t testSLAEncodeDecode_DoStreamingDecodeTestCase(const struct Encode
   data_progress = SLA_HEADER_SIZE;
   while (sample_progress < num_samples) {
     uint32_t ch;
-    uint32_t put_data_size, estimate_min_data_size, remain_data_size, tmp_output_samples;
+    uint32_t put_data_size, estimate_min_data_size, tmp_output_samples;
+    uint32_t dummy_out_size;
+    const uint8_t* dummy_out_ptr;
     int32_t  *output_ptr[SLA_MAX_CHANNELS];
 
     /* 供給データサイズの確定 */
-    SLAStreamingDecoder_GetRemainDataSize(decoder, &remain_data_size);
     if (sample_progress == 0) {
       /* 最初は最大ブロックサイズで見積もる */
       estimate_min_data_size = header.max_block_size;
     } else {
       SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(decoder, &estimate_min_data_size);
-      estimate_min_data_size = SLAUTILITY_MIN(estimate_min_data_size, remain_data_size);
     }
     put_data_size = SLAUTILITY_MIN(estimate_min_data_size, encoded_size - data_progress);
-    SLA_Assert(remain_data_size >= put_data_size);
 
     /* データ供給 */
     if ((api_ret = SLAStreamingDecoder_AppendDataFragment(decoder,
@@ -499,6 +498,9 @@ static int32_t testSLAEncodeDecode_DoStreamingDecodeTestCase(const struct Encode
       ret = 8;
       goto EXIT;
     }
+
+    /* データを回収できるなら回収しておく */
+    SLAStreamingDecoder_CollectDataFragment(decoder, &dummy_out_ptr, &dummy_out_size);
 
     /* ストリーミングデコード */
     for (ch = 0; ch < num_channels; ch++) {

@@ -49,13 +49,14 @@ struct SLADecoder {
 struct SLAStreamingDecoder {
   struct SLADecoder*            decoder_core;
   uint8_t*                      data_buffer;
-  uint32_t                      data_buffer_provided_size;
   uint32_t                      data_buffer_size;
+  uint32_t                      data_buffer_provided_size;
   uint32_t                      num_output_samples_par_decode;
   struct SLABlockHeaderInfo     current_block_header;
   uint32_t                      current_block_sample_offset;
   float                         decode_interval_hz;
   uint32_t                      max_bit_par_sample;
+  struct SLADataPacketQueue*    queue;
 };
 
 /* デコーダハンドルの作成 */
@@ -726,6 +727,7 @@ struct SLAStreamingDecoder* SLAStreamingDecoder_Create(const struct SLAStreaming
     return NULL;
   }
 
+  /* ハンドルの領域割当て */
   decoder = (struct SLAStreamingDecoder *)malloc(sizeof(struct SLAStreamingDecoder));
 
   /* デコーダコアハンドルの作成 */
@@ -734,13 +736,17 @@ struct SLAStreamingDecoder* SLAStreamingDecoder_Create(const struct SLAStreaming
     return NULL;
   }
 
+  /* データパケットキューの作成 */
+  decoder->queue = SLADataPacketQueue_Create(SLA_STREAMING_DECODE_MAX_NUM_PACKETS);
+
   /* コンフィグをメンバに記録 */
   decoder->decode_interval_hz = config->decode_interval_hz;
   decoder->max_bit_par_sample = config->max_bit_par_sample;
 
-  /* バッファサイズ計算: 1ブロック分確保 */
+  /* バッファサイズ計算: ブロックをまたぐことがあるので、2ブロック分確保 */
+  /* TODO:ダブルバッファリングが良いかも */
   decoder->data_buffer_size
-    = SLA_CalculateSufficientBlockSize(config->core_config.max_num_channels,
+    = 2 * SLA_CalculateSufficientBlockSize(config->core_config.max_num_channels,
         config->core_config.max_num_block_samples, config->max_bit_par_sample);
 
   /* バッファ確保 */
@@ -757,6 +763,7 @@ void SLAStreamingDecoder_Destroy(struct SLAStreamingDecoder* decoder)
 {
   if (decoder != NULL) {
     SLADecoder_Destroy(decoder->decoder_core);
+    SLADataPacketQueue_Destroy(decoder->queue);
     NULLCHECK_AND_FREE(decoder->data_buffer);
     NULLCHECK_AND_FREE(decoder);
   }
@@ -802,24 +809,6 @@ SLAApiResult SLAStreamingDecoder_SetEncodeParameter(struct SLAStreamingDecoder* 
   return SLADecoder_SetEncodeParameter(decoder->decoder_core, encode_param);
 }
 
-/* 供給可能な最大データサイズを取得 */
-SLAApiResult SLAStreamingDecoder_GetRemainDataSize(struct SLAStreamingDecoder* decoder,
-    uint32_t* remain_data_size)
-{
-  /* 引数チェック */
-  if ((decoder == NULL) || (remain_data_size == NULL)) {
-    return SLA_APIRESULT_INVALID_ARGUMENT;
-  }
-
-  /* appendのときに超えないようにエラーを出しているはず */
-  SLA_Assert(decoder->data_buffer_size >= decoder->data_buffer_provided_size);
-
-  /* 残りデータサイズを計算 */
-  *remain_data_size = decoder->data_buffer_size - decoder->data_buffer_provided_size;
-
-  return SLA_APIRESULT_OK;
-}
-
 /* 最低限供給すべきデータサイズの推定値を取得 */
 SLAApiResult SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(struct SLAStreamingDecoder* decoder,
     uint32_t* estimate_data_size)
@@ -844,27 +833,6 @@ SLAApiResult SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(struct SLAStre
 
   /* 出力に書き込み */
   (*estimate_data_size) = tmp_estimate_data_size;
-
-  return SLA_APIRESULT_OK;
-}
-
-/* デコーダにデータを供給 */
-SLAApiResult SLAStreamingDecoder_AppendDataFragment(struct SLAStreamingDecoder* decoder,
-    const uint8_t* data, uint32_t data_size)
-{
-  /* 引数チェック */
-  if ((decoder == NULL) || (data == NULL)) {
-    return SLA_APIRESULT_INVALID_ARGUMENT;
-  }
-
-  /* 供給データサイズがハンドルの持てるデータサイズを超えている */
-  if ((decoder->data_buffer_provided_size + data_size) > decoder->data_buffer_size) {
-    return SLA_APIRESULT_EXCEED_HANDLE_CAPACITY;
-  }
-
-  /* データ取得 */
-  memmove(&decoder->data_buffer[decoder->data_buffer_provided_size], data, data_size);
-  decoder->data_buffer_provided_size += data_size;
 
   return SLA_APIRESULT_OK;
 }
@@ -908,28 +876,77 @@ SLAApiResult SLAStreamingDecoder_GetOutputNumSamplesParDecode(struct SLAStreamin
     return SLA_APIRESULT_INVALID_ARGUMENT;
   }
 
-  *output_num_samples = decoder->num_output_samples_par_decode;
+  /* 結果に記録 */
+  (*output_num_samples) = decoder->num_output_samples_par_decode;
+
+  return SLA_APIRESULT_OK;
+}
+
+/* 残りデータサイズを取得 */
+SLAApiResult SLAStreamingDecoder_GetRemainDataSize(struct SLAStreamingDecoder* decoder,
+    uint32_t* remain_data_size)
+{
+  uint32_t queue_remain;
+
+  /* 引数チェック */
+  if ((decoder == NULL) || (remain_data_size == NULL)) {
+    return SLA_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* キューの残りデータサイズを取得 */
+  queue_remain = SLADataPacketQueue_GetRemainDataSize(decoder->queue);
+
+  /* キューと連続バッファの合計が余りサイズ */
+  (*remain_data_size) = queue_remain + decoder->data_buffer_provided_size;
+
+  return SLA_APIRESULT_OK;
+}
+
+/* デコーダにデータを供給 */
+SLAApiResult SLAStreamingDecoder_AppendDataFragment(struct SLAStreamingDecoder* decoder,
+    const uint8_t* data, uint32_t data_size)
+{
+  const uint8_t* append_data;
+  uint32_t append_data_size;
+
+  /* 引数チェック */
+  if ((decoder == NULL) || (data == NULL)) {
+    return SLA_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* キューにデータ挿入 */
+  if (SLADataPacketQueue_EnqueueDataFragment(
+        decoder->queue, data, data_size) != SLA_DATAPACKETQUEUE_APIRESULT_OK) {
+    return SLA_APIRESULT_EXCEED_HANDLE_CAPACITY;
+  }
+
+  /* データ片の取得 */
+  SLA_Assert(decoder->data_buffer_size >= decoder->data_buffer_provided_size);
+  if (SLADataPacketQueue_GetDataFragment(
+        decoder->queue, &append_data, &append_data_size,
+        decoder->data_buffer_size - decoder->data_buffer_provided_size) == SLA_DATAPACKETQUEUE_APIRESULT_OK) {
+    /* データをデコード用の連続領域にコピー */
+    memcpy(&decoder->data_buffer[decoder->data_buffer_provided_size], append_data, append_data_size);
+    decoder->data_buffer_provided_size += append_data_size;
+  }
+
   return SLA_APIRESULT_OK;
 }
 
 /* デコーダに残っているデータの回収 */
-SLAApiResult SLAStreamingDecoder_CollectRemainData(struct SLAStreamingDecoder* decoder,
-    uint8_t* buffer, uint32_t buffer_size, uint32_t* output_size)
+SLAApiResult SLAStreamingDecoder_CollectDataFragment(struct SLAStreamingDecoder* decoder,
+    const uint8_t** data_ptr, uint32_t* data_size)
 {
   /* 引数チェック */
-  if ((decoder == NULL) || (buffer == NULL) || (output_size == NULL)) {
+  if ((decoder == NULL) || (data_ptr == NULL) || (data_size == NULL)) {
     return SLA_APIRESULT_INVALID_ARGUMENT;
   }
 
-  /* バッファサイズ不足 */
-  if (buffer_size < decoder->data_buffer_provided_size) {
-    return SLA_APIRESULT_INSUFFICIENT_BUFFER_SIZE;
+  /* データ回収 */
+  if (SLADataPacketQueue_DequeueDataFragment(
+        decoder->queue, data_ptr, data_size) != SLA_DATAPACKETQUEUE_APIRESULT_OK) {
+    return SLA_APIRESULT_NO_DATA_FRAGMENTS;
   }
-
-  /* データ取得 */
-  memmove(buffer, decoder->data_buffer, decoder->data_buffer_provided_size);
-  *output_size = decoder->data_buffer_provided_size;
-  decoder->data_buffer_provided_size = 0;
 
   return SLA_APIRESULT_OK;
 }
@@ -1005,14 +1022,14 @@ static SLAApiResult SLAStreamingDecoder_DecodeCore(struct SLAStreamingDecoder* d
 
     /* ブロック末尾に達した */
     if (decoder->current_block_sample_offset >= decoder->current_block_header.block_num_samples) {
-      /* データバッファ更新 */
-      /* TODO:超ナイーブ実装. ちゃんとしたキューに置き換える. コピーがひっきりなしに動くのでやりたくない... */
-      memmove(decoder->data_buffer,
-          &decoder->data_buffer[decoder->current_block_header.block_size],
-          decoder->data_buffer_size - decoder->current_block_header.block_size);
-      decoder->data_buffer_provided_size -= decoder->current_block_header.block_size;
       /* ぴったりブロック末尾でなければならない */
       SLA_Assert(decoder->current_block_sample_offset == decoder->current_block_header.block_num_samples);
+      SLA_Assert(decoder->data_buffer_provided_size >= decoder->current_block_header.block_size);
+      /* ブロック末尾でのデータ折返し */
+      memmove(decoder->data_buffer,
+          &decoder->data_buffer[decoder->current_block_header.block_size],
+          decoder->data_buffer_provided_size - decoder->current_block_header.block_size);
+      decoder->data_buffer_provided_size -= decoder->current_block_header.block_size;
       /* ストリームを閉じる */
       SLABitStream_Close(decoder->decoder_core->strm);
       /* ブロック内のオフセットを0に戻す */

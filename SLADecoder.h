@@ -72,17 +72,9 @@ SLAApiResult SLAStreamingDecoder_SetWaveFormat(struct SLAStreamingDecoder* decod
 SLAApiResult SLAStreamingDecoder_SetEncodeParameter(struct SLAStreamingDecoder* decoder,
     const struct SLAEncodeParameter* encode_param);
 
-/* 供給可能な最大データサイズを取得 */
-SLAApiResult SLAStreamingDecoder_GetRemainDataSize(struct SLAStreamingDecoder* decoder,
-    uint32_t* remain_data_size);
-
 /* 最低限供給すべきデータサイズの推定値を取得 */
 SLAApiResult SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(struct SLAStreamingDecoder* decoder,
     uint32_t* estimate_data_size);
-
-/* デコーダにデータを供給 */
-SLAApiResult SLAStreamingDecoder_AppendDataFragment(struct SLAStreamingDecoder* decoder,
-    const uint8_t* data, uint32_t data_size);
 
 /* デコード可能なサンプル数の推定値を取得 */
 SLAApiResult SLAStreamingDecoder_EstimateDecodableNumSamples(struct SLAStreamingDecoder* decoder,
@@ -92,9 +84,17 @@ SLAApiResult SLAStreamingDecoder_EstimateDecodableNumSamples(struct SLAStreaming
 SLAApiResult SLAStreamingDecoder_GetOutputNumSamplesParDecode(struct SLAStreamingDecoder* decoder,
     uint32_t* output_num_samples);
 
-/* デコーダに残っているデータの回収 */
-SLAApiResult SLAStreamingDecoder_CollectRemainData(struct SLAStreamingDecoder* decoder,
-    uint8_t* buffer, uint32_t buffer_size, uint32_t* output_size);
+/* デコーダにデータ片を供給 */
+SLAApiResult SLAStreamingDecoder_AppendDataFragment(struct SLAStreamingDecoder* decoder,
+    const uint8_t* data, uint32_t data_size);
+
+/* デコーダに残っているデータ片の回収 */
+SLAApiResult SLAStreamingDecoder_CollectDataFragment(struct SLAStreamingDecoder* decoder,
+    const uint8_t** data_ptr, uint32_t* data_size);
+
+/* 残りデータサイズを取得 */
+SLAApiResult SLAStreamingDecoder_GetRemainDataSize(struct SLAStreamingDecoder* decoder,
+    uint32_t* remain_data_size);
 
 /* ストリーミングデコード */
 SLAApiResult SLAStreamingDecoder_Decode(struct SLAStreamingDecoder* decoder,

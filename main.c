@@ -354,17 +354,17 @@ int do_streaming_decode(const char* in_filename, const char* out_filename, uint8
   data_progress = SLA_HEADER_SIZE;
   while (sample_progress < header.num_samples) {
     uint32_t ch;
-    uint32_t put_data_size, estimate_min_data_size, remain_data_size, tmp_output_samples;
+    uint32_t put_data_size, estimate_min_data_size, tmp_output_samples;
     int32_t  *output_ptr[8];
+    const uint8_t* dummy_out_ptr;
+    uint32_t dummy_out_size;
 
     /* 供給データサイズの確定 */
-    SLAStreamingDecoder_GetRemainDataSize(decoder, &remain_data_size);
     if (sample_progress == 0) {
       /* 最初は最大ブロックサイズで見積もる */
       estimate_min_data_size = header.max_block_size;
     } else {
       SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(decoder, &estimate_min_data_size);
-      estimate_min_data_size = MIN(estimate_min_data_size, remain_data_size);
     }
     put_data_size = MIN(estimate_min_data_size, buffer_size - data_progress);
 
@@ -380,6 +380,9 @@ int do_streaming_decode(const char* in_filename, const char* out_filename, uint8
       fprintf(stderr, "Streaming Decode failed! ret:%d \n", ret);
       return 1;
     }
+
+    /* 消費済みデータ回収 */
+    SLAStreamingDecoder_CollectDataFragment(decoder, &dummy_out_ptr, &dummy_out_size);
 
     /* 出力を進める */
     data_progress     += put_data_size;

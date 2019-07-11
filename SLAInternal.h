@@ -19,6 +19,7 @@
 #define SLACODER_LOW_THRESHOULD_PARAMETER           8  /* [-4,4] */         /* 固定パラメータ符号を使うか否かの閾値 */
 #define SLACODER_QUOTPART_THRESHOULD                16                      /* 再帰的ライス符号の商部分の閾値 これ以上の大きさの商はガンマ符号化 */
 #define SLA_STREAMING_DECODE_NUM_SAMPLES_MARGIN     1.05f                   /* ストリーミングデコード時の出力サンプルの余裕をもたせるための比率 */
+#define SLA_STREAMING_DECODE_MAX_NUM_PACKETS        8                       /* ストリーミングデコードで使用する最大パケット数 */
 
 /* パスの長さに対して与えるペナルティサイズ[byte]
  * 補足）分割を増やすと以下の要因でサイズが増える
