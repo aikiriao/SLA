@@ -102,6 +102,9 @@ static void testSLAEncoder_EncodeHeaderTest(void *obj)
     /* 最大ブロックサイズ */
     SLAByteArray_GetUint32(data_ptr, &u32buf);
     Test_AssertEqual(u32buf, header.max_block_size);
+    /* 最大bps */
+    SLAByteArray_GetUint32(data_ptr, &u32buf);
+    Test_AssertEqual(u32buf, header.max_bit_per_second);
 
     /* ヘッダサイズチェック */
     Test_AssertEqual(data_ptr - data, SLA_HEADER_SIZE);

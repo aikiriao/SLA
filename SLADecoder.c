@@ -236,6 +236,8 @@ SLAApiResult SLADecoder_DecodeHeader(
   tmp_header.encode_param.max_num_block_samples = (uint32_t)u16buf;
   /* 最大ブロックサイズ */
   SLAByteArray_GetUint32(data_pos, &tmp_header.max_block_size);
+  /* 最大bps */
+  SLAByteArray_GetUint32(data_pos, &tmp_header.max_bit_per_second);
 
   /* ヘッダサイズチェック */
   SLA_Assert((data_pos - data) == SLA_HEADER_SIZE);

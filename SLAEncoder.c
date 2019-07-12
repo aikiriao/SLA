@@ -264,6 +264,8 @@ SLAApiResult SLAEncoder_EncodeHeader(
   SLAByteArray_PutUint16(data_pos, (uint16_t)header->encode_param.max_num_block_samples);
   /* 最大ブロックサイズ */
   SLAByteArray_PutUint32(data_pos, header->max_block_size);
+  /* 最大bps */
+  SLAByteArray_PutUint32(data_pos, header->max_bit_per_second);
 
   /* ヘッダサイズチェック */
   SLA_Assert((data_pos - data) == SLA_HEADER_SIZE);
@@ -776,6 +778,7 @@ SLAApiResult SLAEncoder_EncodeWhole(struct SLAEncoder* encoder,
   const int32_t*        input_ptr[SLA_MAX_CHANNELS];
   struct SLAHeaderInfo  header;
   SLAApiResult          api_ret;
+  uint32_t              max_bit_per_second;
 
   /* 引数チェック */
   if (encoder == NULL || input == NULL || data == NULL || output_size == NULL) {
@@ -805,6 +808,7 @@ SLAApiResult SLAEncoder_EncodeWhole(struct SLAEncoder* encoder,
   max_block_size = 0;
   encode_offset_sample = 0;
   num_blocks = 0;
+  max_bit_per_second = 0;
   while (encode_offset_sample < num_samples) {
     /* 出力バッファサイズが足らない */
     if (cur_output_size >= data_size) {
@@ -832,7 +836,8 @@ SLAApiResult SLAEncoder_EncodeWhole(struct SLAEncoder* encoder,
 
     /* 分割に従ってエンコード */
     for (part = 0; part < num_partitions; part++) {
-      uint32_t num_encode_samples = encoder->num_block_partition_samples[part];
+      uint32_t  block_bit_per_second;
+      uint32_t  num_encode_samples = encoder->num_block_partition_samples[part];
       /* 入力信号のポインタをセット */
       for (ch = 0; ch < encoder->wave_format.num_channels; ch++) {
         input_ptr[ch] = &input[ch][encode_offset_sample];
@@ -851,6 +856,11 @@ SLAApiResult SLAEncoder_EncodeWhole(struct SLAEncoder* encoder,
       /* 最大ブロックサイズの記録 */
       if (block_size > max_block_size) {
         max_block_size = block_size;
+      }
+      /* 最大bpsの計算 */
+      block_bit_per_second = (8 * block_size * encoder->wave_format.sampling_rate) / num_encode_samples;
+      if (block_bit_per_second > max_bit_per_second) {
+        max_bit_per_second = block_bit_per_second;
       }
       /* ブロック数増加 */
       num_blocks++;
@@ -872,9 +882,10 @@ SLAApiResult SLAEncoder_EncodeWhole(struct SLAEncoder* encoder,
     return SLA_APIRESULT_INSUFFICIENT_DATA_SIZE;
   }
 
-  /* 最大ブロックサイズとブロック数を反映（ヘッダの再度書き込み） */
-  header.num_blocks     = num_blocks;
-  header.max_block_size = max_block_size;
+  /* ブロック数, 最大ブロックサイズ, 最大bpsを反映（ヘッダの再度書き込み） */
+  header.num_blocks         = num_blocks;
+  header.max_block_size     = max_block_size;
+  header.max_bit_per_second = max_bit_per_second;
   if ((api_ret = SLAEncoder_EncodeHeader(&header, data, data_size))
       != SLA_APIRESULT_OK) {
     return api_ret;

@@ -213,6 +213,7 @@ int do_decode(const char* in_filename, const char* out_filename, uint8_t enable_
     printf("Number of Samples:           %d \n", header.num_samples);
     printf("Number of Blocks:            %d \n", header.num_blocks);
     printf("Max Block Size:              %d \n", header.max_block_size);
+    printf("Max Bit Per Second(bps):     %d \n", header.max_bit_per_second);
   }
 
   /* 出力wavハンドルの生成 */

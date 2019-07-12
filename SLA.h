@@ -8,7 +8,7 @@
 /* フォーマットバージョン */
 #define SLA_FORMAT_VERSION			    1
 /* ヘッダのサイズ */
-#define SLA_HEADER_SIZE			        39
+#define SLA_HEADER_SIZE			        43
 /* ブロックヘッダのサイズ */
 #define SLA_BLOCK_HEADER_SIZE			  10
 /* サンプル数の無効値 */
@@ -76,11 +76,12 @@ struct SLAEncodeParameter {
 
 /* SLAヘッダ情報 */
 struct SLAHeaderInfo {
-	struct SLAWaveFormat      wave_format;	    /* 波形フォーマット         */
-  struct SLAEncodeParameter encode_param;     /* エンコードパラメータ     */
-	uint32_t                  num_samples;			/* 全サンプル数             */
-  uint32_t                  num_blocks;       /* ブロック数               */
-	uint32_t                  max_block_size;		/* 最大ブロックサイズ[byte] */
+	struct SLAWaveFormat      wave_format;	      /* 波形フォーマット         */
+  struct SLAEncodeParameter encode_param;       /* エンコードパラメータ     */
+	uint32_t                  num_samples;			  /* 全サンプル数             */
+  uint32_t                  num_blocks;         /* ブロック数               */
+	uint32_t                  max_block_size;		  /* 最大ブロックサイズ[byte] */
+  uint32_t                  max_bit_per_second; /* 最大bps                  */
 };
 
 #endif /* SLA_H_INCLUDED */
