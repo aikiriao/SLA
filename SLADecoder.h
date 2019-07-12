@@ -19,7 +19,7 @@ struct SLADecoderConfig {
 	uint32_t  max_num_block_samples;		  /* ブロックあたり最大サンプル数 */
 	uint32_t  max_parcor_order;				    /* 最大PARCOR係数次数 */
 	uint32_t  max_longterm_order;		      /* 最大ロングターム次数 */
-	uint32_t  max_lms_order_par_filter;   /* 最大LMS次数 */
+	uint32_t  max_lms_order_per_filter;   /* 最大LMS次数 */
   uint8_t   enable_crc_check;           /* CRCチェックを有効にするか */
   uint8_t   verpose_flag;               /* 詳細な情報を表示するか */
 };
@@ -28,7 +28,7 @@ struct SLADecoderConfig {
 struct SLAStreamingDecoderConfig {
   struct SLADecoderConfig core_config;          /* デコーダコンフィグ         */
   float                   decode_interval_hz;   /* デコード処理間隔[Hz]       */
-  uint32_t                max_bit_par_sample;   /* 最大サンプルあたりビット数 */
+  uint32_t                max_bit_per_sample;   /* 最大サンプルあたりビット数 */
 };
 
 #ifdef __cplusplus

@@ -24,7 +24,7 @@ struct SLADecoder {
   uint32_t                      max_num_block_samples;
   uint32_t                      max_parcor_order;
   uint32_t                      max_longterm_order;
-  uint32_t                      max_lms_order_par_filter;
+  uint32_t                      max_lms_order_per_filter;
   uint8_t                       enable_crc_check;
   struct SLABitStream*          strm;
   struct SLACoder*              coder;
@@ -51,11 +51,11 @@ struct SLAStreamingDecoder {
   uint8_t*                      data_buffer;
   uint32_t                      data_buffer_size;
   uint32_t                      data_buffer_provided_size;
-  uint32_t                      num_output_samples_par_decode;
+  uint32_t                      num_output_samples_per_decode;
   struct SLABlockHeaderInfo     current_block_header;
   uint32_t                      current_block_sample_offset;
   float                         decode_interval_hz;
-  uint32_t                      max_bit_par_sample;
+  uint32_t                      max_bit_per_sample;
   struct SLADataPacketQueue*    queue;
 };
 
@@ -80,7 +80,7 @@ struct SLADecoder* SLADecoder_Create(const struct SLADecoderConfig* config)
   decoder->max_num_block_samples    = config->max_num_block_samples;
   decoder->max_parcor_order         = config->max_parcor_order;
   decoder->max_longterm_order       = config->max_longterm_order;
-  decoder->max_lms_order_par_filter = config->max_lms_order_par_filter;
+  decoder->max_lms_order_per_filter = config->max_lms_order_per_filter;
   decoder->enable_crc_check         = config->enable_crc_check;
   decoder->verpose_flag             = config->verpose_flag;
 
@@ -108,7 +108,7 @@ struct SLADecoder* SLADecoder_Create(const struct SLADecoderConfig* config)
   for (ch = 0; ch < max_num_channels; ch++) {
     decoder->lpcs[ch]   = SLALPCSynthesizer_Create(config->max_parcor_order);
     decoder->ltms[ch]   = SLALongTermSynthesizer_Create(config->max_longterm_order, SLALONGTERM_MAX_PERIOD);
-    decoder->nlmsc[ch]  = SLALMSFilter_Create(config->max_lms_order_par_filter);
+    decoder->nlmsc[ch]  = SLALMSFilter_Create(config->max_lms_order_per_filter);
     decoder->emp[ch]    = SLAEmphasisFilter_Create();
   }
    
@@ -224,7 +224,7 @@ SLAApiResult SLADecoder_DecodeHeader(
   tmp_header.encode_param.longterm_order    = (uint32_t)u8buf;
   /* LMS次数 */
   SLAByteArray_GetUint8(data_pos, &u8buf);
-  tmp_header.encode_param.lms_order_par_filter = (uint32_t)u8buf;
+  tmp_header.encode_param.lms_order_per_filter = (uint32_t)u8buf;
   /* チャンネル毎の処理法 */
   SLAByteArray_GetUint8(data_pos, &u8buf);
   tmp_header.encode_param.ch_process_method = (uint32_t)u8buf;
@@ -279,7 +279,7 @@ SLAApiResult SLADecoder_SetEncodeParameter(struct SLADecoder* decoder,
   /* デコーダの許容範囲か？ */
   if ((encode_param->parcor_order > decoder->max_parcor_order)
       || (encode_param->longterm_order > decoder->max_longterm_order)
-      || (encode_param->lms_order_par_filter > decoder->max_lms_order_par_filter)
+      || (encode_param->lms_order_per_filter > decoder->max_lms_order_per_filter)
       || (encode_param->max_num_block_samples > decoder->max_num_block_samples)
       || (encode_param->max_num_block_samples < SLA_MIN_BLOCK_NUM_SAMPLES)) {
     return SLA_APIRESULT_EXCEED_HANDLE_CAPACITY;
@@ -473,7 +473,7 @@ static SLAApiResult SLADecoder_DecodeWaveData(struct SLADecoder* decoder,
 
     /* LMSの残差分を合成 */
     if (SLALMSFilter_SynthesizeInt32(decoder->nlmsc[ch],
-          decoder->encode_param.lms_order_par_filter,
+          decoder->encode_param.lms_order_per_filter,
           decoder->residual[ch], num_decode_saples,
           decoder->output[ch]) != SLAPREDICTOR_APIRESULT_OK) {
       return SLA_APIRESULT_FAILED_TO_SYNTHESIZE;
@@ -743,13 +743,13 @@ struct SLAStreamingDecoder* SLAStreamingDecoder_Create(const struct SLAStreaming
 
   /* コンフィグをメンバに記録 */
   decoder->decode_interval_hz = config->decode_interval_hz;
-  decoder->max_bit_par_sample = config->max_bit_par_sample;
+  decoder->max_bit_per_sample = config->max_bit_per_sample;
 
   /* バッファサイズ計算: ブロックをまたぐことがあるので、2ブロック分確保 */
   /* TODO:ダブルバッファリングが良いかも */
   decoder->data_buffer_size
     = 2 * SLA_CalculateSufficientBlockSize(config->core_config.max_num_channels,
-        config->core_config.max_num_block_samples, config->max_bit_par_sample);
+        config->core_config.max_num_block_samples, config->max_bit_per_sample);
 
   /* バッファ確保 */
   decoder->data_buffer = (uint8_t *)malloc(sizeof(uint8_t) * decoder->data_buffer_size);
@@ -788,12 +788,12 @@ SLAApiResult SLAStreamingDecoder_SetWaveFormat(struct SLAStreamingDecoder* decod
   }
 
   /* サンプルあたりビット数をチェック */
-  if (wave_format->bit_per_sample > decoder->max_bit_par_sample) {
+  if (wave_format->bit_per_sample > decoder->max_bit_per_sample) {
     return SLA_APIRESULT_EXCEED_HANDLE_CAPACITY;
   }
 
   /* デコード関数呼び出しあたりのサンプル数を確定 */
-  decoder->num_output_samples_par_decode
+  decoder->num_output_samples_per_decode
     = (uint32_t)ceil(SLA_STREAMING_DECODE_NUM_SAMPLES_MARGIN * (double)wave_format->sampling_rate / decoder->decode_interval_hz);
   
   return SLA_APIRESULT_OK;
@@ -815,7 +815,7 @@ SLAApiResult SLAStreamingDecoder_SetEncodeParameter(struct SLAStreamingDecoder* 
 SLAApiResult SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(struct SLAStreamingDecoder* decoder,
     uint32_t* estimate_data_size)
 {
-  double    bytes_par_sample;
+  double    bytes_per_sample;
   uint32_t  tmp_estimate_data_size;
 
   /* 引数チェック */
@@ -824,11 +824,11 @@ SLAApiResult SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(struct SLAStre
   }
 
   /* サンプルあたりのバイト数を、現在デコード中ブロックの平均により推定 */
-  bytes_par_sample = (double)decoder->current_block_header.block_size / decoder->current_block_header.block_num_samples;
+  bytes_per_sample = (double)decoder->current_block_header.block_size / decoder->current_block_header.block_num_samples;
 
   /* デコード関数呼び出しあたりのバイト数に変換 
    * 安全に振るためバイト数を切り上げ */
-  tmp_estimate_data_size = (uint32_t)ceil(bytes_par_sample * decoder->num_output_samples_par_decode);
+  tmp_estimate_data_size = (uint32_t)ceil(bytes_per_sample * decoder->num_output_samples_per_decode);
 
   /* 少なくとも最小のブロックヘッダサイズ分は必要 */
   tmp_estimate_data_size = SLAUTILITY_MAX(tmp_estimate_data_size, SLA_MINIMUM_BLOCK_HEADER_SIZE);
@@ -843,7 +843,7 @@ SLAApiResult SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(struct SLAStre
 SLAApiResult SLAStreamingDecoder_EstimateDecodableNumSamples(struct SLAStreamingDecoder* decoder,
     uint32_t* estimate_num_samples)
 {
-  double samples_par_bytes, block_progress_ratio;
+  double samples_per_bytes, block_progress_ratio;
   double estimate_num_blocks, tmp_estimate_num_samples;
 
   /* 引数チェック */
@@ -852,7 +852,7 @@ SLAApiResult SLAStreamingDecoder_EstimateDecodableNumSamples(struct SLAStreaming
   }
 
   /* 1バイトあたりのサンプル数を、現在デコード中ブロックの平均により推定 */
-  samples_par_bytes = (double)decoder->current_block_header.block_num_samples / decoder->current_block_header.block_size;
+  samples_per_bytes = (double)decoder->current_block_header.block_num_samples / decoder->current_block_header.block_size;
 
   /* 現在のブロック内進捗率 */
   block_progress_ratio  = (double)decoder->current_block_sample_offset / decoder->current_block_header.block_num_samples;
@@ -861,7 +861,7 @@ SLAApiResult SLAStreamingDecoder_EstimateDecodableNumSamples(struct SLAStreaming
   estimate_num_blocks   = (double)decoder->data_buffer_provided_size / decoder->current_block_header.block_size - block_progress_ratio;
 
   /* ブロック数から推定値を算出 */
-  tmp_estimate_num_samples = estimate_num_blocks * decoder->current_block_header.block_size * samples_par_bytes;
+  tmp_estimate_num_samples = estimate_num_blocks * decoder->current_block_header.block_size * samples_per_bytes;
 
   /* 安全に振るため切り捨て */
   (*estimate_num_samples) = (uint32_t)floor(tmp_estimate_num_samples);
@@ -879,7 +879,7 @@ SLAApiResult SLAStreamingDecoder_GetOutputNumSamplesParDecode(struct SLAStreamin
   }
 
   /* 結果に記録 */
-  (*output_num_samples) = decoder->num_output_samples_par_decode;
+  (*output_num_samples) = decoder->num_output_samples_per_decode;
 
   return SLA_APIRESULT_OK;
 }
@@ -970,7 +970,7 @@ static SLAApiResult SLAStreamingDecoder_DecodeCore(struct SLAStreamingDecoder* d
   SLA_Assert(buffer_num_samples > 0);
 
   /* デコードするべきサンプル数 */
-  goal_num_samples = SLAUTILITY_MIN(buffer_num_samples, decoder->num_output_samples_par_decode);
+  goal_num_samples = SLAUTILITY_MIN(buffer_num_samples, decoder->num_output_samples_per_decode);
 
   /* デコードサンプル数に達するまでデコードし続ける */
   sample_progress = 0;

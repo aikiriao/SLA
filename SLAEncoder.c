@@ -18,7 +18,7 @@ struct SLAEncoder {
   uint32_t                      max_num_block_samples;
   uint32_t                      max_parcor_order;
   uint32_t                      max_longterm_order;
-  uint32_t                      max_lms_order_par_filter;
+  uint32_t                      max_lms_order_per_filter;
   struct SLABitStream*          strm;
   struct SLACoder*              coder;
   void*                         strm_work;
@@ -69,7 +69,7 @@ struct SLAEncoder* SLAEncoder_Create(const struct SLAEncoderConfig* config)
   encoder->max_num_block_samples    = max_num_block_samples;
   encoder->max_parcor_order         = config->max_parcor_order;
   encoder->max_longterm_order       = config->max_longterm_order;
-  encoder->max_lms_order_par_filter = config->max_lms_order_par_filter;
+  encoder->max_lms_order_per_filter = config->max_lms_order_per_filter;
   encoder->verpose_flag             = config->verpose_flag;
 
   /* 各種領域割当て */
@@ -114,7 +114,7 @@ struct SLAEncoder* SLAEncoder_Create(const struct SLAEncoderConfig* config)
   for (ch = 0; ch < max_num_channels; ch++) {
     encoder->lpcs[ch]   = SLALPCSynthesizer_Create(config->max_parcor_order);
     encoder->ltms[ch]   = SLALongTermSynthesizer_Create(config->max_longterm_order, SLALONGTERM_MAX_PERIOD);
-    encoder->nlmsc[ch]  = SLALMSFilter_Create(config->max_lms_order_par_filter);
+    encoder->nlmsc[ch]  = SLALMSFilter_Create(config->max_lms_order_per_filter);
     encoder->emp[ch]    = SLAEmphasisFilter_Create();
   }
   
@@ -200,7 +200,7 @@ SLAApiResult SLAEncoder_SetEncodeParameter(struct SLAEncoder* encoder,
   /* エンコーダの許容範囲か？ */
   if ((encode_param->parcor_order > encoder->max_parcor_order)
       || (encode_param->longterm_order > encoder->max_longterm_order)
-      || (encode_param->lms_order_par_filter > encoder->max_lms_order_par_filter)
+      || (encode_param->lms_order_per_filter > encoder->max_lms_order_per_filter)
       || (encode_param->max_num_block_samples > encoder->max_num_block_samples)
       || (encode_param->max_num_block_samples < SLA_MIN_BLOCK_NUM_SAMPLES)) {
     return SLA_APIRESULT_EXCEED_HANDLE_CAPACITY;
@@ -255,7 +255,7 @@ SLAApiResult SLAEncoder_EncodeHeader(
   /* ロングターム係数次数 */
   SLAByteArray_PutUint8(data_pos,  (uint8_t)header->encode_param.longterm_order);
   /* LMS次数 */
-  SLAByteArray_PutUint8(data_pos,  (uint8_t)header->encode_param.lms_order_par_filter);
+  SLAByteArray_PutUint8(data_pos,  (uint8_t)header->encode_param.lms_order_per_filter);
   /* チャンネル毎の処理法 */
   SLAByteArray_PutUint8(data_pos,  (uint8_t)header->encode_param.ch_process_method);
   /* SLAブロック数 */
@@ -626,7 +626,7 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
     /* LMSで残差計算 */
     SLALMSFilter_Reset(encoder->nlmsc[ch]);
     if (SLALMSFilter_PredictInt32(encoder->nlmsc[ch],
-          encoder->encode_param.lms_order_par_filter,
+          encoder->encode_param.lms_order_per_filter,
           encoder->residual[ch], num_samples,
           encoder->tmp_residual[ch]) == SLAPREDICTOR_APIRESULT_OK) {
       /* 残差をLMSによる残差に差し替え */

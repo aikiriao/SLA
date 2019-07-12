@@ -52,7 +52,7 @@ SLAPredictorApiResult SLALPCCalculator_CalculatePARCORCoefDouble(
 
 /* 入力データとPARCOR係数からサンプルあたりの推定符号長を求める */
 SLAPredictorApiResult SLALPCCalculator_EstimateCodeLength(
-    const double* data, uint32_t num_samples, uint32_t bits_par_sample,
+    const double* data, uint32_t num_samples, uint32_t bits_per_sample,
     const double* parcor_coef, uint32_t order, 
     double* length_per_sample);
 
@@ -156,7 +156,7 @@ SLAPredictorApiResult SLAOptimalEncodeEstimator_SearchOptimalBlockPartitions(
     struct SLALPCCalculator* lpcc,
     const double* const* data, uint32_t num_channels, uint32_t num_samples,
     uint32_t min_num_block_samples, uint32_t delta_num_samples, uint32_t max_num_block_samples,
-    uint32_t bits_par_sample, uint32_t parcor_order, 
+    uint32_t bits_per_sample, uint32_t parcor_order, 
     uint32_t* optimal_num_partitions, uint32_t* optimal_block_partition);
 
 /* 最大分割数の取得 */

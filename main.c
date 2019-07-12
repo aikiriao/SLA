@@ -82,7 +82,7 @@ int do_encode(const char* in_filename, const char* out_filename, uint32_t encode
   config.max_num_block_samples    = 16384;
   config.max_parcor_order         = 48;
   config.max_longterm_order       = 5;
-  config.max_lms_order_par_filter = 40;
+  config.max_lms_order_per_filter = 40;
   config.verpose_flag             = verpose_flag;
   if ((encoder = SLAEncoder_Create(&config)) == NULL) {
     fprintf(stderr, "Failed to create encoder handle. \n");
@@ -108,7 +108,7 @@ int do_encode(const char* in_filename, const char* out_filename, uint32_t encode
   ppreset = &encode_preset[encode_preset_no];
   enc_param.parcor_order            = ppreset->parcor_order;
   enc_param.longterm_order          = ppreset->longterm_order;
-  enc_param.lms_order_par_filter    = ppreset->lms_order_par_filter;
+  enc_param.lms_order_per_filter    = ppreset->lms_order_per_filter;
   if ((in_wav->format.num_channels == 2) 
       && (ppreset->ch_process_method == SLA_CHPROCESSMETHOD_STEREO_MS)) {
     /* 音源がステレオのときだけMSは有効 */
@@ -174,7 +174,7 @@ int do_decode(const char* in_filename, const char* out_filename, uint8_t enable_
   config.max_num_block_samples    = 16384;
   config.max_parcor_order         = 48;
   config.max_longterm_order       = 5;
-  config.max_lms_order_par_filter = 40;
+  config.max_lms_order_per_filter = 40;
   config.enable_crc_check         = enable_crc_check;
   config.verpose_flag             = verpose_flag;
   if ((decoder = SLADecoder_Create(&config)) == NULL) {
@@ -207,7 +207,7 @@ int do_decode(const char* in_filename, const char* out_filename, uint8_t enable_
     printf("Offset Left Shift:           %d \n", header.wave_format.offset_lshift);
     printf("PARCOR Order:                %d \n", header.encode_param.parcor_order);
     printf("Longterm Order:              %d \n", header.encode_param.longterm_order);
-    printf("LMS Order Par Filter:        %d \n", header.encode_param.lms_order_par_filter);
+    printf("LMS Order Par Filter:        %d \n", header.encode_param.lms_order_per_filter);
     printf("Channel Process Method:      %d \n", header.encode_param.ch_process_method);
     printf("Max Number of Block Samples: %d \n", header.encode_param.max_num_block_samples);
     printf("Number of Samples:           %d \n", header.num_samples);
@@ -281,11 +281,11 @@ int do_streaming_decode(const char* in_filename, const char* out_filename, uint8
   core_config.max_num_block_samples    = 16384;
   core_config.max_parcor_order         = 48;
   core_config.max_longterm_order       = 5;
-  core_config.max_lms_order_par_filter = 40;
+  core_config.max_lms_order_per_filter = 40;
   core_config.enable_crc_check         = enable_crc_check;
   core_config.verpose_flag             = verpose_flag;
 
-  streaming_config.max_bit_par_sample = 24;
+  streaming_config.max_bit_per_sample = 24;
   streaming_config.decode_interval_hz = 120.0f;
   streaming_config.core_config = core_config;
 
@@ -319,12 +319,13 @@ int do_streaming_decode(const char* in_filename, const char* out_filename, uint8
     printf("Offset Left Shift:           %d \n", header.wave_format.offset_lshift);
     printf("PARCOR Order:                %d \n", header.encode_param.parcor_order);
     printf("Longterm Order:              %d \n", header.encode_param.longterm_order);
-    printf("LMS Order Par Filter:        %d \n", header.encode_param.lms_order_par_filter);
+    printf("LMS Order Per Filter:        %d \n", header.encode_param.lms_order_per_filter);
     printf("Channel Process Method:      %d \n", header.encode_param.ch_process_method);
     printf("Max Number of Block Samples: %d \n", header.encode_param.max_num_block_samples);
     printf("Number of Samples:           %d \n", header.num_samples);
     printf("Number of Blocks:            %d \n", header.num_blocks);
     printf("Max Block Size:              %d \n", header.max_block_size);
+    printf("Max Bit Per Second(bps):     %d \n", header.max_bit_per_second);
   }
 
   /* 出力wavハンドルの生成 */

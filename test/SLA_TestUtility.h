@@ -8,7 +8,7 @@
   (p_config)->max_num_block_samples     = 8192; \
   (p_config)->max_parcor_order          = 64;   \
   (p_config)->max_longterm_order        = 5;    \
-  (p_config)->max_lms_order_par_filter  = 64;   \
+  (p_config)->max_lms_order_per_filter  = 64;   \
 }
 
 /* デコーダデフォルトのコンフィグをセット */
@@ -18,7 +18,7 @@
   (p_config)->max_num_block_samples     = 8192; \
   (p_config)->max_parcor_order          = 64;   \
   (p_config)->max_longterm_order        = 5;    \
-  (p_config)->max_lms_order_par_filter  = 64;   \
+  (p_config)->max_lms_order_per_filter  = 64;   \
   (p_config)->enable_crc_check          = 0;    \
 }
 
@@ -27,7 +27,7 @@
 #define SLAStreamingDecoder_SetDefaultConfig(p_config) {  \
   SLADecoder_SetDefaultConfig(&(p_config)->core_config);  \
   (p_config)->decode_interval_hz = 60.0f;                 \
-  (p_config)->max_bit_par_sample = 24;                    \
+  (p_config)->max_bit_per_sample = 24;                    \
 }
 
 /* ひとまず有効な波形情報を設定 */
@@ -42,7 +42,7 @@
 #define SLATestUtility_SetValidEncodeParameter(p_param) { \
     (p_param)->parcor_order             = 10;        \
     (p_param)->longterm_order           = 1;         \
-    (p_param)->lms_order_par_filter     = 10;        \
+    (p_param)->lms_order_per_filter     = 10;        \
     (p_param)->ch_process_method                     \
       = SLA_CHPROCESSMETHOD_NONE;                    \
     (p_param)->window_function_type                  \

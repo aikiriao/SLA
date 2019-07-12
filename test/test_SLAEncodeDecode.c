@@ -254,13 +254,13 @@ static int32_t testSLAEncodeDecode_DoTestCase(const struct EncodeDecodeTestCase*
   encoder_config.max_num_block_samples    = test_case->encode_parameter.max_num_block_samples;
   encoder_config.max_parcor_order         = test_case->encode_parameter.parcor_order;
   encoder_config.max_longterm_order       = test_case->encode_parameter.longterm_order;
-  encoder_config.max_lms_order_par_filter = test_case->encode_parameter.lms_order_par_filter;
+  encoder_config.max_lms_order_per_filter = test_case->encode_parameter.lms_order_per_filter;
   encoder_config.verpose_flag             = 0;
   decoder_config.max_num_channels         = num_channels;
   decoder_config.max_num_block_samples    = test_case->encode_parameter.max_num_block_samples;
   decoder_config.max_parcor_order         = test_case->encode_parameter.parcor_order;
   decoder_config.max_longterm_order       = test_case->encode_parameter.longterm_order;
-  decoder_config.max_lms_order_par_filter = test_case->encode_parameter.lms_order_par_filter;
+  decoder_config.max_lms_order_per_filter = test_case->encode_parameter.lms_order_per_filter;
   decoder_config.enable_crc_check         = 1;
   decoder_config.verpose_flag             = 0;
 
@@ -391,19 +391,19 @@ static int32_t testSLAEncodeDecode_DoStreamingDecodeTestCase(const struct Encode
   encoder_config.max_num_block_samples    = test_case->encode_parameter.max_num_block_samples;
   encoder_config.max_parcor_order         = test_case->encode_parameter.parcor_order;
   encoder_config.max_longterm_order       = test_case->encode_parameter.longterm_order;
-  encoder_config.max_lms_order_par_filter = test_case->encode_parameter.lms_order_par_filter;
+  encoder_config.max_lms_order_per_filter = test_case->encode_parameter.lms_order_per_filter;
   encoder_config.verpose_flag             = 0;
   decoder_config.max_num_channels         = num_channels;
   decoder_config.max_num_block_samples    = test_case->encode_parameter.max_num_block_samples;
   decoder_config.max_parcor_order         = test_case->encode_parameter.parcor_order;
   decoder_config.max_longterm_order       = test_case->encode_parameter.longterm_order;
-  decoder_config.max_lms_order_par_filter = test_case->encode_parameter.lms_order_par_filter;
+  decoder_config.max_lms_order_per_filter = test_case->encode_parameter.lms_order_per_filter;
   decoder_config.enable_crc_check         = 1;
   decoder_config.verpose_flag             = 0;
 
   streaming_decoder_config.core_config = decoder_config;
   streaming_decoder_config.decode_interval_hz = 60.0f;  /* 可変にしたい */
-  streaming_decoder_config.max_bit_par_sample = test_case->wave_format.bit_per_sample;
+  streaming_decoder_config.max_bit_per_sample = test_case->wave_format.bit_per_sample;
 
   /* 一時領域の割り当て */
   input_double  = (double **)malloc(sizeof(double*) * num_channels);

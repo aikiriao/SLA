@@ -68,7 +68,7 @@ struct SLAWaveFormat {
 struct SLAEncodeParameter {
 	uint32_t                parcor_order;			        /* PARCOR係数次数 */
 	uint32_t                longterm_order;		        /* ロングターム次数 */
-	uint32_t                lms_order_par_filter;	    /* LMS1フィルタあたりの次数 */
+	uint32_t                lms_order_per_filter;	    /* LMS1フィルタあたりの次数 */
 	SLAChannelProcessMethod	ch_process_method;	      /* マルチチャンネル処理法 */
   SLAWindowFunctionType   window_function_type;     /* 窓関数の種類 */
 	uint32_t                max_num_block_samples;    /* ブロックあたりサンプル数 */

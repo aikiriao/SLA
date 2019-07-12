@@ -49,7 +49,7 @@ static void testSLADecoder_DecodeHeaderTest(void *obj)
     Test_AssertEqual(write_header.wave_format.sampling_rate,      get_header.wave_format.sampling_rate);
     Test_AssertEqual(write_header.encode_param.parcor_order,      get_header.encode_param.parcor_order);
     Test_AssertEqual(write_header.encode_param.longterm_order,    get_header.encode_param.longterm_order);
-    Test_AssertEqual(write_header.encode_param.lms_order_par_filter,  get_header.encode_param.lms_order_par_filter);
+    Test_AssertEqual(write_header.encode_param.lms_order_per_filter,  get_header.encode_param.lms_order_per_filter);
     Test_AssertEqual(write_header.encode_param.ch_process_method, get_header.encode_param.ch_process_method);
     Test_AssertEqual(
         write_header.encode_param.max_num_block_samples, get_header.encode_param.max_num_block_samples);
@@ -485,7 +485,7 @@ static void testSLAStreamingDecoder_CreateDestroyTest(void *obj)
     Test_AssertCondition(decoder->data_buffer != NULL);
     Test_AssertNotEqual(decoder->data_buffer_size, 0);
     Test_AssertEqual(decoder->decode_interval_hz, config.decode_interval_hz);
-    Test_AssertEqual(decoder->max_bit_par_sample, config.max_bit_par_sample);
+    Test_AssertEqual(decoder->max_bit_per_sample, config.max_bit_per_sample);
 
     SLAStreamingDecoder_Destroy(decoder);
     Test_AssertCondition(decoder->data_buffer == NULL);

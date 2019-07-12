@@ -411,7 +411,7 @@ static SLAPredictorApiResult SLALPCCalculator_CalculateVarianceRatio(
 
 /* 入力データとPARCOR係数からサンプルあたりの推定符号長を求める */
 SLAPredictorApiResult SLALPCCalculator_EstimateCodeLength(
-    const double* data, uint32_t num_samples, uint32_t bits_par_sample,
+    const double* data, uint32_t num_samples, uint32_t bits_per_sample,
     const double* parcor_coef, uint32_t order,
     double* length_per_sample)
 {
@@ -432,7 +432,7 @@ SLAPredictorApiResult SLALPCCalculator_EstimateCodeLength(
     log2_mean_res_power += data[smpl] * data[smpl];
   }
   /* 整数PCMの振幅に変換（doubleの密度保障） */
-  log2_mean_res_power *= pow(2, 2 * (bits_par_sample - 1));
+  log2_mean_res_power *= pow(2, 2 * (bits_per_sample - 1));
   if (fabs(log2_mean_res_power) <= FLT_MIN) {
     /* ほぼ無音だった場合は符号長を0とする */
     *length_per_sample = 0.0;
@@ -1392,7 +1392,7 @@ SLAPredictorApiResult SLAOptimalEncodeEstimator_SearchOptimalBlockPartitions(
     struct SLALPCCalculator* lpcc,
     const double* const* data, uint32_t num_channels, uint32_t num_samples,
     uint32_t min_num_block_samples, uint32_t delta_num_samples, uint32_t max_num_block_samples,
-    uint32_t bits_par_sample, uint32_t parcor_order, 
+    uint32_t bits_per_sample, uint32_t parcor_order, 
     uint32_t* optimal_num_partitions, uint32_t* optimal_block_partition)
 {
   uint32_t  i, j, ch;
@@ -1447,7 +1447,7 @@ SLAPredictorApiResult SLAOptimalEncodeEstimator_SearchOptimalBlockPartitions(
           /* 1サンプルあたりの推定符号長の計算 */
           if (SLALPCCalculator_EstimateCodeLength(
                 &data[ch][sample_offset],
-                num_block_samples, bits_par_sample,
+                num_block_samples, bits_per_sample,
                 lpcc->parcor_coef, parcor_order, &code_length) != SLAPREDICTOR_APIRESULT_OK) {
             return SLAPREDICTOR_APIRESULT_FAILED_TO_CALCULATION;
           }
