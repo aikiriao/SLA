@@ -888,7 +888,7 @@ SLAApiResult SLAStreamingDecoder_GetOutputNumSamplesParDecode(struct SLAStreamin
 SLAApiResult SLAStreamingDecoder_GetRemainDataSize(struct SLAStreamingDecoder* decoder,
     uint32_t* remain_data_size)
 {
-  uint32_t queue_remain;
+  uint32_t queue_remain, data_buffer_remain;
 
   /* 引数チェック */
   if ((decoder == NULL) || (remain_data_size == NULL)) {
@@ -898,8 +898,18 @@ SLAApiResult SLAStreamingDecoder_GetRemainDataSize(struct SLAStreamingDecoder* d
   /* キューの残りデータサイズを取得 */
   queue_remain = SLADataPacketQueue_GetRemainDataSize(decoder->queue);
 
+  /* 連続バッファの残りサイズ */
+  data_buffer_remain = decoder->data_buffer_provided_size;
+  if (decoder->current_block_sample_offset > 0) {
+    int32_t decoded_size;
+    /* デコード済みサイズで減じる */
+    SLABitStream_Tell(decoder->decoder_core->strm, &decoded_size);
+    SLA_Assert(decoder->data_buffer_provided_size >= (uint32_t)decoded_size);
+    data_buffer_remain -= (uint32_t)decoded_size;
+  }
+
   /* キューと連続バッファの合計が余りサイズ */
-  (*remain_data_size) = queue_remain + decoder->data_buffer_provided_size;
+  (*remain_data_size) = queue_remain + data_buffer_remain;
 
   return SLA_APIRESULT_OK;
 }
