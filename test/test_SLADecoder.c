@@ -733,17 +733,14 @@ static void testSLAStreamingDecoder_GetDecodeInformationTest(void *obj)
     struct SLAWaveFormat              wave_format;
     struct SLAStreamingDecoder*       decoder;
     uint32_t estimate_data_size, tmp_estimate_data_size;
-    const struct SLABlockHeaderInfo tmp_block_header = { 2048, 1024 };
 
     /* 通常の成功例 */
     SLAStreamingDecoder_SetDefaultConfig(&config);
     decoder = SLAStreamingDecoder_Create(&config);
     SLATestUtility_SetValidWaveFormat(&wave_format);
-    decoder->current_block_header = tmp_block_header;
     SLAStreamingDecoder_SetWaveFormat(decoder, &wave_format);
     Test_AssertEqual(SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(decoder, &estimate_data_size), SLA_APIRESULT_OK);
     Test_AssertNotEqual(estimate_data_size, 0);
-    Test_AssertCondition(estimate_data_size <= tmp_block_header.block_size);
     SLAStreamingDecoder_Destroy(decoder);
 
     /* サンプリングレートを2倍にしてみる */
@@ -751,7 +748,6 @@ static void testSLAStreamingDecoder_GetDecodeInformationTest(void *obj)
     decoder = SLAStreamingDecoder_Create(&config);
     SLATestUtility_SetValidWaveFormat(&wave_format);
     wave_format.sampling_rate *= 2;
-    decoder->current_block_header = tmp_block_header;
     SLAStreamingDecoder_SetWaveFormat(decoder, &wave_format);
     Test_AssertEqual(SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(decoder, &tmp_estimate_data_size), SLA_APIRESULT_OK);
     Test_AssertCondition(tmp_estimate_data_size >= (2 * estimate_data_size));
@@ -762,7 +758,6 @@ static void testSLAStreamingDecoder_GetDecodeInformationTest(void *obj)
     decoder = SLAStreamingDecoder_Create(&config);
     SLATestUtility_SetValidWaveFormat(&wave_format);
     wave_format.sampling_rate /= 2;
-    decoder->current_block_header = tmp_block_header;
     SLAStreamingDecoder_SetWaveFormat(decoder, &wave_format);
     Test_AssertEqual(SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(decoder, &tmp_estimate_data_size), SLA_APIRESULT_OK);
     Test_AssertCondition(tmp_estimate_data_size >= (estimate_data_size / 2));
@@ -773,7 +768,6 @@ static void testSLAStreamingDecoder_GetDecodeInformationTest(void *obj)
     config.decode_interval_hz *= 2;
     decoder = SLAStreamingDecoder_Create(&config);
     SLATestUtility_SetValidWaveFormat(&wave_format);
-    decoder->current_block_header = tmp_block_header;
     SLAStreamingDecoder_SetWaveFormat(decoder, &wave_format);
     Test_AssertEqual(SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(decoder, &tmp_estimate_data_size), SLA_APIRESULT_OK);
     Test_AssertCondition(tmp_estimate_data_size >= (estimate_data_size / 2));
@@ -784,7 +778,6 @@ static void testSLAStreamingDecoder_GetDecodeInformationTest(void *obj)
     config.decode_interval_hz /= 2;
     decoder = SLAStreamingDecoder_Create(&config);
     SLATestUtility_SetValidWaveFormat(&wave_format);
-    decoder->current_block_header = tmp_block_header;
     SLAStreamingDecoder_SetWaveFormat(decoder, &wave_format);
     Test_AssertEqual(SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(decoder, &tmp_estimate_data_size), SLA_APIRESULT_OK);
     Test_AssertCondition(tmp_estimate_data_size >= (2 * estimate_data_size));

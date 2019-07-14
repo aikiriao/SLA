@@ -59,6 +59,7 @@ struct SLAStreamingDecoder {
   uint32_t                      num_output_samples_per_decode;
   struct SLABlockHeaderInfo     current_block_header;
   uint32_t                      current_block_sample_offset;
+  float                         estimated_bytes_per_sample;
   float                         decode_interval_hz;
   uint32_t                      max_bit_per_sample;
   struct SLADataPacketQueue*    queue;
@@ -774,6 +775,9 @@ struct SLAStreamingDecoder* SLAStreamingDecoder_Create(const struct SLAStreaming
 
   /* データパケットキューの作成 */
   decoder->queue = SLADataPacketQueue_Create(SLA_STREAMING_DECODE_MAX_NUM_PACKETS);
+  if (decoder->queue == NULL) {
+    return NULL;
+  }
 
   /* コンフィグをメンバに記録 */
   decoder->decode_interval_hz = config->decode_interval_hz;
@@ -786,6 +790,9 @@ struct SLAStreamingDecoder* SLAStreamingDecoder_Create(const struct SLAStreaming
 
   /* バッファ確保 */
   decoder->data_buffer = (uint8_t *)malloc(sizeof(uint8_t) * decoder->data_buffer_size);
+
+  /* 推定サンプルあたりバイト数を最悪値で見積もる */
+  decoder->estimated_bytes_per_sample = config->core_config.max_num_channels * (config->max_bit_per_sample / 8);
 
   /* 内部状態リセット */
   SLAStreamingDecoder_Reset(decoder);
@@ -827,7 +834,7 @@ SLAApiResult SLAStreamingDecoder_SetWaveFormat(struct SLAStreamingDecoder* decod
 
   /* デコード関数呼び出しあたりのサンプル数を確定 */
   decoder->num_output_samples_per_decode
-    = (uint32_t)ceil(SLA_STREAMING_DECODE_NUM_SAMPLES_MARGIN * (double)wave_format->sampling_rate / decoder->decode_interval_hz);
+    = (uint32_t)ceil(SLA_STREAMING_DECODE_NUM_SAMPLES_MARGIN * (float)wave_format->sampling_rate / decoder->decode_interval_hz);
   
   return SLA_APIRESULT_OK;
 }
@@ -848,7 +855,6 @@ SLAApiResult SLAStreamingDecoder_SetEncodeParameter(struct SLAStreamingDecoder* 
 SLAApiResult SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(struct SLAStreamingDecoder* decoder,
     uint32_t* estimate_data_size)
 {
-  double    bytes_per_sample;
   uint32_t  tmp_estimate_data_size;
 
   /* 引数チェック */
@@ -856,12 +862,9 @@ SLAApiResult SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(struct SLAStre
     return SLA_APIRESULT_INVALID_ARGUMENT;
   }
 
-  /* サンプルあたりのバイト数を、現在デコード中ブロックの平均により推定 */
-  bytes_per_sample = (double)decoder->current_block_header.block_size / decoder->current_block_header.block_num_samples;
-
   /* デコード関数呼び出しあたりのバイト数に変換 
    * 安全に振るためバイト数を切り上げ */
-  tmp_estimate_data_size = (uint32_t)ceil(bytes_per_sample * decoder->num_output_samples_per_decode);
+  tmp_estimate_data_size = (uint32_t)ceil(decoder->estimated_bytes_per_sample * decoder->num_output_samples_per_decode);
 
   /* 少なくとも最小のブロックヘッダサイズ分は必要 */
   tmp_estimate_data_size = SLAUTILITY_MAX(tmp_estimate_data_size, SLA_MINIMUM_BLOCK_HEADER_SIZE);
@@ -876,25 +879,22 @@ SLAApiResult SLAStreamingDecoder_EstimateMinimumNessesaryDataSize(struct SLAStre
 SLAApiResult SLAStreamingDecoder_EstimateDecodableNumSamples(struct SLAStreamingDecoder* decoder,
     uint32_t* estimate_num_samples)
 {
-  double samples_per_bytes, block_progress_ratio;
-  double estimate_num_blocks, tmp_estimate_num_samples;
+  SLAApiResult  api_ret;
+  uint32_t      remain_data_size;
+  float         tmp_estimate_num_samples;
 
   /* 引数チェック */
   if ((decoder == NULL) || (estimate_num_samples == NULL)) {
     return SLA_APIRESULT_INVALID_ARGUMENT;
   }
 
-  /* 1バイトあたりのサンプル数を、現在デコード中ブロックの平均により推定 */
-  samples_per_bytes = (double)decoder->current_block_header.block_num_samples / decoder->current_block_header.block_size;
+  /* 残りデータサイズを取得 */
+  if ((api_ret = SLAStreamingDecoder_GetRemainDataSize(decoder, &remain_data_size)) != SLA_APIRESULT_OK) {
+    return api_ret;
+  }
 
-  /* 現在のブロック内進捗率 */
-  block_progress_ratio  = (double)decoder->current_block_sample_offset / decoder->current_block_header.block_num_samples;
-
-  /* 供給データに含まれるブロック数の推定値 */
-  estimate_num_blocks   = (double)decoder->data_buffer_provided_size / decoder->current_block_header.block_size - block_progress_ratio;
-
-  /* ブロック数から推定値を算出 */
-  tmp_estimate_num_samples = estimate_num_blocks * decoder->current_block_header.block_size * samples_per_bytes;
+  /* デコード可能なサンプル数推定値を計算 */
+  tmp_estimate_num_samples = (float)remain_data_size / decoder->estimated_bytes_per_sample;
 
   /* 安全に振るため切り捨て */
   (*estimate_num_samples) = (uint32_t)floor(tmp_estimate_num_samples);
@@ -1022,12 +1022,10 @@ static SLAApiResult SLAStreamingDecoder_DecodeCore(struct SLAStreamingDecoder* d
     /* ブロック先頭 */
     if (decoder->current_block_sample_offset == 0) {
       uint32_t block_header_size;
-
       /* ストリームを開く */
       decoder->decoder_core->strm = SLABitStream_OpenMemory(
           decoder->data_buffer, decoder->data_buffer_size, "r", 
           decoder->decoder_core->strm_work, SLABitStream_CalculateWorkSize());
-
       /* ブロックヘッダ読み取り */
       if ((ret = SLADecoder_DecodeBlockHeader(decoder->decoder_core, 
               decoder->data_buffer, decoder->data_buffer_provided_size,
@@ -1036,7 +1034,9 @@ static SLAApiResult SLAStreamingDecoder_DecodeCore(struct SLAStreamingDecoder* d
       }
       decoded_data_progress += block_header_size;
       block_offset += block_header_size;
-
+      /* サンプルあたりバイト数の更新 */
+      decoder->estimated_bytes_per_sample
+        = (float)decoder->current_block_header.block_size / decoder->current_block_header.block_num_samples;
       /* 予測ハンドルをリセット（ブロック先頭で必須） */
       SLADecoder_ResetAllSynthesizer(decoder->decoder_core);
     }
