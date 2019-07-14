@@ -678,7 +678,7 @@ static void testSLAStreamingDecoder_GetDecodeInformationTest(void *obj)
     decoder = SLAStreamingDecoder_Create(&config);
     SLATestUtility_SetValidWaveFormat(&wave_format);
     SLAStreamingDecoder_SetWaveFormat(decoder, &wave_format);
-    Test_AssertEqual(SLAStreamingDecoder_GetOutputNumSamplesParDecode(decoder, &output_num_samples), SLA_APIRESULT_OK);
+    Test_AssertEqual(SLAStreamingDecoder_GetOutputNumSamplesPerDecode(decoder, &output_num_samples), SLA_APIRESULT_OK);
     Test_AssertNotEqual(output_num_samples, 0);
     SLAStreamingDecoder_Destroy(decoder);
 
@@ -688,7 +688,7 @@ static void testSLAStreamingDecoder_GetDecodeInformationTest(void *obj)
     SLATestUtility_SetValidWaveFormat(&wave_format);
     wave_format.sampling_rate *= 2;
     SLAStreamingDecoder_SetWaveFormat(decoder, &wave_format);
-    Test_AssertEqual(SLAStreamingDecoder_GetOutputNumSamplesParDecode(decoder, &tmp_output_num_samples), SLA_APIRESULT_OK);
+    Test_AssertEqual(SLAStreamingDecoder_GetOutputNumSamplesPerDecode(decoder, &tmp_output_num_samples), SLA_APIRESULT_OK);
     /* 2倍以上になるはず */
     Test_AssertCondition(tmp_output_num_samples >= (2 * output_num_samples));
     SLAStreamingDecoder_Destroy(decoder);
@@ -699,7 +699,7 @@ static void testSLAStreamingDecoder_GetDecodeInformationTest(void *obj)
     SLATestUtility_SetValidWaveFormat(&wave_format);
     wave_format.sampling_rate /= 2;
     SLAStreamingDecoder_SetWaveFormat(decoder, &wave_format);
-    Test_AssertEqual(SLAStreamingDecoder_GetOutputNumSamplesParDecode(decoder, &tmp_output_num_samples), SLA_APIRESULT_OK);
+    Test_AssertEqual(SLAStreamingDecoder_GetOutputNumSamplesPerDecode(decoder, &tmp_output_num_samples), SLA_APIRESULT_OK);
     /* 半分以上になるはず */
     Test_AssertCondition(tmp_output_num_samples >= (output_num_samples / 2));
     SLAStreamingDecoder_Destroy(decoder);
@@ -710,7 +710,7 @@ static void testSLAStreamingDecoder_GetDecodeInformationTest(void *obj)
     decoder = SLAStreamingDecoder_Create(&config);
     SLATestUtility_SetValidWaveFormat(&wave_format);
     SLAStreamingDecoder_SetWaveFormat(decoder, &wave_format);
-    Test_AssertEqual(SLAStreamingDecoder_GetOutputNumSamplesParDecode(decoder, &tmp_output_num_samples), SLA_APIRESULT_OK);
+    Test_AssertEqual(SLAStreamingDecoder_GetOutputNumSamplesPerDecode(decoder, &tmp_output_num_samples), SLA_APIRESULT_OK);
     /* 半分以上になるはず */
     Test_AssertCondition(tmp_output_num_samples >= (output_num_samples / 2));
     SLAStreamingDecoder_Destroy(decoder);
@@ -721,7 +721,7 @@ static void testSLAStreamingDecoder_GetDecodeInformationTest(void *obj)
     decoder = SLAStreamingDecoder_Create(&config);
     SLATestUtility_SetValidWaveFormat(&wave_format);
     SLAStreamingDecoder_SetWaveFormat(decoder, &wave_format);
-    Test_AssertEqual(SLAStreamingDecoder_GetOutputNumSamplesParDecode(decoder, &tmp_output_num_samples), SLA_APIRESULT_OK);
+    Test_AssertEqual(SLAStreamingDecoder_GetOutputNumSamplesPerDecode(decoder, &tmp_output_num_samples), SLA_APIRESULT_OK);
     /* 2倍以上になるはず */
     Test_AssertCondition(tmp_output_num_samples >= (2 * output_num_samples));
     SLAStreamingDecoder_Destroy(decoder);
