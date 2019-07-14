@@ -81,7 +81,7 @@ SLAApiResult SLAStreamingDecoder_EstimateDecodableNumSamples(struct SLAStreaming
     uint32_t* estimate_num_samples);
 
 /* デコード関数呼び出しあたりの出力サンプル数を取得 */
-SLAApiResult SLAStreamingDecoder_GetOutputNumSamplesParDecode(struct SLAStreamingDecoder* decoder,
+SLAApiResult SLAStreamingDecoder_GetOutputNumSamplesPerDecode(struct SLAStreamingDecoder* decoder,
     uint32_t* output_num_samples);
 
 /* デコーダにデータ片を供給 */
