@@ -312,6 +312,70 @@ static void testSLADecoder_DecodeBlockTest(void *obj)
     free(data);
     SLADecoder_Destroy(decoder);
   }
+  
+  /* パラメータセット前にデコードするとエラーになるか？ */
+  {
+    struct SLADecoder*      decoder;
+    struct SLADecoderConfig config;
+    struct SLAHeaderInfo    header;
+    uint8_t*                data;
+    int32_t**               output;
+    uint32_t                ch, suff_size, outsize, out_num_samples, num_samples;
+
+    SLADecoder_SetDefaultConfig(&config);
+    SLATestUtility_SetValidHeaderInfo(&header);
+    num_samples = header.encode_param.max_num_block_samples;
+    suff_size
+      = SLA_CalculateSufficientBlockSize(header.wave_format.num_channels,
+        num_samples, header.wave_format.bit_per_sample);
+
+    /* データ領域の確保 */
+    output = (int32_t **)malloc(sizeof(int32_t *) * header.wave_format.num_channels);
+    data  = (uint8_t *)malloc(suff_size);
+    for (ch = 0; ch < header.wave_format.num_channels; ch++) {
+      output[ch] = (int32_t *)malloc(sizeof(int32_t) * header.encode_param.max_num_block_samples);
+    }
+
+    /* デコーダ作成 */
+    decoder = SLADecoder_Create(&config);
+
+    /* 何もパラメータが設定されていない */
+    Test_AssertEqual(
+        SLADecoder_DecodeBlock(decoder, data, suff_size, output, num_samples, &outsize, &out_num_samples),
+        SLA_APIRESULT_PARAMETER_NOT_SET);
+
+    /* 波形パラメータだけ設定 */
+    Test_AssertEqual(
+        SLADecoder_SetWaveFormat(decoder, &header.wave_format),
+        SLA_APIRESULT_OK);
+
+    /* エンコードパラメータが設定されていない */
+    Test_AssertEqual(
+        SLADecoder_DecodeBlock(decoder, data, suff_size, output, num_samples, &outsize, &out_num_samples),
+        SLA_APIRESULT_PARAMETER_NOT_SET);
+
+    /* デコーダ再作成 */
+    SLADecoder_Destroy(decoder);
+    decoder = SLADecoder_Create(&config);
+
+    /* エンコードパラメータだけ設定 */
+    Test_AssertEqual(
+        SLADecoder_SetEncodeParameter(decoder, &header.encode_param),
+        SLA_APIRESULT_OK);
+
+    /* 波形パラメータが設定されていない */
+    Test_AssertEqual(
+        SLADecoder_DecodeBlock(decoder, data, suff_size, output, num_samples, &outsize, &out_num_samples),
+        SLA_APIRESULT_PARAMETER_NOT_SET);
+
+    /* 領域の開放 */
+    for (ch = 0; ch < header.wave_format.num_channels; ch++) {
+      free(output[ch]);
+    }
+    free(output);
+    free(data);
+    SLADecoder_Destroy(decoder);
+  }
 
   /* エンコード済みのデータのデコードテスト */
   {

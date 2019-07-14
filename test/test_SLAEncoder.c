@@ -228,6 +228,70 @@ static void testSLAEncoder_EncodeBlockTest(void *obj)
     SLAEncoder_Destroy(encoder);
   }
 
+  /* パラメータセット前にエンコードするとエラーになるか？ */
+  {
+    struct SLAEncoder*      encoder;
+    struct SLAEncoderConfig config;
+    struct SLAHeaderInfo    header;
+    const int32_t**         input;
+    uint8_t*                data;
+    uint32_t                ch, suff_size, outsize, num_samples;
+
+    SLAEncoder_SetDefaultConfig(&config);
+    SLATestUtility_SetValidHeaderInfo(&header);
+    num_samples = header.encode_param.max_num_block_samples;
+    suff_size 
+      = SLA_CalculateSufficientBlockSize(header.wave_format.num_channels,
+        num_samples, header.wave_format.bit_per_sample);
+
+    /* 入力データ領域の確保 */
+    input = (const int32_t **)malloc(sizeof(int32_t *) * header.wave_format.num_channels);
+    data  = (uint8_t *)malloc(suff_size);
+    for (ch = 0; ch < header.wave_format.num_channels; ch++) {
+      input[ch] = (int32_t *)malloc(sizeof(int32_t) * header.encode_param.max_num_block_samples);
+    }
+
+    /* エンコーダ作成 */
+    encoder = SLAEncoder_Create(&config);
+
+    /* セット前だからエラー */
+    Test_AssertEqual(
+        SLAEncoder_EncodeBlock(encoder, input, num_samples, data, suff_size, &outsize),
+        SLA_APIRESULT_PARAMETER_NOT_SET);
+
+    /* 波形パラメータだけ設定 */
+    Test_AssertEqual(
+        SLAEncoder_SetWaveFormat(encoder, &header.wave_format),
+        SLA_APIRESULT_OK);
+
+    /* エンコードパラメータが足りない */
+    Test_AssertEqual(
+        SLAEncoder_EncodeBlock(encoder, input, num_samples, data, suff_size, &outsize),
+        SLA_APIRESULT_PARAMETER_NOT_SET);
+
+    /* ハンドル再作成 */
+    SLAEncoder_Destroy(encoder);
+    encoder = SLAEncoder_Create(&config);
+
+    /* エンコードパラメータだけ設定 */
+    Test_AssertEqual(
+        SLAEncoder_SetEncodeParameter(encoder, &header.encode_param),
+        SLA_APIRESULT_OK);
+
+    /* 波形パラメータが足りない */
+    Test_AssertEqual(
+        SLAEncoder_EncodeBlock(encoder, input, num_samples, data, suff_size, &outsize),
+        SLA_APIRESULT_PARAMETER_NOT_SET);
+
+    /* 領域の開放 */
+    for (ch = 0; ch < header.wave_format.num_channels; ch++) {
+      free((void *)input[ch]);
+    }
+    free(input);
+    free(data);
+    SLAEncoder_Destroy(encoder);
+  }
+
   /* 無音エンコードテスト */
   { 
     struct SLAEncoder*      encoder;

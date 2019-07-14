@@ -10,6 +10,10 @@
 #include <string.h>
 #include <math.h>
 
+/* デコーダ状態管理フラグ */
+#define SLADECODER_STATUS_FLAG_SET_WAVE_FORMAT      (1 << 0)    /* 波形フォーマットセット済み     */
+#define SLADECODER_STATUS_FLAG_SET_ENCODE_PARAMETER (1 << 1)    /* エンコードパラメータセット済み */
+
 /* ブロックヘッダ */
 struct SLABlockHeaderInfo {
   uint32_t  block_size;               /* ブロックサイズ                         */
@@ -42,6 +46,7 @@ struct SLADecoder {
   SLABlockDataType              block_data_type;
   int32_t**                     residual;
   int32_t**                     output;
+  uint32_t                      status_flag;
   uint8_t                       verpose_flag;
 };
 
@@ -111,6 +116,9 @@ struct SLADecoder* SLADecoder_Create(const struct SLADecoderConfig* config)
     decoder->nlmsc[ch]  = SLALMSFilter_Create(config->max_lms_order_per_filter);
     decoder->emp[ch]    = SLAEmphasisFilter_Create();
   }
+
+  /* 状態管理フラグをすべて落とす */
+  decoder->status_flag = 0;
    
   return decoder;
 }
@@ -264,6 +272,10 @@ SLAApiResult SLADecoder_SetWaveFormat(struct SLADecoder* decoder,
 
   /* パラメータをセット */
   decoder->wave_format = *wave_format;
+
+  /* 波形フォーマットセット済みに設定 */
+  decoder->status_flag |= SLADECODER_STATUS_FLAG_SET_WAVE_FORMAT;
+
   return SLA_APIRESULT_OK;
 }
 
@@ -287,6 +299,10 @@ SLAApiResult SLADecoder_SetEncodeParameter(struct SLADecoder* decoder,
 
   /* パラメータをセット */
   decoder->encode_param = *encode_param;
+
+  /* パラメータセット済みに設定 */
+  decoder->status_flag |= SLADECODER_STATUS_FLAG_SET_ENCODE_PARAMETER;
+
   return SLA_APIRESULT_OK;
 }
 
@@ -304,6 +320,12 @@ static SLAApiResult SLADecoder_DecodeBlockHeader(struct SLADecoder* decoder,
   /* 引数チェック */
   if ((decoder == NULL) || (data == NULL) || (block_header_info == NULL)) {
     return SLA_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* デコードに必要なパラメータがセットされていない */
+  if ((!(decoder->status_flag & SLADECODER_STATUS_FLAG_SET_WAVE_FORMAT))
+      || (!(decoder->status_flag & SLADECODER_STATUS_FLAG_SET_ENCODE_PARAMETER))) {
+    return SLA_APIRESULT_PARAMETER_NOT_SET;
   }
 
   /* 最小のサイズに満たない */
@@ -413,6 +435,12 @@ static SLAApiResult SLADecoder_DecodeWaveData(struct SLADecoder* decoder,
   /* 引数チェック */
   if ((decoder == NULL) || (buffer == NULL)) {
     return SLA_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* デコードに必要なパラメータがセットされていない */
+  if ((!(decoder->status_flag & SLADECODER_STATUS_FLAG_SET_WAVE_FORMAT))
+      || (!(decoder->status_flag & SLADECODER_STATUS_FLAG_SET_ENCODE_PARAMETER))) {
+    return SLA_APIRESULT_PARAMETER_NOT_SET;
   }
 
   /* 開始オフセットの記録 */
@@ -566,6 +594,12 @@ static SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
   if (decoder == NULL || data == NULL || buffer == NULL
       || output_block_size == NULL || output_num_samples == NULL) {
     return SLA_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* デコードに必要なパラメータがセットされていない */
+  if ((!(decoder->status_flag & SLADECODER_STATUS_FLAG_SET_WAVE_FORMAT))
+      || (!(decoder->status_flag & SLADECODER_STATUS_FLAG_SET_ENCODE_PARAMETER))) {
+    return SLA_APIRESULT_PARAMETER_NOT_SET;
   }
 
   /* チャンネル毎の処理に矛盾がないかチェック */

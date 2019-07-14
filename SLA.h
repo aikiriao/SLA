@@ -26,19 +26,20 @@
 typedef enum SLAApiResultTag {
 	SLA_APIRESULT_OK = 0,
 	SLA_APIRESULT_NG,
-  SLA_APIRESULT_INVALID_ARGUMENT,           /* 無効な引数 */
-  SLA_APIRESULT_EXCEED_HANDLE_CAPACITY,     /* ハンドルの許容範囲外 */
-  SLA_APIRESULT_INSUFFICIENT_BUFFER_SIZE,   /* バッファサイズが不足 */
-  SLA_APIRESULT_INVAILD_CHPROCESSMETHOD,    /* チャンネル処理を行えないチャンネル数が指定された */
-  SLA_APIRESULT_FAILED_TO_CALCULATE_COEF,   /* 予測係数を求めるのに失敗した */
-  SLA_APIRESULT_FAILED_TO_PREDICT,          /* 予測に失敗した */
-  SLA_APIRESULT_FAILED_TO_SYNTHESIZE,       /* 合成に失敗した */
-  SLA_APIRESULT_INSUFFICIENT_DATA_SIZE,     /* データ不足 */
-  SLA_APIRESULT_INVALID_HEADER_FORMAT,      /* ヘッダが不正 */
-  SLA_APIRESULT_DETECT_DATA_CORRUPTION,     /* データ破壊を検出した */
-  SLA_APIRESULT_FAILED_TO_FIND_SYNC_CODE,   /* 同期コードを発見できなかった */
-  SLA_APIRESULT_INVALID_WINDOWFUNCTION_TYPE, /* 不正な窓関数が指定された */
-  SLA_APIRESULT_NO_DATA_FRAGMENTS             /* 回収可能なデータ片が存在しない */
+  SLA_APIRESULT_INVALID_ARGUMENT,             /* 無効な引数 */
+  SLA_APIRESULT_EXCEED_HANDLE_CAPACITY,       /* ハンドルの許容範囲外 */
+  SLA_APIRESULT_INSUFFICIENT_BUFFER_SIZE,     /* バッファサイズが不足 */
+  SLA_APIRESULT_INVAILD_CHPROCESSMETHOD,      /* チャンネル処理を行えないチャンネル数が指定された */
+  SLA_APIRESULT_FAILED_TO_CALCULATE_COEF,     /* 予測係数を求めるのに失敗した */
+  SLA_APIRESULT_FAILED_TO_PREDICT,            /* 予測に失敗した */
+  SLA_APIRESULT_FAILED_TO_SYNTHESIZE,         /* 合成に失敗した */
+  SLA_APIRESULT_INSUFFICIENT_DATA_SIZE,       /* データ不足 */
+  SLA_APIRESULT_INVALID_HEADER_FORMAT,        /* ヘッダが不正 */
+  SLA_APIRESULT_DETECT_DATA_CORRUPTION,       /* データ破壊を検出した */
+  SLA_APIRESULT_FAILED_TO_FIND_SYNC_CODE,     /* 同期コードを発見できなかった */
+  SLA_APIRESULT_INVALID_WINDOWFUNCTION_TYPE,  /* 不正な窓関数が指定された */
+  SLA_APIRESULT_NO_DATA_FRAGMENTS,            /* 回収可能なデータ片が存在しない */
+  SLA_APIRESULT_PARAMETER_NOT_SET             /* 波形パラメータ/エンコードパラメータがハンドルにセットされていない */
 } SLAApiResult;
 
 /* マルチチャンネル処理方法 */

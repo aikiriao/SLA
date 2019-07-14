@@ -10,6 +10,10 @@
 #include <math.h>
 #include <string.h>
 
+/* エンコーダ状態管理フラグ */
+#define SLAENCODER_STATUS_FLAG_SET_WAVE_FORMAT      (1 << 0)    /* 波形フォーマットセット済み     */
+#define SLAENCODER_STATUS_FLAG_SET_ENCODE_PARAMETER (1 << 1)    /* エンコードパラメータセット済み */
+
 /* エンコーダハンドル */
 struct SLAEncoder {
   struct SLAWaveFormat          wave_format;
@@ -45,6 +49,7 @@ struct SLAEncoder {
   int32_t**                     residual;
   int32_t**                     tmp_residual;
   uint32_t*                     num_block_partition_samples;
+  uint32_t                      status_flag;
   uint8_t                       verpose_flag;
 };
 
@@ -117,6 +122,9 @@ struct SLAEncoder* SLAEncoder_Create(const struct SLAEncoderConfig* config)
     encoder->nlmsc[ch]  = SLALMSFilter_Create(config->max_lms_order_per_filter);
     encoder->emp[ch]    = SLAEmphasisFilter_Create();
   }
+
+  /* ステータスフラグをすべて落とす */
+  encoder->status_flag = 0;
   
   return encoder;
 }
@@ -185,6 +193,10 @@ SLAApiResult SLAEncoder_SetWaveFormat(struct SLAEncoder* encoder,
 
   /* パラメータをセット */
   encoder->wave_format = *wave_format;
+
+  /* パラメータをセット済み状態に変更 */
+  encoder->status_flag |= SLAENCODER_STATUS_FLAG_SET_WAVE_FORMAT;
+
   return SLA_APIRESULT_OK;
 }
 
@@ -208,6 +220,10 @@ SLAApiResult SLAEncoder_SetEncodeParameter(struct SLAEncoder* encoder,
 
   /* パラメータをセット */
   encoder->encode_param = *encode_param;
+
+  /* パラメータをセット済み状態に変更 */
+  encoder->status_flag |= SLAENCODER_STATUS_FLAG_SET_ENCODE_PARAMETER;
+
   return SLA_APIRESULT_OK;
 }
 
@@ -455,6 +471,12 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
   if (encoder == NULL || input == NULL
       || data == NULL || output_size == NULL) {
     return SLA_APIRESULT_INVALID_ARGUMENT;
+  }
+
+  /* エンコードに必要なパラメータがセットされていない */
+  if ((!(encoder->status_flag & SLAENCODER_STATUS_FLAG_SET_WAVE_FORMAT))
+      || (!(encoder->status_flag & SLAENCODER_STATUS_FLAG_SET_ENCODE_PARAMETER))) {
+    return SLA_APIRESULT_PARAMETER_NOT_SET;
   }
 
   /* 許容サンプル数を超えている */
