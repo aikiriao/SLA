@@ -952,7 +952,7 @@ static SLAPredictorApiResult SLALongTermSynthesizer_ProcessCore(
 {
   uint32_t        smpl, j;
   const int32_t   half    = (1UL << 30); /* 丸め用定数(0.5) */
-  int32_t         predict;
+  int64_t         predict;
   const uint32_t  max_delay = pitch_period + (num_taps >> 1);
   uint32_t        buffer_pos;
   int32_t*        signal_buffer;
