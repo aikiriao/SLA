@@ -23,7 +23,7 @@
 #define SLAOPTIMALENCODEESTIMATOR_CALCULATE_NUM_NODES(num_samples, delta_num_samples) \
   ((((num_samples) + ((delta_num_samples) - 1)) / (delta_num_samples)) + 1)
 
-/* sign(x) * log2ceil(|x| + 1) の計算 */
+/* sign(x) * log2ceil(|x| + 1) の計算 TODO:負荷が高い */
 #define SLALMS_SIGNED_LOG2CEIL(x) (SLAUTILITY_SIGN(x) * (int32_t)SLAUtility_Log2Ceil((uint32_t)SLAUTILITY_ABS(x) + 1))
 
 /* 内部エラー型 */
@@ -77,8 +77,8 @@ struct SLALongTermSynthesizer {
 
 /* LMS計算ハンドル */
 struct SLALMSFilter {
-	int64_t* 	fir_coef;			            /* FIR係数                          */
-	int64_t* 	iir_coef;			            /* IIR係数                          */
+	int32_t* 	fir_coef;			            /* FIR係数                          */
+	int32_t* 	iir_coef;			            /* IIR係数                          */
 	uint32_t	max_num_coef;	            /* 最大の係数個数                   */
   int32_t*  fir_sign_buffer;          /* 入力信号の符号を記録したバッファ */
   int32_t*  iir_sign_buffer;          /* 予測信号の符号を記録したバッファ */
@@ -119,27 +119,28 @@ static SLAPredictorError LPC_CalculateCoef(
     const double* data, uint32_t num_samples, uint32_t order);
 
 /* LMSの更新量テーブル */
-/* 補足）更新量はlog2(残差), 残差符号, 入力信号符号の3つで決まるから更新量を全てキャッシュする */
-#define DEFINE_LMS_DELTA_ENTRY(log2res, signres) \
-    { -(signres) * ((log2res) << (31 - SLALMS_DELTA_WEIGHT_SHIFT)), 0, (signres) * ((log2res) << (31 - SLALMS_DELTA_WEIGHT_SHIFT)) }
+/* 補足）更新量はlog2(|残差| + 1), 残差符号, 入力信号符号の3つで決まるから更新量パターンを全てキャッシュする */
+#define DEFINE_LMS_DELTA_ENTRY(signres, log2res) \
+    { -(signres) * (((log2res) << SLALMS_DELTA_WEIGHT_SHIFT) >> 5), 0, (signres) * (((log2res) << SLALMS_DELTA_WEIGHT_SHIFT) >> 5) }
 static const int32_t logsignlms_delta_table[64][3] = {
-  DEFINE_LMS_DELTA_ENTRY(32, -1), DEFINE_LMS_DELTA_ENTRY(31, -1), DEFINE_LMS_DELTA_ENTRY(30, -1), DEFINE_LMS_DELTA_ENTRY(29, -1), 
-  DEFINE_LMS_DELTA_ENTRY(28, -1), DEFINE_LMS_DELTA_ENTRY(27, -1), DEFINE_LMS_DELTA_ENTRY(26, -1), DEFINE_LMS_DELTA_ENTRY(25, -1), 
-  DEFINE_LMS_DELTA_ENTRY(24, -1), DEFINE_LMS_DELTA_ENTRY(23, -1), DEFINE_LMS_DELTA_ENTRY(22, -1), DEFINE_LMS_DELTA_ENTRY(21, -1), 
-  DEFINE_LMS_DELTA_ENTRY(20, -1), DEFINE_LMS_DELTA_ENTRY(19, -1), DEFINE_LMS_DELTA_ENTRY(18, -1), DEFINE_LMS_DELTA_ENTRY(17, -1), 
-  DEFINE_LMS_DELTA_ENTRY(16, -1), DEFINE_LMS_DELTA_ENTRY(15, -1), DEFINE_LMS_DELTA_ENTRY(14, -1), DEFINE_LMS_DELTA_ENTRY(13, -1), 
-  DEFINE_LMS_DELTA_ENTRY(12, -1), DEFINE_LMS_DELTA_ENTRY(11, -1), DEFINE_LMS_DELTA_ENTRY(10, -1), DEFINE_LMS_DELTA_ENTRY( 9, -1), 
-  DEFINE_LMS_DELTA_ENTRY( 8, -1), DEFINE_LMS_DELTA_ENTRY( 7, -1), DEFINE_LMS_DELTA_ENTRY( 6, -1), DEFINE_LMS_DELTA_ENTRY( 5, -1), 
-  DEFINE_LMS_DELTA_ENTRY( 4, -1), DEFINE_LMS_DELTA_ENTRY( 3, -1), DEFINE_LMS_DELTA_ENTRY( 2, -1), DEFINE_LMS_DELTA_ENTRY( 1, -1), 
-  DEFINE_LMS_DELTA_ENTRY( 0,  1), DEFINE_LMS_DELTA_ENTRY( 1,  1), DEFINE_LMS_DELTA_ENTRY( 2,  1), DEFINE_LMS_DELTA_ENTRY( 3,  1),
-  DEFINE_LMS_DELTA_ENTRY( 4,  1), DEFINE_LMS_DELTA_ENTRY( 5,  1), DEFINE_LMS_DELTA_ENTRY( 6,  1), DEFINE_LMS_DELTA_ENTRY( 7,  1),
-  DEFINE_LMS_DELTA_ENTRY( 8,  1), DEFINE_LMS_DELTA_ENTRY( 9,  1), DEFINE_LMS_DELTA_ENTRY(10,  1), DEFINE_LMS_DELTA_ENTRY(11,  1),
-  DEFINE_LMS_DELTA_ENTRY(12,  1), DEFINE_LMS_DELTA_ENTRY(13,  1), DEFINE_LMS_DELTA_ENTRY(14,  1), DEFINE_LMS_DELTA_ENTRY(15,  1),
-  DEFINE_LMS_DELTA_ENTRY(16,  1), DEFINE_LMS_DELTA_ENTRY(17,  1), DEFINE_LMS_DELTA_ENTRY(18,  1), DEFINE_LMS_DELTA_ENTRY(19,  1),
-  DEFINE_LMS_DELTA_ENTRY(20,  1), DEFINE_LMS_DELTA_ENTRY(21,  1), DEFINE_LMS_DELTA_ENTRY(22,  1), DEFINE_LMS_DELTA_ENTRY(23,  1),
-  DEFINE_LMS_DELTA_ENTRY(24,  1), DEFINE_LMS_DELTA_ENTRY(25,  1), DEFINE_LMS_DELTA_ENTRY(26,  1), DEFINE_LMS_DELTA_ENTRY(27,  1),
-  DEFINE_LMS_DELTA_ENTRY(28,  1), DEFINE_LMS_DELTA_ENTRY(29,  1), DEFINE_LMS_DELTA_ENTRY(30,  1), DEFINE_LMS_DELTA_ENTRY(31,  1),
+  DEFINE_LMS_DELTA_ENTRY(-1, 32), DEFINE_LMS_DELTA_ENTRY(-1, 31), DEFINE_LMS_DELTA_ENTRY(-1, 30), DEFINE_LMS_DELTA_ENTRY(-1, 29), 
+  DEFINE_LMS_DELTA_ENTRY(-1, 28), DEFINE_LMS_DELTA_ENTRY(-1, 27), DEFINE_LMS_DELTA_ENTRY(-1, 26), DEFINE_LMS_DELTA_ENTRY(-1, 25), 
+  DEFINE_LMS_DELTA_ENTRY(-1, 24), DEFINE_LMS_DELTA_ENTRY(-1, 23), DEFINE_LMS_DELTA_ENTRY(-1, 22), DEFINE_LMS_DELTA_ENTRY(-1, 21), 
+  DEFINE_LMS_DELTA_ENTRY(-1, 20), DEFINE_LMS_DELTA_ENTRY(-1, 19), DEFINE_LMS_DELTA_ENTRY(-1, 18), DEFINE_LMS_DELTA_ENTRY(-1, 17), 
+  DEFINE_LMS_DELTA_ENTRY(-1, 16), DEFINE_LMS_DELTA_ENTRY(-1, 15), DEFINE_LMS_DELTA_ENTRY(-1, 14), DEFINE_LMS_DELTA_ENTRY(-1, 13), 
+  DEFINE_LMS_DELTA_ENTRY(-1, 12), DEFINE_LMS_DELTA_ENTRY(-1, 11), DEFINE_LMS_DELTA_ENTRY(-1, 10), DEFINE_LMS_DELTA_ENTRY(-1,  9), 
+  DEFINE_LMS_DELTA_ENTRY(-1,  8), DEFINE_LMS_DELTA_ENTRY(-1,  7), DEFINE_LMS_DELTA_ENTRY(-1,  6), DEFINE_LMS_DELTA_ENTRY(-1,  5), 
+  DEFINE_LMS_DELTA_ENTRY(-1,  4), DEFINE_LMS_DELTA_ENTRY(-1,  3), DEFINE_LMS_DELTA_ENTRY(-1,  2), DEFINE_LMS_DELTA_ENTRY(-1,  1), 
+  DEFINE_LMS_DELTA_ENTRY( 0,  0), DEFINE_LMS_DELTA_ENTRY( 1,  1), DEFINE_LMS_DELTA_ENTRY( 1,  2), DEFINE_LMS_DELTA_ENTRY( 1,  3),
+  DEFINE_LMS_DELTA_ENTRY( 1,  4), DEFINE_LMS_DELTA_ENTRY( 1,  5), DEFINE_LMS_DELTA_ENTRY( 1,  6), DEFINE_LMS_DELTA_ENTRY( 1,  7),
+  DEFINE_LMS_DELTA_ENTRY( 1,  8), DEFINE_LMS_DELTA_ENTRY( 1,  9), DEFINE_LMS_DELTA_ENTRY( 1, 10), DEFINE_LMS_DELTA_ENTRY( 1, 11),
+  DEFINE_LMS_DELTA_ENTRY( 1, 12), DEFINE_LMS_DELTA_ENTRY( 1, 13), DEFINE_LMS_DELTA_ENTRY( 1, 14), DEFINE_LMS_DELTA_ENTRY( 1, 15),
+  DEFINE_LMS_DELTA_ENTRY( 1, 16), DEFINE_LMS_DELTA_ENTRY( 1, 17), DEFINE_LMS_DELTA_ENTRY( 1, 18), DEFINE_LMS_DELTA_ENTRY( 1, 19),
+  DEFINE_LMS_DELTA_ENTRY( 1, 20), DEFINE_LMS_DELTA_ENTRY( 1, 21), DEFINE_LMS_DELTA_ENTRY( 1, 22), DEFINE_LMS_DELTA_ENTRY( 1, 23),
+  DEFINE_LMS_DELTA_ENTRY( 1, 24), DEFINE_LMS_DELTA_ENTRY( 1, 25), DEFINE_LMS_DELTA_ENTRY( 1, 26), DEFINE_LMS_DELTA_ENTRY( 1, 27),
+  DEFINE_LMS_DELTA_ENTRY( 1, 28), DEFINE_LMS_DELTA_ENTRY( 1, 29), DEFINE_LMS_DELTA_ENTRY( 1, 30), DEFINE_LMS_DELTA_ENTRY( 1, 31),
 };
+#undef DEFINE_LMS_DELTA_ENTRY
 
 /* LPC係数計算ハンドルの作成 */
 struct SLALPCCalculator* SLALPCCalculator_Create(uint32_t max_order)
@@ -940,7 +941,7 @@ static SLAPredictorApiResult SLALongTermSynthesizer_ProcessCore(
 {
   uint32_t        smpl, j;
   const int32_t   half    = (1UL << 30); /* 丸め用定数(0.5) */
-  int64_t         predict;
+  int32_t         predict;
   const uint32_t  max_delay = pitch_period + (num_taps >> 1);
   uint32_t        buffer_pos;
   int32_t*        signal_buffer;
@@ -1042,8 +1043,8 @@ struct SLALMSFilter* SLALMSFilter_Create(uint32_t max_num_coef)
   nlms->max_num_coef            = max_num_coef;
   nlms->signal_sign_buffer_size = SLAUtility_RoundUp2Powered(max_num_coef);
 
-  nlms->fir_coef                = malloc(sizeof(int64_t) * max_num_coef);
-  nlms->iir_coef                = malloc(sizeof(int64_t) * max_num_coef);
+  nlms->fir_coef                = malloc(sizeof(int32_t) * max_num_coef);
+  nlms->iir_coef                = malloc(sizeof(int32_t) * max_num_coef);
   /* バッファアクセスの高速化のため2倍確保 */
   nlms->fir_sign_buffer         = malloc(sizeof(int32_t) * 2 * max_num_coef);
   nlms->iir_sign_buffer         = malloc(sizeof(int32_t) * 2 * max_num_coef);
@@ -1084,8 +1085,8 @@ SLAPredictorApiResult SLALMSFilter_Reset(struct SLALMSFilter* nlms)
   nlms->buffer_pos = 0;
 
   /* 係数を0クリア */
-  memset(nlms->fir_coef, 0, sizeof(int64_t) * nlms->max_num_coef);
-  memset(nlms->iir_coef, 0, sizeof(int64_t) * nlms->max_num_coef);
+  memset(nlms->fir_coef, 0, sizeof(int32_t) * nlms->max_num_coef);
+  memset(nlms->iir_coef, 0, sizeof(int32_t) * nlms->max_num_coef);
 
   /* バッファを0クリア */
   memset(nlms->fir_buffer,      0, sizeof(int32_t) * 2 * nlms->max_num_coef);
@@ -1104,7 +1105,7 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
 {
   uint32_t        smpl, i;
   uint32_t        buffer_pos;
-  int64_t         predict;
+  int32_t         predict;
   const int32_t*  delta_table_p;
 
   /* 引数チェック */
@@ -1151,26 +1152,30 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
   /* フィルタ処理実行 */
   for (; smpl < num_samples; smpl++) {
     /* 予測 */
-    predict = (1UL << 30);  /* 丸め誤差回避 */
+    predict = (1 << 9);  /* 丸め誤差回避 */
     for (i = 0; i < num_coef; i++) {
       predict += nlms->fir_coef[i] * nlms->fir_buffer[buffer_pos + i];
+      /* オーバーフローチェック */
+      SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC((int64_t)nlms->fir_coef[i] * nlms->fir_buffer[buffer_pos + i], 10) <= (int64_t)INT32_MAX);
+      SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC((int64_t)nlms->fir_coef[i] * nlms->fir_buffer[buffer_pos + i], 10) >= (int64_t)INT32_MIN);
       predict += nlms->iir_coef[i] * nlms->iir_buffer[buffer_pos + i];
-      /* 値域チェック */
-      SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31) <= (int64_t)INT32_MAX);
-      SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31) >= (int64_t)INT32_MIN);
+      /* printf("%8d %8d %8d \n", nlms->fir_coef[i], nlms->iir_coef[i], predict >> 10); */
+      /* オーバーフローチェック */
+      SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC((int64_t)nlms->iir_coef[i] * nlms->iir_buffer[buffer_pos + i], 10) <= (int64_t)INT32_MAX);
+      SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC((int64_t)nlms->iir_coef[i] * nlms->iir_buffer[buffer_pos + i], 10) >= (int64_t)INT32_MIN);
     }
-    predict = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 31);
+    predict = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 10);
 
     /* 出力計算 / 残差テーブルの参照をセット */
     /* 補足）32を加算して [-32, 31] を [0, 63] の範囲にマップする */
     if (is_predict == 1) {
-      output[smpl]  -= (int32_t)predict;
+      output[smpl]  -= predict;
       delta_table_p = logsignlms_delta_table[SLALMS_SIGNED_LOG2CEIL(output[smpl]) + 32]; 
     } else {
       delta_table_p = logsignlms_delta_table[SLALMS_SIGNED_LOG2CEIL(output[smpl]) + 32]; 
-      output[smpl]  += (int32_t)predict;
+      output[smpl]  += predict;
     }
-    /* printf("%8d, %8d, %8d \n", residual[smpl], original_signal[smpl], (int32_t)predict); */
+    /* printf("%8d, %8d \n", output[smpl], predict); */
 
     /* 係数更新 */
     for (i = 0; i < num_coef; i++) {
@@ -1202,8 +1207,7 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
     nlms->fir_sign_buffer[buffer_pos]
       = nlms->fir_sign_buffer[buffer_pos + num_coef]
       = (is_predict == 1)
-      ? SLAUTILITY_SIGN(input[smpl]) + 1
-      : SLAUTILITY_SIGN(output[smpl]) + 1;
+      ? (SLAUTILITY_SIGN(input[smpl]) + 1) : (SLAUTILITY_SIGN(output[smpl]) + 1);
   }
 
   /* バッファ参照位置の記録 */
