@@ -701,7 +701,7 @@ static void testLPCLongTermCalculator_GeneratePeriodSineWave(
   assert(data != NULL);
 
   for (i = 0; i < num_data; i++) {
-    data[i] = sin(fmod((2.0f * M_PI * i) / period, 2.0f * M_PI));
+    data[i] = sin(fmod((2.0f * SLA_PI * i) / period, 2.0f * SLA_PI));
   }
 }
 
