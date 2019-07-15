@@ -303,7 +303,7 @@ static void realft(double data[], unsigned long n, int isign)
 void SLAUtility_FFT(double* data, uint32_t n, int32_t sign)
 {
   SLA_Assert(data != NULL);
-  realft(&data[-1], n, sign);
+  realft(&data[-1], n, (int)sign);
 }
 
 /* CRC16(IBM)の計算 */
@@ -875,7 +875,7 @@ uint32_t SLADataPacketQueue_GetRemainDataSize(const struct SLADataPacketQueue* q
   uint32_t pos, size;
   const struct SLADataPacket* packet;
 
-  SLA_Assert(queue);
+  SLA_Assert(queue != NULL);
 
   /* 一つもパケットが入っていない */
   if (queue->num_free_packets == queue->max_num_packets) {

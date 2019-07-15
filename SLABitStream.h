@@ -5,9 +5,9 @@
 #include <stdio.h>
 
 /* SLABitStream_Seek関数の探索コード */
-#define SLABITSTREAM_SEEK_SET  SEEK_SET
-#define SLABITSTREAM_SEEK_CUR  SEEK_CUR
-#define SLABITSTREAM_SEEK_END  SEEK_END
+#define SLABITSTREAM_SEEK_SET  (int32_t)SEEK_SET
+#define SLABITSTREAM_SEEK_CUR  (int32_t)SEEK_CUR
+#define SLABITSTREAM_SEEK_END  (int32_t)SEEK_END
 
 /* ビットストリーム構造体 */
 struct SLABitStream;

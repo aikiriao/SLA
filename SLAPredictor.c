@@ -13,7 +13,7 @@
 #define LPC_LONGTERM_PITCH_RATIO_VS_MAX_THRESHOULD    (1.0f)
 
 /* ダイクストラ法使用時の巨大な重み */
-#define SLAOPTIMALENCODEESTIMATOR_DIJKSTRA_BIGWEIGHT  (1UL << 24)
+#define SLAOPTIMALENCODEESTIMATOR_DIJKSTRA_BIGWEIGHT  (double)(1UL << 24)
 
 /* ブロックヘッダサイズの推定値 */
 /* TODO:真値に置き換える */
@@ -121,7 +121,9 @@ static SLAPredictorError LPC_CalculateCoef(
 /* LMSの更新量テーブル */
 /* 補足）更新量はlog2(|残差| + 1), 残差符号, 入力信号符号の3つで決まるから更新量パターンを全てキャッシュする */
 #define DEFINE_LMS_DELTA_ENTRY(signres, log2res) \
-    { -(signres) * (((log2res) << SLALMS_DELTA_WEIGHT_SHIFT) >> 5), 0, (signres) * (((log2res) << SLALMS_DELTA_WEIGHT_SHIFT) >> 5) }
+    { (int32_t)(-(signres) * (((log2res) << SLALMS_DELTA_WEIGHT_SHIFT) >> 5)), \
+      0, \
+      (int32_t)((signres) * (((log2res) << SLALMS_DELTA_WEIGHT_SHIFT) >> 5)) }
 static const int32_t logsignlms_delta_table[64][3] = {
   DEFINE_LMS_DELTA_ENTRY(-1, 32), DEFINE_LMS_DELTA_ENTRY(-1, 31), DEFINE_LMS_DELTA_ENTRY(-1, 30), DEFINE_LMS_DELTA_ENTRY(-1, 29), 
   DEFINE_LMS_DELTA_ENTRY(-1, 28), DEFINE_LMS_DELTA_ENTRY(-1, 27), DEFINE_LMS_DELTA_ENTRY(-1, 26), DEFINE_LMS_DELTA_ENTRY(-1, 25), 
@@ -433,13 +435,13 @@ SLAPredictorApiResult SLALPCCalculator_EstimateCodeLength(
     log2_mean_res_power += data[smpl] * data[smpl];
   }
   /* 整数PCMの振幅に変換（doubleの密度保障） */
-  log2_mean_res_power *= pow(2, 2 * (bits_per_sample - 1));
+  log2_mean_res_power *= pow(2, (double)(2 * (bits_per_sample - 1)));
   if (fabs(log2_mean_res_power) <= FLT_MIN) {
     /* ほぼ無音だった場合は符号長を0とする */
     *length_per_sample = 0.0;
     return SLAPREDICTOR_APIRESULT_OK;
   } 
-  log2_mean_res_power = SLAUtility_Log2(log2_mean_res_power) - SLAUtility_Log2(num_samples);
+  log2_mean_res_power = SLAUtility_Log2((double)log2_mean_res_power) - SLAUtility_Log2((double)num_samples);
 
   /* sum(log2(1-parcor * parcor))の計算 */
   /* 1次の係数は0で確定だから飛ばす */
@@ -513,7 +515,12 @@ struct SLALPCSynthesizer* SLALPCSynthesizer_Create(uint32_t max_order)
   lpcs->backward_residual = malloc(sizeof(int32_t) * (max_order + 1));
 
   /* 状態リセット */
-  SLALPCSynthesizer_Reset(lpcs);
+  if (SLALPCSynthesizer_Reset(lpcs) != SLAPREDICTOR_APIRESULT_OK) {
+    free(lpcs->forward_residual);
+    free(lpcs->backward_residual);
+    free(lpcs);
+    return NULL;
+  }
 
   return lpcs;
 }
@@ -737,7 +744,7 @@ SLAPredictorApiResult SLALongTermCalculator_CalculateCoef(
   /* データをセット */
   for (i = 0; i < fft_size; i++) {
     if (i < num_samples) {
-      auto_corr[i] = data[i] * pow(2, -31);
+      auto_corr[i] = (double)data[i] * pow(2.0f, -31.0f);
     } else {
       /* 後ろは0埋め */
       auto_corr[i] = 0.0f;
@@ -897,11 +904,15 @@ struct SLALongTermSynthesizer* SLALongTermSynthesizer_Create(uint32_t max_num_ta
   ltm = malloc(sizeof(struct SLALongTermSynthesizer));
   
   /* 計算効率化のために2倍確保 */
-  tmp_buffer_size = 2 * (max_num_taps + max_pitch_period);
+  tmp_buffer_size         = 2 * (max_num_taps + max_pitch_period);
   ltm->signal_buffer_size = tmp_buffer_size;
   ltm->signal_buffer      = (int32_t *)malloc(sizeof(int32_t) * tmp_buffer_size);
   
-  SLALongTermSynthesizer_Reset(ltm);
+  if (SLALongTermSynthesizer_Reset(ltm) != SLAPREDICTOR_APIRESULT_OK) {
+    free(ltm->signal_buffer);
+    free(ltm);
+    return NULL;
+  }
 
   return ltm;
 }
@@ -1051,7 +1062,13 @@ struct SLALMSFilter* SLALMSFilter_Create(uint32_t max_num_coef)
   nlms->fir_buffer              = malloc(sizeof(int32_t) * 2 * max_num_coef);
   nlms->iir_buffer              = malloc(sizeof(int32_t) * 2 * max_num_coef);
 
-  SLALMSFilter_Reset(nlms);
+  if (SLALMSFilter_Reset(nlms) != SLAPREDICTOR_APIRESULT_OK) {
+    free(nlms->fir_coef); free(nlms->iir_coef);
+    free(nlms->fir_sign_buffer); free(nlms->iir_sign_buffer);
+    free(nlms->fir_buffer); free(nlms->iir_buffer);
+    free(nlms);
+    return NULL;
+  }
 
   return nlms;
 }
@@ -1152,7 +1169,7 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
   /* フィルタ処理実行 */
   for (; smpl < num_samples; smpl++) {
     /* 予測 */
-    predict = (1 << 9);  /* 丸め誤差回避 */
+    predict = (int32_t)(1 << 9);  /* 丸め誤差回避 */
     for (i = 0; i < num_coef; i++) {
       predict += nlms->fir_coef[i] * nlms->fir_buffer[buffer_pos + i];
       /* オーバーフローチェック */
@@ -1353,43 +1370,6 @@ static SLAPredictorApiResult SLAOptimalEncodeEstimator_ApplyDijkstraMethod(
   return SLAPREDICTOR_APIRESULT_OK;
 }
 
-/* （デバッグ用）隣接行列と結果の表示 */
-void SLAOptimalEncodeEstimator_PrettyPrint(
-    const struct SLAOptimalBlockPartitionEstimator* oee,
-    uint32_t num_nodes, uint32_t start_node, uint32_t goal_node)
-{
-  uint32_t i, j, tmp_node;
-
-  printf("----- ");
-  for (i = 0; i < num_nodes; i++) {
-    printf("%5d ", i);
-  }
-  printf("\n");
-  for (i = 0; i < num_nodes; i++) {
-    printf("%5d ", i);
-    for (j = 0; j < num_nodes; j++) {
-      if (oee->adjacency_matrix[i][j] != SLAOPTIMALENCODEESTIMATOR_DIJKSTRA_BIGWEIGHT) {
-        printf("%5d ", (int32_t)(oee->adjacency_matrix[i][j]));
-      } else {
-        printf("----- ");
-      }
-    }
-    printf("\n");
-  }
-
-  /* 最適パスの表示 */
-  tmp_node = goal_node;
-  printf("%d ", tmp_node);
-  while (tmp_node != start_node) {
-    tmp_node = oee->path[tmp_node];
-    printf("<- %d ", tmp_node);
-  }
-  printf("\n");
-
-  /* 最小コストの表示 */
-  printf("Min Cost: %e \n", oee->cost[goal_node]);
-}
-
 /* 最適なブロック分割の探索 */
 SLAPredictorApiResult SLAOptimalEncodeEstimator_SearchOptimalBlockPartitions(
     struct SLAOptimalBlockPartitionEstimator* oee, 
@@ -1521,7 +1501,10 @@ struct SLAEmphasisFilter* SLAEmphasisFilter_Create(void)
 
   emp = (struct SLAEmphasisFilter *)malloc(sizeof(struct SLAEmphasisFilter));
 
-  SLAEmphasisFilter_Reset(emp);
+  if (SLAEmphasisFilter_Reset(emp) != SLAPREDICTOR_APIRESULT_OK) {
+    free(emp);
+    return NULL;
+  }
 
   return emp;
 }
@@ -1551,7 +1534,7 @@ SLAPredictorApiResult SLAEmphasisFilter_PreEmphasisInt32(
 {
   uint32_t  smpl;
   int32_t   prev_int32, tmp_int32;
-  const int32_t coef_numer = (1 << coef_shift) - 1;
+  const int32_t coef_numer = (int32_t)((1 << coef_shift) - 1);
 
   /* 引数チェック */
   if ((emp == NULL) || (data == NULL)) {
@@ -1577,7 +1560,7 @@ SLAPredictorApiResult SLAEmphasisFilter_DeEmphasisInt32(
     int32_t* data, uint32_t num_samples, int32_t coef_shift)
 {
   uint32_t  smpl;
-  const int32_t coef_numer = (1 << coef_shift) - 1;
+  const int32_t coef_numer = (int32_t)((1 << coef_shift) - 1);
 
   /* 引数チェック */
   if ((emp == NULL) || (data == NULL)) {
@@ -1607,7 +1590,7 @@ void SLAEmphasisFilter_PreEmphasisDouble(double* data, uint32_t num_samples, int
   SLA_Assert(data != NULL);
 
   /* フィルタ係数の計算 */
-  coef = (pow(2, coef_shift) - 1.0f) * pow(2, -coef_shift);
+  coef = (pow(2.0f, (double)coef_shift) - 1.0f) * pow(2.0f, (double)-coef_shift);
 
   /* フィルタ適用 */
   prev = 0.0f;

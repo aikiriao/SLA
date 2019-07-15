@@ -759,6 +759,43 @@ static void testLPCLongTermCalculator_PitchDetectTest(void* obj)
 #undef NUM_SAMPLES 
 }
 
+/* （デバッグ用）隣接行列と結果の表示 */
+void SLAOptimalEncodeEstimator_PrettyPrint(
+    const struct SLAOptimalBlockPartitionEstimator* oee,
+    uint32_t num_nodes, uint32_t start_node, uint32_t goal_node)
+{
+  uint32_t i, j, tmp_node;
+
+  printf("----- ");
+  for (i = 0; i < num_nodes; i++) {
+    printf("%5d ", i);
+  }
+  printf("\n");
+  for (i = 0; i < num_nodes; i++) {
+    printf("%5d ", i);
+    for (j = 0; j < num_nodes; j++) {
+      if (oee->adjacency_matrix[i][j] != SLAOPTIMALENCODEESTIMATOR_DIJKSTRA_BIGWEIGHT) {
+        printf("%5d ", (int32_t)(oee->adjacency_matrix[i][j]));
+      } else {
+        printf("----- ");
+      }
+    }
+    printf("\n");
+  }
+
+  /* 最適パスの表示 */
+  tmp_node = goal_node;
+  printf("%d ", tmp_node);
+  while (tmp_node != start_node) {
+    tmp_node = oee->path[tmp_node];
+    printf("<- %d ", tmp_node);
+  }
+  printf("\n");
+
+  /* 最小コストの表示 */
+  printf("Min Cost: %e \n", oee->cost[goal_node]);
+}
+
 static void testSLAOptimalEncodeEstimator_DijkstraTest(void* obj)
 {
   /* 隣接行列の重み */

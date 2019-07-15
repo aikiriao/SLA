@@ -130,7 +130,7 @@ static const uint8_t st_zerobit_runlength_table[0x100] = {
 /* ファイルに対する一文字取得 */
 static SLABitStreamError SLABitStream_FGet(Stream* strm, int32_t* ch)
 {
-  int32_t ret;
+  int ret;
 
   SLA_Assert(strm != NULL && ch != NULL);
 
@@ -139,7 +139,7 @@ static SLABitStreamError SLABitStream_FGet(Stream* strm, int32_t* ch)
     return SLABITSTREAM_ERROR_EOS;
   }
 
-  (*ch) = ret;
+  (*ch) = (int32_t)ret;
   return SLABITSTREAM_ERROR_OK;
 }
 
@@ -147,7 +147,7 @@ static SLABitStreamError SLABitStream_FGet(Stream* strm, int32_t* ch)
 static SLABitStreamError SLABitStream_FPut(Stream* strm, int32_t ch)
 {
   SLA_Assert(strm != NULL);
-  if (fputc(ch, strm->fp) == EOF) {
+  if (fputc((int)ch, strm->fp) == EOF) {
     return SLABITSTREAM_ERROR_IOERROR;
   }
   return SLABITSTREAM_ERROR_OK;
@@ -157,7 +157,7 @@ static SLABitStreamError SLABitStream_FPut(Stream* strm, int32_t ch)
 static SLABitStreamError SLABitStream_FSeek(Stream* strm, int32_t offset, int32_t wherefrom)
 {
   SLA_Assert(strm != NULL);
-  return (fseek(strm->fp, offset, wherefrom) == 0) ? SLABITSTREAM_ERROR_OK : SLABITSTREAM_ERROR_IOERROR;
+  return (fseek(strm->fp, (long)offset, (int)wherefrom) == 0) ? SLABITSTREAM_ERROR_OK : SLABITSTREAM_ERROR_IOERROR;
 }
 
 /* ファイルに対するTell関数 */
@@ -385,8 +385,8 @@ void SLABitStream_Close(struct SLABitStream* stream)
     return;
   }
 
-  /* バッファのクリア */
-  SLABitStream_Flush(stream);
+  /* バッファのクリア 返り値は無視する */
+  (void)SLABitStream_Flush(stream);
 
   if (!(stream->flags & SLABITSTREAM_FLAGS_READWRITE_ON_MEMORY)) {
     /* ファイルハンドルクローズ */
@@ -603,7 +603,7 @@ SLABitStreamApiResult SLABitStream_GetBits(struct SLABitStream* stream, uint32_t
     SLA_Assert(ch >= 0);
     SLA_Assert(ch <= 0xFF);
     switch (err) {
-      case SLABITSTREAM_APIRESULT_OK:
+      case SLABITSTREAM_ERROR_OK:
         break;
       case SLABITSTREAM_ERROR_EOS:
         /* ファイル終端であればループを抜ける */
@@ -655,7 +655,7 @@ SLABitStreamApiResult SLABitStream_GetZeroRunLength(struct SLABitStream* stream,
     SLABitStreamError err;
     err = stream->stm_if->SGetChar(&(stream->stm), &ch);
     switch (err) {
-      case SLABITSTREAM_APIRESULT_OK:
+      case SLABITSTREAM_ERROR_OK:
         break;
       case SLABITSTREAM_ERROR_EOS:
         /* ファイル終端であればループを抜ける */

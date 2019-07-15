@@ -235,21 +235,25 @@ static uint32_t SLAGolomb_GetCode(struct SLABitStream* strm, uint32_t m)
 static void SLAGamma_PutCode(struct SLABitStream* strm, uint32_t val)
 {
   uint32_t ndigit;
+  SLABitStreamApiResult ret;
 
   SLA_Assert(strm != NULL);
 
   if (val == 0) {
     /* 符号化対象が0ならば1を出力して終了 */
-    SLABitStream_PutBit(strm, 1);
+    ret = SLABitStream_PutBit(strm, 1);
+    SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
     return;
   } 
 
   /* 桁数を取得 */
   ndigit = SLAUtility_Log2Ceil(val + 2);
   /* 桁数-1だけ0を続ける */
-  SLABitStream_PutBits(strm, ndigit - 1, 0);
+  ret = SLABitStream_PutBits(strm, ndigit - 1, 0);
+  SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
   /* 桁数を使用して符号語を2進数で出力 */
-  SLABitStream_PutBits(strm, ndigit, val + 1);
+  ret = SLABitStream_PutBits(strm, ndigit, val + 1);
+  SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
 }
 
 /* ガンマ符号の取得 */
@@ -258,6 +262,7 @@ static uint32_t SLAGamma_GetCode(struct SLABitStream* strm)
   uint32_t ndigit;
   uint8_t  bitbuf;
   uint64_t bitsbuf;
+  SLABitStreamApiResult ret;
 
   SLA_Assert(strm != NULL);
 
@@ -266,7 +271,8 @@ static uint32_t SLAGamma_GetCode(struct SLABitStream* strm)
   ndigit = 0;
   do {
     ndigit++;
-    SLABitStream_GetBit(strm, &bitbuf);
+    ret = SLABitStream_GetBit(strm, &bitbuf);
+    SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
   } while (bitbuf == 0);
 
   /* 桁数が1のときは0 */
@@ -275,7 +281,8 @@ static uint32_t SLAGamma_GetCode(struct SLABitStream* strm)
   }
 
   /* 桁数から符号語を出力 */
-  SLABitStream_GetBits(strm, ndigit - 1, &bitsbuf);
+  ret = SLABitStream_GetBits(strm, ndigit - 1, &bitsbuf);
+  SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
   return (uint32_t)((1UL << (ndigit - 1)) + bitsbuf - 1);
 }
 
@@ -284,13 +291,16 @@ static void SLARecursiveRice_PutQuotPart(
     struct SLABitStream* strm, uint32_t quot)
 {
   uint32_t i;
+  SLABitStreamApiResult ret;
 
   SLA_Assert(strm != NULL);
 
   for (i = 0; i < quot; i++) {
-    SLABitStream_PutBit(strm, 0);
+    ret = SLABitStream_PutBit(strm, 0);
+    SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
   }
-  SLABitStream_PutBit(strm, 1);
+  ret = SLABitStream_PutBit(strm, 1);
+  SLA_Assert(ret == SLABITSTREAM_APIRESULT_OK);
 }
 
 /* 商部分（アルファ符号）を取得 */
@@ -346,18 +356,18 @@ static uint32_t SLARecursiveRice_GetRestPart(struct SLABitStream* strm, uint32_t
 
 /* 再帰的ライス符号の出力 */
 static void SLARecursiveRice_PutCode(
-    struct SLABitStream* strm, SLARecursiveRiceParameter* m_params, uint32_t num_params, uint32_t val)
+    struct SLABitStream* strm, SLARecursiveRiceParameter* rice_parameters, uint32_t num_params, uint32_t val)
 {
   uint32_t i, reduced_val, param;
 
   SLA_Assert(strm != NULL);
-  SLA_Assert(m_params != NULL);
+  SLA_Assert(rice_parameters != NULL);
   SLA_Assert(num_params != 0);
-  SLA_Assert(SLACODER_PARAMETER_GET(m_params, 0) != 0);
+  SLA_Assert(SLACODER_PARAMETER_GET(rice_parameters, 0) != 0);
 
   reduced_val = val;
   for (i = 0; i < (num_params - 1); i++) {
-    param = SLARICE_CALCULATE_RICE_PARAMETER(m_params, i);
+    param = SLARICE_CALCULATE_RICE_PARAMETER(rice_parameters, i);
     /* 現在のパラメータ値よりも小さければ、符号化を行う */
     if (reduced_val < param) {
         /* 商部分としてはパラメータ段数 */
@@ -365,18 +375,18 @@ static void SLARecursiveRice_PutCode(
         /* 剰余部分 */
         SLARecursiveRice_PutRestPart(strm, reduced_val, param);
         /* パラメータ更新 */
-        SLARICE_PARAMETER_UPDATE(m_params, i, reduced_val);
+        SLARICE_PARAMETER_UPDATE(rice_parameters, i, reduced_val);
         break;
     }
     /* パラメータ更新 */
-    SLARICE_PARAMETER_UPDATE(m_params, i, reduced_val);
+    SLARICE_PARAMETER_UPDATE(rice_parameters, i, reduced_val);
     /* 現在のパラメータ値で減じる */
     reduced_val -= param;
   }
 
   /* 末尾のパラメータに達した */
   if (i == (num_params - 1)) {
-    uint32_t tail_param = SLARICE_CALCULATE_RICE_PARAMETER(m_params, i);
+    uint32_t tail_param = SLARICE_CALCULATE_RICE_PARAMETER(rice_parameters, i);
     uint32_t tail_quot  = i + reduced_val / tail_param;
     SLA_Assert(SLAUTILITY_IS_POWERED_OF_2(tail_param));
     /* 商が大きい場合はガンマ符号を使用する */
@@ -388,22 +398,22 @@ static void SLARecursiveRice_PutCode(
     }
     SLARecursiveRice_PutRestPart(strm, reduced_val, tail_param);
     /* パラメータ更新 */
-    SLARICE_PARAMETER_UPDATE(m_params, i, reduced_val);
+    SLARICE_PARAMETER_UPDATE(rice_parameters, i, reduced_val);
   }
 
 }
 
 /* 再帰的ライス符号の取得 */
 static uint32_t SLARecursiveRice_GetCode(
-    struct SLABitStream* strm, SLARecursiveRiceParameter* m_params, uint32_t num_params)
+    struct SLABitStream* strm, SLARecursiveRiceParameter* rice_parameters, uint32_t num_params)
 {
   uint32_t  i, quot, val;
   uint32_t  param, tmp_val;
 
   SLA_Assert(strm != NULL);
-  SLA_Assert(m_params != NULL);
+  SLA_Assert(rice_parameters != NULL);
   SLA_Assert(num_params != 0);
-  SLA_Assert(SLACODER_PARAMETER_GET(m_params, 0) != 0);
+  SLA_Assert(SLACODER_PARAMETER_GET(rice_parameters, 0) != 0);
 
   /* 商部分を取得 */
   quot = SLARecursiveRice_GetQuotPart(strm);
@@ -411,16 +421,16 @@ static uint32_t SLARecursiveRice_GetCode(
   /* 得られたパラメータ段数までのパラメータを加算 */
   val = 0;
   for (i = 0; (i < quot) && (i < (num_params - 1)); i++) {
-    val += SLARICE_CALCULATE_RICE_PARAMETER(m_params, i);
+    val += SLARICE_CALCULATE_RICE_PARAMETER(rice_parameters, i);
   }
 
   if (quot < (num_params - 1)) {
     /* 指定したパラメータ段数で剰余部を取得 */
     val += SLARecursiveRice_GetRestPart(strm, 
-        SLARICE_CALCULATE_RICE_PARAMETER(m_params, i));
+        SLARICE_CALCULATE_RICE_PARAMETER(rice_parameters, i));
   } else {
     /* 末尾のパラメータで取得 */
-    uint32_t tail_param = SLARICE_CALCULATE_RICE_PARAMETER(m_params, i);
+    uint32_t tail_param = SLARICE_CALCULATE_RICE_PARAMETER(rice_parameters, i);
     uint32_t tail_rest;
     if (quot == SLACODER_QUOTPART_THRESHOULD) {
       quot += SLAGamma_GetCode(strm);
@@ -433,8 +443,8 @@ static uint32_t SLARecursiveRice_GetCode(
   /* 補足）符号語が分かってからでないと更新できない */
   tmp_val = val;
   for (i = 0; (i <= quot) && (i < num_params); i++) {
-    param = SLARICE_CALCULATE_RICE_PARAMETER(m_params, i);
-    SLARICE_PARAMETER_UPDATE(m_params, i, tmp_val);
+    param = SLARICE_CALCULATE_RICE_PARAMETER(rice_parameters, i);
+    SLARICE_PARAMETER_UPDATE(rice_parameters, i, tmp_val);
     tmp_val -= param;
   }
 

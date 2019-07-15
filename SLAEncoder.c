@@ -363,6 +363,7 @@ static SLAApiResult SLAEncoder_SearchOptimalBlockPartitions(struct SLAEncoder* e
 {
   uint32_t ch, smpl;
   uint32_t num_channels, parcor_order;
+  SLAApiResult api_ret;
 
   /* 引数チェック */
   if (encoder == NULL || input == NULL
@@ -387,7 +388,9 @@ static SLAApiResult SLAEncoder_SearchOptimalBlockPartitions(struct SLAEncoder* e
     }
   }
   /* チャンネル毎の処理実行 */
-  SLAEncoder_ApplyChProcessing(encoder, max_num_block_samples);
+  if ((api_ret = SLAEncoder_ApplyChProcessing(encoder, max_num_block_samples)) != SLA_APIRESULT_OK) {
+    return api_ret;
+  }
 
   /* 無音判定 */
   for (smpl = 0; smpl < num_samples; smpl++) {
@@ -573,10 +576,10 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
     encoder->parcor_coef_int32[ch][0] = 0; /* PARCOR係数の0次成分は0.0で確定だから飛ばす */
     SLA_Assert(encoder->parcor_coef[ch][0] == 0.0f);
     for (ord = 1; ord < parcor_order + 1; ord++) {
-      uint32_t qbits = SLA_GET_PARCOR_QUANTIZE_BIT_WIDTH(ord);     /* 量子化ビット数 */
+      uint32_t qbits = (uint32_t)SLA_GET_PARCOR_QUANTIZE_BIT_WIDTH(ord);     /* 量子化ビット数 */
       /* 整数化（符号化する係数） */
       encoder->parcor_coef_code[ch][ord]
-        = (int32_t)SLAUtility_Round(encoder->parcor_coef[ch][ord] * pow(2.0f, (qbits - 1)));
+        = (int32_t)SLAUtility_Round(encoder->parcor_coef[ch][ord] * pow(2.0f, (double)(qbits - 1)));
       /* roundによる丸めによりビット幅をはみ出てしまうことがある クリップにより対処 */
       encoder->parcor_coef_code[ch][ord] 
         = SLAUTILITY_INNER_VALUE(encoder->parcor_coef_code[ch][ord], -(1 << (qbits - 1)), (1 << (qbits - 1)) - 1);
@@ -591,14 +594,22 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
     /* 残差を求める */
 
     /* doubleデータに適用したものと同様のプリエンファシスフィルタを適用 */
-    SLAEmphasisFilter_Reset(encoder->emp[ch]);
+    if (SLAEmphasisFilter_Reset(encoder->emp[ch]) != SLAPREDICTOR_APIRESULT_OK) {
+      return SLA_APIRESULT_FAILED_TO_PREDICT;
+    }
     memcpy(encoder->tmp_residual[ch], encoder->input_int32[ch], sizeof(int32_t) * num_samples);
-    SLAEmphasisFilter_PreEmphasisInt32(encoder->emp[ch], encoder->tmp_residual[ch], num_samples, SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT);
+    if (SLAEmphasisFilter_PreEmphasisInt32(encoder->emp[ch],
+          encoder->tmp_residual[ch], num_samples,
+          SLA_PRE_EMPHASIS_COEFFICIENT_SHIFT) != SLAPREDICTOR_APIRESULT_OK) {
+      return SLA_APIRESULT_FAILED_TO_PREDICT;
+    }
     /* 残差をプリエンファシス予測による残差に差し替え */
     memcpy(encoder->residual[ch], encoder->tmp_residual[ch], sizeof(int32_t) * num_samples);
 
     /* PARCORで残差計算 */
-    SLALPCSynthesizer_Reset(encoder->lpcs[ch]);
+    if (SLALPCSynthesizer_Reset(encoder->lpcs[ch]) != SLAPREDICTOR_APIRESULT_OK) {
+      return SLA_APIRESULT_FAILED_TO_PREDICT;
+    }
     if (SLALPCSynthesizer_PredictByParcorCoefInt32(encoder->lpcs[ch],
           encoder->residual[ch], num_samples,
           encoder->parcor_coef_int32[ch], parcor_order,
@@ -633,7 +644,9 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
 
     /* ロングタームで残差計算 */
     if (encoder->pitch_period[ch] >= SLALONGTERM_MIN_PITCH_THRESHOULD) {
-      SLALongTermSynthesizer_Reset(encoder->ltms[ch]);
+      if (SLALongTermSynthesizer_Reset(encoder->ltms[ch]) != SLAPREDICTOR_APIRESULT_OK) {
+        return SLA_APIRESULT_FAILED_TO_PREDICT;
+      }
       if (SLALongTermSynthesizer_PredictInt32(
             encoder->ltms[ch],
             encoder->residual[ch], num_samples,
@@ -646,7 +659,9 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
     }
 
     /* LMSで残差計算 */
-    SLALMSFilter_Reset(encoder->nlmsc[ch]);
+    if (SLALMSFilter_Reset(encoder->nlmsc[ch]) != SLAPREDICTOR_APIRESULT_OK) {
+      return SLA_APIRESULT_FAILED_TO_PREDICT;
+    }
     if (SLALMSFilter_PredictInt32(encoder->nlmsc[ch],
           encoder->encode_param.lms_order_per_filter,
           encoder->residual[ch], num_samples,
@@ -669,19 +684,19 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
   /* ビットストリーム作成 */
   encoder->strm = SLABitStream_OpenMemory(data,
       data_size, "w", encoder->strm_work, SLABitStream_CalculateWorkSize());
-  SLABitStream_Seek(encoder->strm, 0, SLABITSTREAM_SEEK_SET);
+  (void)SLABitStream_Seek(encoder->strm, 0, SLABITSTREAM_SEEK_SET);
 
   /* ブロックヘッダ書き出し */
   /* 同期コード */
-  SLABitStream_PutBits(encoder->strm, 16, SLA_BLOCK_SYNC_CODE);
+  (void)SLABitStream_PutBits(encoder->strm, 16, SLA_BLOCK_SYNC_CODE);
   /* ブロックサイズ:一旦飛ばす */
-  SLABitStream_PutBits(encoder->strm, 32, 0);
+  (void)SLABitStream_PutBits(encoder->strm, 32, 0);
   /* CRC16:一旦飛ばす */
-  SLABitStream_PutBits(encoder->strm, 16, 0);
+  (void)SLABitStream_PutBits(encoder->strm, 16, 0);
   /* ブロックのサンプル数 */
-  SLABitStream_PutBits(encoder->strm, 16, num_samples);
+  (void)SLABitStream_PutBits(encoder->strm, 16, num_samples);
   /* ブロックデータタイプ */
-  SLABitStream_PutBits(encoder->strm,  2, encoder->block_data_type);
+  (void)SLABitStream_PutBits(encoder->strm,  2, encoder->block_data_type);
 
   /* ch毎に係数情報を符号化 */
   for (ch = 0; ch < num_channels; ch++) {
@@ -693,26 +708,27 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
     /* PARCOR係数 */
     /* 右シフト量を記録 */
     SLA_Assert(encoder->parcor_rshift[ch] < (1UL << 4));
-    SLABitStream_PutBits(encoder->strm, 4, encoder->parcor_rshift[ch]);
+    (void)SLABitStream_PutBits(encoder->strm, 4, encoder->parcor_rshift[ch]);
     /* 0次は0.0だから符号化せず飛ばす */
     for (ord = 1; ord < parcor_order + 1; ord++) {
       /* 符号なしで符号化 */
-      SLABitStream_PutBits(encoder->strm, SLA_GET_PARCOR_QUANTIZE_BIT_WIDTH(ord), 
+      (void)SLABitStream_PutBits(encoder->strm, 
+          (uint32_t)SLA_GET_PARCOR_QUANTIZE_BIT_WIDTH(ord), 
           SLAUTILITY_SINT32_TO_UINT32(encoder->parcor_coef_code[ch][ord]));
     }
 
     /* ピッチ周期/ロングターム係数 */
     if (encoder->pitch_period[ch] >= SLALONGTERM_MIN_PITCH_THRESHOULD) {
-      SLABitStream_PutBit(encoder->strm, 1);
-      SLABitStream_PutBits(encoder->strm, 10, encoder->pitch_period[ch]);
+      (void)SLABitStream_PutBit(encoder->strm, 1);
+      (void)SLABitStream_PutBits(encoder->strm, 10, encoder->pitch_period[ch]);
       for (ord = 0; ord < longterm_order; ord++) {
-        SLABitStream_PutBits(encoder->strm, 16, 
+        (void)SLABitStream_PutBits(encoder->strm, 16, 
             SLAUTILITY_SINT32_TO_UINT32(
               SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(encoder->longterm_coef_int32[ch][ord], 16)));
       }
     } else {
       /* ロングターム未使用であることをマーク */
-      SLABitStream_PutBit(encoder->strm, 0);
+      (void)SLABitStream_PutBit(encoder->strm, 0);
     }
 
     /* 再帰的ライス符号パラメータを符号化 */
@@ -722,7 +738,7 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
   }
 
   /* ここまでがブロックヘッダ. バイト境界に揃える */
-  SLABitStream_Flush(encoder->strm);
+  (void)SLABitStream_Flush(encoder->strm);
 
   /* データ符号化 */
   switch (encoder->block_data_type) {
@@ -744,7 +760,7 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
         /* チャンネルインターリーブしつつ符号化 */
         for (smpl = 0; smpl < num_samples; smpl++) {
           for (ch = 0; ch < num_channels; ch++) {
-            SLABitStream_PutBits(encoder->strm, output_bits[ch],
+            (void)SLABitStream_PutBits(encoder->strm, output_bits[ch],
                 SLAUTILITY_SINT32_TO_UINT32(encoder->input_int32[ch][smpl]));
           }
         }
@@ -766,10 +782,10 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
   }
 
   /* バイト境界に揃える */
-  SLABitStream_Flush(encoder->strm);
+  (void)SLABitStream_Flush(encoder->strm);
 
   /* 出力サイズの取得 */
-  SLABitStream_Tell(encoder->strm, (int32_t *)output_size);
+  (void)SLABitStream_Tell(encoder->strm, (int32_t *)output_size);
 
   /* ブロックCRC16計算 */
   crc16 = SLAUtility_CalculateCRC16(
@@ -777,13 +793,13 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
       (*output_size) - SLA_BLOCK_CRC16_CALC_START_OFFSET);
 
   /* オフセット / CRC16値の書き込み */
-  SLABitStream_Seek(encoder->strm, 
+  (void)SLABitStream_Seek(encoder->strm, 
       SLABITSTREAM_SEEK_SET, SLA_BLOCK_CRC16_CALC_START_OFFSET - 2 - 4);  /* オフセットの書き込み位置に移動 */
-  SLABitStream_PutBits(encoder->strm, 32, (*output_size) - 2 - 4);        /* 同期コード(2byte)とオフセット自体(4byte)を除く */
-  SLABitStream_PutBits(encoder->strm, 16, crc16);
+  (void)SLABitStream_PutBits(encoder->strm, 32, (*output_size) - 2 - 4);        /* 同期コード(2byte)とオフセット自体(4byte)を除く */
+  (void)SLABitStream_PutBits(encoder->strm, 16, crc16);
 
   /* ビットストリーム破棄 */
-  SLABitStream_Close(encoder->strm);
+  (void)SLABitStream_Close(encoder->strm);
 
   return SLA_APIRESULT_OK;
 }
@@ -849,7 +865,7 @@ SLAApiResult SLAEncoder_EncodeWhole(struct SLAEncoder* encoder,
     if ((api_ret = SLAEncoder_SearchOptimalBlockPartitions(encoder,
             input_ptr,
             SLAUTILITY_MIN(encoder->encode_param.max_num_block_samples, num_remain_samples),
-            SLAUTILITY_MIN(SLA_MIN_BLOCK_NUM_SAMPLES, num_remain_samples),
+            (uint32_t)SLAUTILITY_MIN(SLA_MIN_BLOCK_NUM_SAMPLES, num_remain_samples),
             SLA_SEARCH_BLOCK_NUM_SAMPLES_DELTA,
             SLAUTILITY_MIN(encoder->encode_param.max_num_block_samples, num_remain_samples),
             &num_partitions, encoder->num_block_partition_samples)) != SLA_APIRESULT_OK) {
@@ -892,8 +908,8 @@ SLAApiResult SLAEncoder_EncodeWhole(struct SLAEncoder* encoder,
     if (encoder->verpose_flag != 0) {
       uint32_t output_original_size 
         = encode_offset_sample * encoder->wave_format.num_channels * encoder->wave_format.bit_per_sample / 8;
-      printf("progress:%2d%% (compress ratio:%3.1f %%)\r",
-          (100 * encode_offset_sample) / num_samples,
+      printf("progress:%2u%% (compress ratio:%3.1f %%)\r",
+          (unsigned int)((100 * encode_offset_sample) / num_samples),
           ((double)cur_output_size / output_original_size) * 100);
       fflush(stdout);
     }
