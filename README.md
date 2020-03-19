@@ -1,4 +1,4 @@
-# SLA - Solitary Lossless Audio Compressor aka SL Asterisk
+# SLA - Solitary Lossless Audio Compressor (aka SL*)
 
 A Lossless Audio Compressor implementation.
 
