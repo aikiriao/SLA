@@ -58,9 +58,9 @@ static const struct SLAEncodeParameter encode_preset[] = {
 };
 
 /* エンコードプリセット数 */
-const uint32_t num_encode_preset = sizeof(encode_preset) / sizeof(encode_preset[0]);
+static const uint32_t num_encode_preset = sizeof(encode_preset) / sizeof(encode_preset[0]);
 /* デフォルトのプリセット番号 */
-const uint32_t default_preset_no = 2;
+static const uint32_t default_preset_no = 2;
 
 /* エンコード */
 int do_encode(const char* in_filename, const char* out_filename, uint32_t encode_preset_no, uint8_t verpose_flag)
