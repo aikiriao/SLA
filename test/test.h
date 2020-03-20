@@ -49,6 +49,10 @@ typedef void (*TestFunctionType)(void *obj);
 /* テストスイート構造体 */
 struct TestSuite;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* テストの初期化 */
 void Test_Initialize(void);
 
@@ -115,5 +119,9 @@ void Test_AssertFloat32NotEpsilonEqualFunc(
     uint32_t    line_no,
     const char* expected_exp,
     const char* actual_exp);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _TEST_H_INCLUDED_ */
