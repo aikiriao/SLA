@@ -1,6 +1,6 @@
 # SLA - Solitary Lossless Audio Compressor (aka SL*)
 
-A Lossless Audio Compressor implementation.
+A Lossless Audio Compressor.
 
 ## License
 
