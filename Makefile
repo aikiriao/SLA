@@ -1,5 +1,5 @@
 CC 		    = gcc
-CFLAGS 	  = -std=c89 -O3 -g3 -Werror -Wall -Wextra -Wpedantic -Wformat=2 -Wconversion -Wmissing-prototypes -Wstrict-prototypes -Wold-style-definition
+CFLAGS 	  = -std=c89 -O3 -Werror -Wall -Wextra -Wpedantic -Wformat=2 -Wconversion -Wmissing-prototypes -Wstrict-prototypes -Wold-style-definition
 CPPFLAGS	= -DNDEBUG
 LDFLAGS		= -Wall -Wextra -Wpedantic -O3
 LDLIBS		= -lm
