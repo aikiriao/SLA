@@ -15,9 +15,6 @@
 #include <string.h>
 #include <sys/stat.h>
 
-/* CUIインターフェースバージョン */
-#define SLA_CUI_VERSION_STRING     "0.0.1(beta)"
-
 /* 2つのうち小さい値の選択 */
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 
@@ -44,8 +41,8 @@ static struct CommandLineParserSpecification command_line_spec[] = {
   { 'p', "verpose", COMMAND_LINE_PARSER_FALSE, 
     "Verpose mode(try to display all information)", 
     NULL, COMMAND_LINE_PARSER_FALSE },
-  { 's', "silence", COMMAND_LINE_PARSER_FALSE, 
-    "Silence mode(suppress outputs)", 
+  { 'q', "quiet", COMMAND_LINE_PARSER_FALSE, 
+    "Quiet mode(suppress outputs)", 
     NULL, COMMAND_LINE_PARSER_FALSE },
   { 'c', "crc-check", COMMAND_LINE_PARSER_TRUE, 
     "Whether to check CRC16 at decoding(yes or no) default:yes", 
@@ -56,7 +53,7 @@ static struct CommandLineParserSpecification command_line_spec[] = {
   { 'v', "version", COMMAND_LINE_PARSER_FALSE, 
     "Show version information", 
     NULL, COMMAND_LINE_PARSER_FALSE },
-  { 'r', "streaming", COMMAND_LINE_PARSER_FALSE, 
+  { 's', "streaming", COMMAND_LINE_PARSER_FALSE, 
     "Use streaming decode(for debug; 120fps)", 
     NULL, COMMAND_LINE_PARSER_FALSE },
   { 0, }
@@ -491,7 +488,7 @@ int main(int argc, char** argv)
   /* 情報表示オプション */
   if (CommandLineParser_GetOptionAcquired(command_line_spec, "verpose") == COMMAND_LINE_PARSER_TRUE) {
     verpose_flag = 1;
-  } else if (CommandLineParser_GetOptionAcquired(command_line_spec, "silence") == COMMAND_LINE_PARSER_TRUE) {
+  } else if (CommandLineParser_GetOptionAcquired(command_line_spec, "quiet") == COMMAND_LINE_PARSER_TRUE) {
     verpose_flag = 0;
   }
 
