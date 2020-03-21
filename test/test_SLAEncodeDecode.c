@@ -17,6 +17,9 @@
 typedef void (*GenerateWaveFunction)(
     double** data, uint32_t num_channels, uint32_t num_samples);
 
+/* テストのセットアップ関数 */
+void testSLAEncodeDecode_Setup(void);
+
 /* テストケース */
 struct EncodeDecodeTestCase {
   struct SLAWaveFormat      wave_format;        /* 入力波形データ */
@@ -183,13 +186,13 @@ static void testSLAEncodeDecode_GenerateGaussNoise(
   }
 }
 
-int testSLAEncodeDecode_Initialize(void *obj)
+static int testSLAEncodeDecode_Initialize(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
   return 0;
 }
 
-int testSLAEncodeDecode_Finalize(void *obj)
+static int testSLAEncodeDecode_Finalize(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
   return 0;

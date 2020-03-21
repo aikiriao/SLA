@@ -9,13 +9,16 @@
 /* テスト対象のモジュール */
 #include "../SLADecoder.c"
 
-int testSLADecoder_Initialize(void *obj)
+/* テストのセットアップ関数 */
+void testSLADecoder_Setup(void);
+
+static int testSLADecoder_Initialize(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
   return 0;
 }
 
-int testSLADecoder_Finalize(void *obj)
+static int testSLADecoder_Finalize(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
   return 0;

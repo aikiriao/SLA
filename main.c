@@ -21,6 +21,15 @@
 /* 2つのうち小さい値の選択 */
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 
+/* エンコード */
+static int do_encode(const char* in_filename, const char* out_filename, uint32_t encode_preset_no, uint8_t verpose_flag);
+
+/* デコード */
+static int do_decode(const char* in_filename, const char* out_filename, uint8_t enable_crc_check, uint8_t verpose_flag);
+
+/* ストリーミングデコード */
+static int do_streaming_decode(const char* in_filename, const char* out_filename, uint8_t enable_crc_check, uint8_t verpose_flag);
+
 /* コマンドライン仕様 */
 static struct CommandLineParserSpecification command_line_spec[] = {
   { 'e', "encode", COMMAND_LINE_PARSER_FALSE, 
@@ -65,11 +74,12 @@ static const struct SLAEncodeParameter encode_preset[] = {
 
 /* エンコードプリセット数 */
 static const uint32_t num_encode_preset = sizeof(encode_preset) / sizeof(encode_preset[0]);
+
 /* デフォルトのプリセット番号 */
 static const uint32_t default_preset_no = 2;
 
 /* エンコード */
-int do_encode(const char* in_filename, const char* out_filename, uint32_t encode_preset_no, uint8_t verpose_flag)
+static int do_encode(const char* in_filename, const char* out_filename, uint32_t encode_preset_no, uint8_t verpose_flag)
 {
   FILE*                             out_fp;
   struct WAVFile*                   in_wav;
@@ -162,7 +172,7 @@ int do_encode(const char* in_filename, const char* out_filename, uint32_t encode
 }
 
 /* デコード */
-int do_decode(const char* in_filename, const char* out_filename, uint8_t enable_crc_check, uint8_t verpose_flag)
+static int do_decode(const char* in_filename, const char* out_filename, uint8_t enable_crc_check, uint8_t verpose_flag)
 {
   FILE*                     in_fp;
   struct WAVFile*           out_wav;
@@ -268,7 +278,7 @@ int do_decode(const char* in_filename, const char* out_filename, uint8_t enable_
 }
 
 /* ストリーミングデコード */
-int do_streaming_decode(const char* in_filename, const char* out_filename, uint8_t enable_crc_check, uint8_t verpose_flag)
+static int do_streaming_decode(const char* in_filename, const char* out_filename, uint8_t enable_crc_check, uint8_t verpose_flag)
 {
   FILE*                               in_fp;
   struct WAVFile*                     out_wav;

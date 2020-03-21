@@ -5,13 +5,16 @@
 /* テスト対象のモジュール */
 #include "../SLAEncoder.c"
 
-int testSLAEncoder_Initialize(void *obj)
+/* テストのセットアップ関数 */
+void testSLAEncoder_Setup(void);
+
+static int testSLAEncoder_Initialize(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
   return 0;
 }
 
-int testSLAEncoder_Finalize(void *obj)
+static int testSLAEncoder_Finalize(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
   return 0;

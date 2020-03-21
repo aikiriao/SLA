@@ -5,13 +5,16 @@
 /* テスト対象のモジュール */
 #include "../SLABitStream.c"
 
-int testSLABitStream_Initialize(void *obj)
+/* テストのセットアップ関数 */
+void testSLABitStream_Setup(void);
+
+static int testSLABitStream_Initialize(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
   return 0;
 }
 
-int testSLABitStream_Finalize(void *obj)
+static int testSLABitStream_Finalize(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
   return 0;

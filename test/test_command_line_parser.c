@@ -5,13 +5,16 @@
 /* テスト対象のモジュール */
 #include "../command_line_parser.c"
 
-int testCommandLineParser_Initialize(void *obj)
+/* テストのセットアップ関数 */
+void testCommandLineParser_Setup(void);
+
+static int testCommandLineParser_Initialize(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
   return 0;
 }
 
-int testCommandLineParser_Finalize(void *obj)
+static int testCommandLineParser_Finalize(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
   return 0;

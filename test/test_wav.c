@@ -5,20 +5,23 @@
 /* テスト対象のモジュール */
 #include "../wav.c"
 
-int testWAV_Initialize(void *obj)
+/* テストのセットアップ関数 */
+void testWAV_Setup(void);
+
+static int testWAV_Initialize(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
   return 0;
 }
 
-int testWAV_Finalize(void *obj)
+static int testWAV_Finalize(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
   return 0;
 }
 
 /* WAVファイルフォーマット取得テスト */
-void testWAV_GetWAVFormatTest(void *obj)
+static void testWAV_GetWAVFormatTest(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
 
@@ -53,7 +56,7 @@ void testWAV_GetWAVFormatTest(void *obj)
 }
 
 /* WAVファイルデータ取得テスト */
-void testWAV_CreateDestroyTest(void *obj)
+static void testWAV_CreateDestroyTest(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
 
@@ -112,7 +115,7 @@ void testWAV_CreateDestroyTest(void *obj)
 }
 
 /* WAVファイルデータ書き込みテスト */
-void testWAV_WriteTest(void *obj)
+static void testWAV_WriteTest(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
 

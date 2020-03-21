@@ -6,13 +6,16 @@
 /* テスト対象のモジュール */
 #include "../SLAUtility.c"
 
-int testSLAUtility_Initialize(void *obj)
+/* テストのセットアップ関数 */
+void testSLAUtility_Setup(void);
+
+static int testSLAUtility_Initialize(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
   return 0;
 }
 
-int testSLAUtility_Finalize(void *obj)
+static int testSLAUtility_Finalize(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
   return 0;

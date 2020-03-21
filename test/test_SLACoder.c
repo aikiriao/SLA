@@ -6,13 +6,16 @@
 /* テスト対象のモジュール */
 #include "../SLACoder.c"
 
-int testSLACoder_Initialize(void *obj)
+/* テストのセットアップ関数 */
+void testSLACoder_Setup(void);
+
+static int testSLACoder_Initialize(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
   return 0;
 }
 
-int testSLACoder_Finalize(void *obj)
+static int testSLACoder_Finalize(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
   return 0;

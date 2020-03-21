@@ -19,6 +19,14 @@ typedef void (*SynthesizeInt32Function)(const int32_t* residual, uint32_t num_sa
 /* 波形生成関数 */
 typedef void (*GenerateWaveFunction)(double* data, uint32_t num_samples);
 
+/* このテストのセットアップ関数 */
+void testSLAPredictor_Setup(void);
+
+/* （デバッグ用）隣接行列と結果の表示 */
+void SLAOptimalEncodeEstimator_PrettyPrint(
+    const struct SLAOptimalBlockPartitionEstimator* oee,
+    uint32_t num_nodes, uint32_t start_node, uint32_t goal_node);
+
 /* 予測合成(double)テストのテストケース */
 typedef struct LPCPredictSynthDoubleTestCaseTag {
   uint32_t                  order;            /* 次数 */
@@ -51,13 +59,13 @@ typedef struct SLALongTermTestCaseTag {
   GenerateWaveFunction  gen_wave_func;            /* 波形生成関数 */
 } SLALongTermTestCase;
 
-int testLPC_Initialize(void *obj)
+static int testLPC_Initialize(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
   return 0;
 }
 
-int testLPC_Finalize(void *obj)
+static int testLPC_Finalize(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
   return 0;
@@ -999,7 +1007,7 @@ static void LPC_CalculateAutoCorrelationReference(
 }
 
 /* 自己相関係数計算テスト */
-void testLPC_CalculateAutoCorrelationTest(void* obj)
+static void testLPC_CalculateAutoCorrelationTest(void* obj)
 {
   /* 判定精度 */
 #define FLOAT_ERROR_EPISILON 1.0e-8

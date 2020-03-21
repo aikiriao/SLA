@@ -6,9 +6,8 @@
 
 #include "test.h"
 
-/* ログ出力（仮実装） */
-#define Test_LogOutput(...) \
-  fprintf(stdout, __VA_ARGS__)
+/* ログ出力関数（暫定） */
+#define Test_LogOutput printf
 
 /* 式文字列の最大長 */
 #define TEST_MAX_LEN_EXPRESSION_STRING (100)

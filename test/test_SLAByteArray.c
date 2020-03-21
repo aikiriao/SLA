@@ -5,13 +5,16 @@
 /* テスト対象のモジュール */
 #include "../SLAByteArray.h"
 
-int testSLAByteArray_Initialize(void *obj)
+/* テストのセットアップ関数 */
+void testSLAByteArray_Setup(void);
+
+static int testSLAByteArray_Initialize(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
   return 0;
 }
 
-int testSLAByteArray_Finalize(void *obj)
+static int testSLAByteArray_Finalize(void *obj)
 {
   TEST_UNUSED_PARAMETER(obj);
   return 0;
