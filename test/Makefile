@@ -1,9 +1,10 @@
 CC 		    = gcc
 CFLAGS 	  = -Wall -Wextra -Wpedantic -Wformat=2 -O0 -g3 -std=c89
 LDFLAGS		= -lm
-OBJS	 		= test_main.o test.o \
-						test_SLABitStream.o test_SLAUtility.o test_SLACoder.o test_SLAPredictor.o test_SLAEncoder.o test_SLADecoder.o test_SLAByteArray.o test_SLAEncodeDecode.o
-OBJS			+= test_wav.o test_command_line_parser.o
+SRC				= test_main.c test.c \
+						test_SLABitStream.c test_SLAUtility.c test_SLACoder.c test_SLAPredictor.c test_SLAEncoder.c test_SLADecoder.c test_SLAByteArray.c test_SLAEncodeDecode.c
+SRC				+= test_wav.c test_command_line_parser.c
+OBJS	 		= $(SRC:%.c=%.o) 
 TARGET    = test 
 
 all: $(TARGET) 

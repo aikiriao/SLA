@@ -3,7 +3,8 @@ CFLAGS 	  = -std=c89 -Wall -Wextra -Wpedantic -Wformat=2 -Wconversion -O3 -g3
 CPPFLAGS	= -DNDEBUG
 LDFLAGS		= -Wall -Wextra -Wpedantic -O3
 LDLIBS		= -lm
-OBJS	 		= main.o wav.o command_line_parser.o SLABitStream.o SLACoder.o SLADecoder.o SLAEncoder.o SLAPredictor.o SLAUtility.o 
+SRC				= main.c wav.c command_line_parser.c SLABitStream.c SLACoder.c SLADecoder.c SLAEncoder.c SLAPredictor.c SLAUtility.c 
+OBJS	 		= $(SRC:%.c=%.o) 
 TARGET    = sla 
 
 all: $(TARGET) 
@@ -13,9 +14,9 @@ rebuild:
 	make all
 
 clean:
-	rm -f $(OBJS) $(TEST_OBJS) $(TARGET)
+	rm -f $(OBJS) $(TARGET)
 
-$(TARGET) : $(OBJS) $(TEST_OBJS)
+$(TARGET) : $(OBJS)
 	$(CC) $(LDFLAGS) $(OBJS) $(LDLIBS) -o $(TARGET)
 
 .c.o:
