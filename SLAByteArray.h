@@ -1,7 +1,7 @@
 #ifndef SLA_BYTEARRAY_H_INCLUDED
 #define SLA_BYTEARRAY_H_INCLUDED
 
-#include <stdint.h>
+#include "SLAStdint.h"
 
 /* 1バイト読み出し */
 #define SLAByteArray_ReadUint8(p_array)   \

@@ -1,7 +1,7 @@
 #ifndef SLA_H_INCLUDED
 #define SLA_H_INCLUDED
 
-#include <stdint.h>
+#include "SLAStdint.h"
 
 /* バージョン文字列 */
 #define SLA_VERSION_STRING          "0.0.1(beta)"

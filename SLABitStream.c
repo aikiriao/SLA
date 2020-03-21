@@ -1,8 +1,9 @@
-#include <stdint.h>
-#include <string.h>
-#include <stdlib.h>
+#include "SLAStdint.h"
 #include "SLABitStream.h"
 #include "SLAInternal.h"
+
+#include <string.h>
+#include <stdlib.h>
 
 /* アラインメント */
 #define SLABITSTREAM_ALIGNMENT                   16

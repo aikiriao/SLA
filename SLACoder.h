@@ -2,7 +2,7 @@
 #define SLACODER_H_INCLUDED
 
 #include "SLABitStream.h"
-#include <stdint.h>
+#include "SLAStdint.h"
 
 /* 符号化ハンドル */
 struct SLACoder;

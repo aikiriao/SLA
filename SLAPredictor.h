@@ -1,7 +1,7 @@
 #ifndef SLAPREDICTOR_H_INCLUDED
 #define SLAPREDICTOR_H_INCLUDED
 
-#include <stdint.h>
+#include "SLAStdint.h"
 
 /* LPC係数計算ハンドル */
 struct SLALPCCalculator;

@@ -1,7 +1,7 @@
 #ifndef SLAUTILITY_H_INCLUDED
 #define SLAUTILITY_H_INCLUDED
 
-#include <stdint.h>
+#include "SLAStdint.h"
 
 /* 円周率 */
 #define SLA_PI              3.1415926535897932384626433832795029

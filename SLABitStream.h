@@ -1,7 +1,7 @@
 #ifndef SLABITSTREAM_H_INCLUDED
 #define SLABITSTREAM_H_INCLUDED
 
-#include <stdint.h>
+#include "SLAStdint.h"
 #include <stdio.h>
 
 /* SLABitStream_Seek関数の探索コード */

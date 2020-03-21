@@ -2,7 +2,7 @@
 #define SLA_ENCODER_H_INCLUDED
 
 #include "SLA.h"
-#include <stdint.h>
+#include "SLAStdint.h"
 
 /* エンコーダバージョン */
 #define SLA_ENCODER_VERSION_STRING   "0.0.1(beta)"
