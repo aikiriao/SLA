@@ -1,4 +1,4 @@
-# SLA - Solitary Lossless Audio Compressor (aka SL*)
+# SLA - Solitary Lossless Audio Compressor
 
 A Lossless Audio Compressor.
 
