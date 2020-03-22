@@ -53,6 +53,16 @@
 #define SLA_Assert(condition) assert(condition)
 #endif
 
+/* 状態検査マクロ（デバッグ時のみ有効） */
+#ifdef NDEBUG
+#define SLA_CHECK_RETURN_IF_TRUE(condition, return_value)
+#else
+#define SLA_CHECK_RETURN_IF_TRUE(condition, return_value) \
+  if (condition) {                                        \
+    return (return_value);                                \
+  }
+#endif
+
 /* ブロックデータタイプ */
 typedef enum SLABlockDataTypeTag {
   SLA_BLOCK_DATA_TYPE_COMPRESSDATA  = 0,     /* 圧縮済みデータ */

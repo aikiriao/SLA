@@ -261,9 +261,7 @@ struct SLABitStream* SLABitStream_OpenMemory(
   struct SLABitStream* stream;
 
   /* 引数チェック */
-  if (memory_image == NULL) {
-    return NULL;
-  }
+  SLA_CHECK_RETURN_IF_TRUE(memory_image == NULL, NULL);
 
   /* 共通インスタンス作成ルーチンを通す */
   stream = SLABitStream_OpenCommon(mode, work, work_size);
@@ -406,9 +404,7 @@ void SLABitStream_Close(struct SLABitStream* stream)
 SLABitStreamApiResult SLABitStream_Seek(struct SLABitStream* stream, int32_t offset, int32_t wherefrom)
 {
   /* 引数チェック */
-  if (stream == NULL) {
-    return SLABITSTREAM_APIRESULT_INVALID_ARGUMENT;
-  }
+  SLA_CHECK_RETURN_IF_TRUE(stream == NULL, SLABITSTREAM_APIRESULT_INVALID_ARGUMENT);
 
   /* 内部バッファをクリア（副作用が起こる） */
   if (SLABitStream_Flush(stream) != SLABITSTREAM_APIRESULT_OK) {
@@ -430,9 +426,8 @@ SLABitStreamApiResult SLABitStream_Tell(struct SLABitStream* stream, int32_t* re
   SLABitStreamError err;
 
   /* 引数チェック */
-  if (stream == NULL || result == NULL) {
-    return SLABITSTREAM_APIRESULT_INVALID_ARGUMENT;
-  }
+  SLA_CHECK_RETURN_IF_TRUE(
+      (stream == NULL || result == NULL), SLABITSTREAM_APIRESULT_INVALID_ARGUMENT);
 
   /* ftell実行 */
   err = stream->stm_if->STell(&(stream->stm), result);
@@ -444,14 +439,11 @@ SLABitStreamApiResult SLABitStream_Tell(struct SLABitStream* stream, int32_t* re
 SLABitStreamApiResult SLABitStream_PutBit(struct SLABitStream* stream, uint8_t bit)
 {
   /* 引数チェック */
-  if (stream == NULL) {
-    return SLABITSTREAM_APIRESULT_INVALID_ARGUMENT;
-  }
+  SLA_CHECK_RETURN_IF_TRUE(stream == NULL, SLABITSTREAM_APIRESULT_INVALID_ARGUMENT);
 
   /* 読み込みモードでは実行不可能 */
-  if (stream->flags & SLABITSTREAM_FLAGS_FILEOPENMODE_READ) {
-    return SLABITSTREAM_APIRESULT_INVALID_MODE;
-  }
+  SLA_CHECK_RETURN_IF_TRUE(
+      (stream->flags & SLABITSTREAM_FLAGS_FILEOPENMODE_READ), SLABITSTREAM_APIRESULT_INVALID_MODE);
 
   /* バイト出力するまでのカウントを減らす */
   stream->bit_count--;
@@ -482,19 +474,15 @@ SLABitStreamApiResult SLABitStream_PutBit(struct SLABitStream* stream, uint8_t b
 SLABitStreamApiResult SLABitStream_PutBits(struct SLABitStream* stream, uint32_t n_bits, uint64_t val)
 {
   /* 引数チェック */
-  if (stream == NULL) {
-    return SLABITSTREAM_APIRESULT_INVALID_ARGUMENT;
-  }
+  SLA_CHECK_RETURN_IF_TRUE(stream == NULL, SLABITSTREAM_APIRESULT_INVALID_ARGUMENT);
 
   /* 読み込みモードでは実行不可能 */
-  if (stream->flags & SLABITSTREAM_FLAGS_FILEOPENMODE_READ) {
-    return SLABITSTREAM_APIRESULT_INVALID_MODE;
-  }
+  SLA_CHECK_RETURN_IF_TRUE(
+      (stream->flags & SLABITSTREAM_FLAGS_FILEOPENMODE_READ), SLABITSTREAM_APIRESULT_INVALID_MODE);
 
   /* 出力可能な最大ビット数を越えている */
-  if (n_bits > sizeof(uint64_t) * 8) {
-    return SLABITSTREAM_APIRESULT_INVALID_ARGUMENT;
-  }
+  SLA_CHECK_RETURN_IF_TRUE(
+      n_bits > sizeof(uint64_t) * 8, SLABITSTREAM_APIRESULT_INVALID_ARGUMENT);
 
   /* 0ビット出力では何もしない */
   if (n_bits == 0) {
@@ -531,14 +519,12 @@ SLABitStreamApiResult SLABitStream_GetBit(struct SLABitStream* stream, uint8_t* 
   SLABitStreamError err;
 
   /* 引数チェック */
-  if (stream == NULL || bit == NULL) {
-    return SLABITSTREAM_APIRESULT_INVALID_ARGUMENT;
-  }
+  SLA_CHECK_RETURN_IF_TRUE(
+      (stream == NULL || bit == NULL), SLABITSTREAM_APIRESULT_INVALID_ARGUMENT);
 
   /* 読み込みモードでない場合は即時リターン */
-  if (!(stream->flags & SLABITSTREAM_FLAGS_FILEOPENMODE_READ)) {
-    return SLABITSTREAM_APIRESULT_INVALID_MODE;
-  }
+  SLA_CHECK_RETURN_IF_TRUE(
+      !(stream->flags & SLABITSTREAM_FLAGS_FILEOPENMODE_READ), SLABITSTREAM_APIRESULT_INVALID_MODE);
 
   /* 入力ビットカウントを1減らし、バッファの対象ビットを出力 */
   if (stream->bit_count > 0) {
@@ -580,19 +566,16 @@ SLABitStreamApiResult SLABitStream_GetBits(struct SLABitStream* stream, uint32_t
   SLABitStreamError err;
 
   /* 引数チェック */
-  if (stream == NULL || val == NULL) {
-    return SLABITSTREAM_APIRESULT_INVALID_ARGUMENT;
-  }
+  SLA_CHECK_RETURN_IF_TRUE(
+      (stream == NULL) || (val == NULL), SLABITSTREAM_APIRESULT_INVALID_ARGUMENT);
 
   /* 読み込みモードでない場合は即時リターン */
-  if (!(stream->flags & SLABITSTREAM_FLAGS_FILEOPENMODE_READ)) {
-    return SLABITSTREAM_APIRESULT_INVALID_MODE;
-  }
+  SLA_CHECK_RETURN_IF_TRUE(
+      !(stream->flags & SLABITSTREAM_FLAGS_FILEOPENMODE_READ), SLABITSTREAM_APIRESULT_INVALID_MODE);
 
   /* 入力可能な最大ビット数を越えている */
-  if (n_bits > sizeof(uint64_t) * 8) {
-    return SLABITSTREAM_APIRESULT_INVALID_ARGUMENT;
-  }
+  SLA_CHECK_RETURN_IF_TRUE(
+      n_bits > sizeof(uint64_t) * 8, SLABITSTREAM_APIRESULT_INVALID_ARGUMENT);
 
   /* 最上位ビットからデータを埋めていく
    * 初回ループではtmpの上位ビットにセット
@@ -625,7 +608,7 @@ END_OF_STREAM:
   tmp               |= (uint64_t)SLABITSTREAM_GETLOWERBITS(n_bits, (uint32_t)(stream->bit_buffer >> stream->bit_count));
 
   /* 正常終了 */
-  *val = tmp;
+  (*val) = tmp;
   return SLABITSTREAM_APIRESULT_OK;
 }
 
@@ -635,9 +618,8 @@ SLABitStreamApiResult SLABitStream_GetZeroRunLength(struct SLABitStream* stream,
   uint32_t run;
 
   /* 引数チェック */
-  if (stream == NULL || runlength == NULL) {
-    return SLABITSTREAM_APIRESULT_INVALID_ARGUMENT;
-  }
+  SLA_CHECK_RETURN_IF_TRUE(
+      (stream == NULL || runlength == NULL), SLABITSTREAM_APIRESULT_INVALID_ARGUMENT);
 
   /* 上位ビットからの連続する0をNLZで計測 */
   /* (1 << (31 - stream->bit_count)) はラン長が伸びすぎないようにするためのビット */
@@ -685,7 +667,7 @@ SLABitStreamApiResult SLABitStream_GetZeroRunLength(struct SLABitStream* stream,
 
 END_OF_STREAM:
   /* 正常終了 */
-  *runlength = run;
+  (*runlength) = run;
   return SLABITSTREAM_APIRESULT_OK;
 }
 
@@ -693,9 +675,7 @@ END_OF_STREAM:
 SLABitStreamApiResult SLABitStream_Flush(struct SLABitStream* stream)
 {
   /* 引数チェック */
-  if (stream == NULL) {
-    return SLABITSTREAM_APIRESULT_INVALID_ARGUMENT;
-  }
+  SLA_CHECK_RETURN_IF_TRUE(stream == NULL, SLABITSTREAM_APIRESULT_INVALID_ARGUMENT)
 
   /* 既に先頭にあるときは何もしない */
   if (stream->bit_count == 8) {
