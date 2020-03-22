@@ -624,7 +624,7 @@ SLABitStreamApiResult SLABitStream_GetZeroRunLength(struct SLABitStream* stream,
   /* 上位ビットからの連続する0をNLZで計測 */
   /* (1 << (31 - stream->bit_count)) はラン長が伸びすぎないようにするためのビット */
   run = SLAUtility_NLZ(
-      (stream->bit_buffer << (32 - stream->bit_count)) | (1 << (31 - stream->bit_count))
+      (uint32_t)((stream->bit_buffer << (32 - stream->bit_count)) | (1UL << (31 - stream->bit_count)))
       );
 
   /* 読み込んだ分カウントを減らす */
