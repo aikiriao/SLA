@@ -70,20 +70,6 @@ static const uint16_t CRC16_IBM_BYTE_TABLE[0x100] = {
   0x8201, 0x42c0, 0x4380, 0x8341, 0x4100, 0x81c1, 0x8081, 0x4040
 };
 
-/* NLZ計算のためのテーブル */
-#define UNUSED 99
-static const uint32_t nlz10_table[64] = {
-      32,     20,     19, UNUSED, UNUSED,     18, UNUSED,      7,
-      10,     17, UNUSED, UNUSED,     14, UNUSED,      6, UNUSED,
-  UNUSED,      9, UNUSED,     16, UNUSED, UNUSED,      1,     26,
-  UNUSED,     13, UNUSED, UNUSED,     24,      5, UNUSED, UNUSED,
-  UNUSED,     21, UNUSED,      8,     11, UNUSED,     15, UNUSED,
-  UNUSED, UNUSED, UNUSED,      2,     27,      0,     25, UNUSED,
-      22, UNUSED,     12, UNUSED, UNUSED,      3,     28, UNUSED,
-      23, UNUSED,      4,     29, UNUSED, UNUSED,     30,     31
-};
-#undef UNUSED
-
 /* 窓の適用 */
 void SLAUtility_ApplyWindow(const double* window, double* data, uint32_t num_samples)
 {
@@ -327,9 +313,26 @@ uint16_t SLAUtility_CalculateCRC16(const uint8_t* data, uint64_t data_size)
 }
 
 /* NLZ（最上位ビットから1に当たるまでのビット数）を計算する黒魔術 */
-/* ハッカーのたのしみ参照 */
-static uint32_t nlz10(uint32_t x)
+static uint32_t nlzcore(uint32_t x)
 {
+#if defined(__GNUC__)
+  /* 組み込み関数を使用 */
+  return (x > 0) ? (uint32_t)__builtin_clz(x) : 32U;
+#else
+  /* ハッカーのたのしみ参照 */
+  /* NLZ計算のためのテーブル */
+#define UNUSED 99
+  static const uint32_t nlz10_table[64] = {
+        32,     20,     19, UNUSED, UNUSED,     18, UNUSED,      7,
+        10,     17, UNUSED, UNUSED,     14, UNUSED,      6, UNUSED,
+    UNUSED,      9, UNUSED,     16, UNUSED, UNUSED,      1,     26,
+    UNUSED,     13, UNUSED, UNUSED,     24,      5, UNUSED, UNUSED,
+    UNUSED,     21, UNUSED,      8,     11, UNUSED,     15, UNUSED,
+    UNUSED, UNUSED, UNUSED,      2,     27,      0,     25, UNUSED,
+        22, UNUSED,     12, UNUSED, UNUSED,      3,     28, UNUSED,
+        23, UNUSED,      4,     29, UNUSED, UNUSED,     30,     31
+  };
+#undef UNUSED
   x = x | (x >> 1);
   x = x | (x >> 2);
   x = x | (x >> 4);
@@ -339,24 +342,36 @@ static uint32_t nlz10(uint32_t x)
   x = (x << 11) - x;
   x = (x << 14) - x;
   return nlz10_table[x >> 26];
+#endif
+}
+
+/* NLZ（最上位ビットから1に当たるまでのビット数）の計算 */
+uint32_t SLAUtility_NLZ(uint32_t val)
+{
+  return nlzcore(val);
 }
 
 /* ceil(log2(val)) を計算する */
 uint32_t SLAUtility_Log2Ceil(uint32_t val)
 {
   SLA_Assert(val != 0);
-  return 32U - nlz10(val - 1);
+  return 32U - nlzcore(val - 1);
 }
 
 /* floor(log2(val)) を計算する */
 uint32_t SLAUtility_Log2Floor(uint32_t val)
 {
-  return 31U - nlz10(val);
+  return 31U - nlzcore(val);
 }
 
-/* 2の冪乗数に切り上げる ハッカーのたのしみ参照 */
+/* 2の冪乗数に切り上げる */
 uint32_t SLAUtility_RoundUp2Powered(uint32_t val)
 {
+#if defined(__GNUC__)
+  /* 組み込み関数関数の速度に期待 */
+  return 1U << SLAUtility_Log2Ceil(val);
+#else
+  /* ハッカーのたのしみ参照 */
   val--;
   val |= val >> 1;
   val |= val >> 2;
@@ -364,6 +379,7 @@ uint32_t SLAUtility_RoundUp2Powered(uint32_t val)
   val |= val >> 8;
   val |= val >> 16;
   return val + 1;
+#endif
 }
 
 /* LR -> MS（double） */

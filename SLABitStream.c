@@ -1,6 +1,7 @@
 #include "SLAStdint.h"
 #include "SLABitStream.h"
 #include "SLAInternal.h"
+#include "SLAUtility.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -109,7 +110,7 @@ static const uint32_t st_lowerbits_mask[33] = {
 };
 
 /* 0のラン長パターンテーブル（注意：上位ビットからのラン長） */
-static const uint8_t st_zerobit_runlength_table[0x100] = {
+static const uint32_t st_zerobit_runlength_table[0x100] = {
   8, 7, 6, 6, 5, 5, 5, 5, 4, 4, 4, 4, 4, 4, 4, 4, 
   3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 
   2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 
@@ -631,22 +632,21 @@ END_OF_STREAM:
 /* つぎの1にぶつかるまで読み込み、その間に読み込んだ0のランレングスを取得 */
 SLABitStreamApiResult SLABitStream_GetZeroRunLength(struct SLABitStream* stream, uint32_t* runlength)
 {
-  uint32_t  run, rshift, mask, table_index;
+  uint32_t run;
 
   /* 引数チェック */
   if (stream == NULL || runlength == NULL) {
     return SLABITSTREAM_APIRESULT_INVALID_ARGUMENT;
   }
 
-  /* ビットバッファに残っているデータを読み取るための
-   * 右シフト量とマスクを作成 */
-  rshift = 8 - stream->bit_count;
-  mask   = (1U << rshift) - 1;
+  /* 上位ビットからの連続する0をNLZで計測 */
+  /* (1 << (31 - stream->bit_count)) はラン長が伸びすぎないようにするためのビット */
+  run = SLAUtility_NLZ(
+      (stream->bit_buffer << (32 - stream->bit_count)) | (1 << (31 - stream->bit_count))
+      );
 
-  /* テーブル参照 / ラン取得 */
-  table_index         = (stream->bit_buffer << rshift) | mask;
-  run                 = st_zerobit_runlength_table[0xFF & table_index];
-  stream->bit_count   -= run;
+  /* 読み込んだ分カウントを減らす */
+  stream->bit_count -= run;
 
   /* バッファが空の時 */
   while (stream->bit_count == 0) {
@@ -670,7 +670,11 @@ SLABitStreamApiResult SLABitStream_GetZeroRunLength(struct SLABitStream* stream,
     SLA_Assert(ch <= 0xFF);
     /* ビットバッファにセットし直して再度ランを計測 */
     stream->bit_buffer  = (uint32_t)ch;
-    tmp_run             = st_zerobit_runlength_table[ch];
+    /* テーブルによりラン長を取得 */
+    tmp_run             = st_zerobit_runlength_table[stream->bit_buffer];
+    /* TODO:32bitで入力するときはこちらを使う
+    tmp_run             = SLAUtility_NLZ(stream->bit_buffer);
+    */
     stream->bit_count   = 8 - tmp_run;
     /* ランを加算 */
     run                 += tmp_run;

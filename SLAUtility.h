@@ -72,6 +72,9 @@ void SLAUtility_FFT(double* data, uint32_t n, int32_t sign);
 /* CRC16(CRC-IBM)の計算 */
 uint16_t SLAUtility_CalculateCRC16(const uint8_t* data, uint64_t data_size);
 
+/* NLZ（最上位ビットから1に当たるまでのビット数）の計算 */
+uint32_t SLAUtility_NLZ(uint32_t val);
+
 /* ceil(log2(val))の計算 */
 uint32_t SLAUtility_Log2Ceil(uint32_t val);
 
