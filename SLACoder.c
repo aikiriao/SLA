@@ -42,7 +42,7 @@ struct SLACoder {
 };
 
 /* 2の冪数に対するlog2計算のためのテーブル */
-static const uint8_t log2_for_2powered_val_table[4][0x100] = {
+static const uint8_t st_log2_for_2powered_val_table[4][0x100] = {
   /* 1byte目 */
   {
     0, 0, 1, 0, 2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0,
@@ -131,12 +131,12 @@ static uint32_t SLACoder_Log2CeilFor2PoweredValue(uint32_t val)
   SLA_Assert(SLAUTILITY_IS_POWERED_OF_2(val));
 
   if (val < 0x10000) {
-    return  log2_for_2powered_val_table[0][0xFF & (val >>  0)]
-          | log2_for_2powered_val_table[1][0xFF & (val >>  8)];
+    return  st_log2_for_2powered_val_table[0][0xFF & (val >>  0)]
+          | st_log2_for_2powered_val_table[1][0xFF & (val >>  8)];
   }
 
-  return  log2_for_2powered_val_table[2][0xFF & (val >> 16)]
-        | log2_for_2powered_val_table[3][0xFF & (val >> 24)];
+  return  st_log2_for_2powered_val_table[2][0xFF & (val >> 16)]
+        | st_log2_for_2powered_val_table[3][0xFF & (val >> 24)];
 }
 
 
