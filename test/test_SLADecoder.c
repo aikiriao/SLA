@@ -1,13 +1,13 @@
 #include "test.h"
 #include "SLA_TestUtility.h"
-#include "../SLAEncoder.h"
+#include "SLAEncoder.h"
 
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
 
 /* テスト対象のモジュール */
-#include "../SLADecoder.c"
+#include "../src/SLADecoder.c"
 
 /* テストのセットアップ関数 */
 void testSLADecoder_Setup(void);

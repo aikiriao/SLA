@@ -4,6 +4,7 @@ LDFLAGS		= -lm
 SRC				= test_main.c test.c \
 						test_SLABitStream.c test_SLAUtility.c test_SLACoder.c test_SLAPredictor.c test_SLAEncoder.c test_SLADecoder.c test_SLAByteArray.c test_SLAEncodeDecode.c
 SRC				+= test_wav.c test_command_line_parser.c
+INCLUDE   = -I../src/include/private -I../src/include/public
 OBJS	 		= $(SRC:%.c=%.o) 
 TARGET    = test 
 
@@ -23,4 +24,4 @@ $(TARGET) : $(OBJS) $(TEST_OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) $(TEST_OBJS) -o $(TARGET)
 
 .c.o:
-	$(CC) $(CFLAGS) -c $<
+	$(CC) $(CFLAGS) $(INCLUDE) -c $<

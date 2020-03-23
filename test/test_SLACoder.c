@@ -4,7 +4,7 @@
 #include <string.h>
 
 /* テスト対象のモジュール */
-#include "../SLACoder.c"
+#include "../src/SLACoder.c"
 
 /* テストのセットアップ関数 */
 void testSLACoder_Setup(void);

@@ -1,8 +1,8 @@
 #include "test.h"
-#include "../SLAEncoder.h"
-#include "../SLADecoder.h"
-#include "../SLAInternal.h"
-#include "../SLAUtility.h"
+#include "SLAEncoder.h"
+#include "SLADecoder.h"
+#include "SLAInternal.h"
+#include "SLAUtility.h"
 
 #include <stdlib.h>
 #include <math.h>

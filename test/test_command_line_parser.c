@@ -3,7 +3,7 @@
 #include "test.h"
 
 /* テスト対象のモジュール */
-#include "../command_line_parser.c"
+#include "../src/command_line_parser.c"
 
 /* テストのセットアップ関数 */
 void testCommandLineParser_Setup(void);

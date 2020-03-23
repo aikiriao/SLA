@@ -4,7 +4,7 @@
 #include <sys/stat.h>
 
 /* テスト対象のモジュール */
-#include "../SLAUtility.c"
+#include "../src/SLAUtility.c"
 
 /* テストのセットアップ関数 */
 void testSLAUtility_Setup(void);

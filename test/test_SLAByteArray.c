@@ -3,7 +3,7 @@
 #include "test.h"
 
 /* テスト対象のモジュール */
-#include "../SLAByteArray.h"
+#include "../src/include/private/SLAByteArray.h"
 
 /* テストのセットアップ関数 */
 void testSLAByteArray_Setup(void);

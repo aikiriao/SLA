@@ -3,7 +3,7 @@
 #include "SLA_TestUtility.h"
 
 /* テスト対象のモジュール */
-#include "../SLAEncoder.c"
+#include "../src/SLAEncoder.c"
 
 /* テストのセットアップ関数 */
 void testSLAEncoder_Setup(void);

@@ -3,7 +3,7 @@
 #include "test.h"
 
 /* テスト対象のモジュール */
-#include "../wav.c"
+#include "../src/wav.c"
 
 /* テストのセットアップ関数 */
 void testWAV_Setup(void);

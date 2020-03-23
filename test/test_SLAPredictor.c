@@ -4,7 +4,7 @@
 #include "test.h"
 
 /* テスト対象のモジュール */
-#include "../SLAPredictor.c"
+#include "../src/SLAPredictor.c"
 
 /* 係数計算関数 */
 typedef void (*CalculateCoefFunction)(const double* data, uint32_t num_samples, double* coef, uint32_t order);

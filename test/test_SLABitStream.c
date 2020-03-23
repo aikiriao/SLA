@@ -3,7 +3,7 @@
 #include "test.h"
 
 /* テスト対象のモジュール */
-#include "../SLABitStream.c"
+#include "../src/SLABitStream.c"
 
 /* テストのセットアップ関数 */
 void testSLABitStream_Setup(void);
