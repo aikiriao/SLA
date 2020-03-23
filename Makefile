@@ -30,7 +30,7 @@ clean:
 	rm -f $(LIBOBJS) $(CUIOBJS) $(TARGET)
 
 $(TARGETDIR)/sla : $(CUIOBJS)
-	$(CC) $(LDFLAGS) -o $@ $^ 
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 $(TARGETDIR)/libsla.a : $(LIBOBJS)
 	$(AR) $(ARFLAGS) $@ $^
