@@ -383,7 +383,7 @@ static uint32_t testSLALPCSynthesizer_DoPredictSynthInt32TestCase(const LPCPredi
 
   /* 固定小数化 */
   for (smpl = 0; smpl < num_samples; smpl++) {
-    int32_data[smpl] = (int32_t)(round((double)data[smpl] * (1UL << test_case->data_bit_width)));
+    int32_data[smpl] = (int32_t)(SLAUtility_Round((double)data[smpl] * (1UL << test_case->data_bit_width)));
     /*
     printf("%4d %+f %08x %08x \n", 
         smpl, data[smpl], int32_data[smpl], int32_data[smpl] & 0xFFFF0000);
@@ -395,7 +395,7 @@ static uint32_t testSLALPCSynthesizer_DoPredictSynthInt32TestCase(const LPCPredi
 
   /* 係数固定小数化 */
   for (ord = 0; ord < order + 1; ord++) {
-    int32_coef[ord] = (int32_t)(round((double)coef[ord] * (1UL << 31)));
+    int32_coef[ord] = (int32_t)(SLAUtility_Round((double)coef[ord] * (1UL << 31)));
   }
 
   /* 入力データのビット幅計測 */
@@ -612,7 +612,7 @@ static void testLPCLongTermCalculator_CalculateCoefTest(void* obj)
 
     /* 波形を固定小数化 */
     for (smpl = 0; smpl < test_case_p->num_samples; smpl++) {
-      int32_data[smpl] = (int32_t)(round((double)data[smpl] * (1UL << test_case->data_bit_width)));
+      int32_data[smpl] = (int32_t)(SLAUtility_Round((double)data[smpl] * (1UL << test_case->data_bit_width)));
     }
 
     /* 係数をクリア */
@@ -657,7 +657,7 @@ static void testLPCLongTermCalculator_CalculateCoefTest(void* obj)
 
       /* 係数固定小数化 */
       for (j = 0; j < test_case_p->num_taps; j++) {
-        int32_ltm_coef[j] = (int32_t)(round(ltm_coef[j] * (1UL << 31)));
+        int32_ltm_coef[j] = (int32_t)(SLAUtility_Round(ltm_coef[j] * (1UL << 31)));
       }
 
       /* 残差計算 */
@@ -747,9 +747,9 @@ static void testLPCLongTermCalculator_PitchDetectTest(void* obj)
     /* 波形を固定小数化 */
     for (smpl = 0; smpl < NUM_SAMPLES; smpl++) {
       if (data[smpl] > 0.0f) {
-        int32_data[smpl] = (int32_t)(round(data[smpl] * ((1UL << 31) - 1)));
+        int32_data[smpl] = (int32_t)(SLAUtility_Round(data[smpl] * ((1UL << 31) - 1)));
       } else {
-        int32_data[smpl] = (int32_t)(round(data[smpl] * (1UL << 31)));
+        int32_data[smpl] = (int32_t)(SLAUtility_Round(data[smpl] * (1UL << 31)));
       }
     }
     /* ピッチ解析 */

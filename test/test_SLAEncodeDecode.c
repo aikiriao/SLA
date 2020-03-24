@@ -212,7 +212,7 @@ static void testSLAEncodeDecode_InputDoubleToInputFixedFloat(
       assert(fabs(input_double[ch][smpl]) <= 1.0f);
       /* まずはビット幅のデータを作る */
       input_int32[ch][smpl]
-        = (int32_t)round(input_double[ch][smpl] * pow(2, wave_format->bit_per_sample - 1));
+        = (int32_t)SLAUtility_Round(input_double[ch][smpl] * pow(2, wave_format->bit_per_sample - 1));
       /* クリップ */
       if (input_int32[ch][smpl] >= (1L << (wave_format->bit_per_sample - 1))) {
         input_int32[ch][smpl] = (1L << (wave_format->bit_per_sample - 1)) - 1;
