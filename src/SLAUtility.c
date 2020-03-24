@@ -82,6 +82,18 @@ void SLAUtility_ApplyWindow(const double* window, double* data, uint32_t num_sam
   }
 }
 
+/* 矩形窓を作成 */
+void SLAUtility_MakeRectangularWindow(double* window, uint32_t window_size)
+{
+  uint32_t  smpl;
+
+  SLA_Assert(window != NULL);
+
+  for (smpl = 0; smpl < window_size; smpl++) {
+    window[smpl] = 1.0f;
+  }
+}
+
 /* ハン窓を作成 */
 void SLAUtility_MakeHannWindow(double* window, uint32_t window_size)
 {

@@ -303,6 +303,7 @@ static SLAApiResult SLAEncoder_MakeWindow(struct SLAEncoder* encoder, uint32_t n
 
   switch (encoder->encode_param.window_function_type) {
     case SLA_WINDOWFUNCTIONTYPE_RECTANGULAR:
+      SLAUtility_MakeRectangularWindow(encoder->window, num_samples);
       break;
     case SLA_WINDOWFUNCTIONTYPE_SIN:
       SLAUtility_MakeSinWindow(encoder->window, num_samples);

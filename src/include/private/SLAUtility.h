@@ -51,6 +51,9 @@ extern "C" {
 /* 窓の適用 */
 void SLAUtility_ApplyWindow(const double* window, double* data, uint32_t num_samples);
 
+/* 矩形窓を作成 */
+void SLAUtility_MakeRectangularWindow(double* window, uint32_t window_size);
+
 /* ハン窓を作成 */
 void SLAUtility_MakeHannWindow(double* window, uint32_t window_size);
 
