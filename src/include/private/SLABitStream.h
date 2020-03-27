@@ -187,7 +187,7 @@ extern const uint32_t g_sla_bitstream_zerobit_runlength_table[0x100];
       __nbits -= (stream)->bit_count;                                   \
       (stream)->bit_buffer                                              \
         |= (uint32_t)SLABITSTREAM_GETLOWERBITS(                         \
-              (val) >> __nbits, (stream)->bit_count);                   \
+              (uint32_t)(val) >> __nbits, (stream)->bit_count);         \
                                                                         \
       /* 終端に達している */                                            \
       /* TODO:もしかしたら不要かも */                                   \
@@ -212,7 +212,7 @@ extern const uint32_t g_sla_bitstream_zerobit_runlength_table[0x100];
     (stream)->bit_count  -= __nbits;                                    \
     (stream)->bit_buffer                                                \
       |= (uint32_t)SLABITSTREAM_GETLOWERBITS(                           \
-            (val), __nbits) << (stream)->bit_count;                     \
+            (uint32_t)(val), __nbits) << (stream)->bit_count;           \
   } while (0)
 
 /* nbits 取得（最大64bit）し、その値を右詰めして出力 */
