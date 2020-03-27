@@ -44,8 +44,8 @@ extern const uint32_t g_sla_bitstream_zerobit_runlength_table[0x100];
 #define SLABitReader_Open(stream, memory, size)                         \
   do {                                                                  \
     /* 引数チェック */                                                  \
-    SLA_Assert((stream) != NULL);                                       \
-    SLA_Assert((memory) != NULL);                                       \
+    SLA_Assert((void *)(stream) != NULL);                               \
+    SLA_Assert((void *)(memory) != NULL);                               \
                                                                         \
     /* 内部状態リセット */                                              \
     (stream)->flags = 0;                                                \
@@ -69,8 +69,8 @@ extern const uint32_t g_sla_bitstream_zerobit_runlength_table[0x100];
 #define SLABitWriter_Open(stream, memory, size)                         \
   do {                                                                  \
     /* 引数チェック */                                                  \
-    SLA_Assert((stream) != NULL);                                       \
-    SLA_Assert((memory) != NULL);                                       \
+    SLA_Assert((void *)(stream) != NULL);                               \
+    SLA_Assert((void *)(memory) != NULL);                               \
                                                                         \
     /* 内部状態リセット */                                              \
     (stream)->flags = 0;                                                \
@@ -94,7 +94,7 @@ extern const uint32_t g_sla_bitstream_zerobit_runlength_table[0x100];
 #define SLABitStream_Close(stream)                                      \
   do {                                                                  \
     /* 引数チェック */                                                  \
-    SLA_Assert((stream) != NULL);                                       \
+    SLA_Assert((void *)(stream) != NULL);                               \
                                                                         \
     /* 残ったデータをフラッシュ */                                      \
     SLABitStream_Flush(stream);                                         \
@@ -117,7 +117,7 @@ extern const uint32_t g_sla_bitstream_zerobit_runlength_table[0x100];
     uint8_t* __pos = NULL;                                              \
                                                                         \
     /* 引数チェック */                                                  \
-    SLA_Assert((stream) != NULL);                                       \
+    SLA_Assert((void *)(stream) != NULL);                               \
                                                                         \
     /* 内部バッファをクリア（副作用が起こる） */                        \
     SLABitStream_Flush(stream);                                         \
@@ -154,8 +154,8 @@ extern const uint32_t g_sla_bitstream_zerobit_runlength_table[0x100];
 #define SLABitStream_Tell(stream, result)                               \
   do {                                                                  \
     /* 引数チェック */                                                  \
-    SLA_Assert((stream) != NULL);                                       \
-    SLA_Assert((result) != NULL);                                       \
+    SLA_Assert((void *)(stream) != NULL);                               \
+    SLA_Assert((void *)(result) != NULL);                               \
                                                                         \
     /* アクセスオフセットを返す */                                      \
     (*result) = (int32_t)                                               \
@@ -168,7 +168,7 @@ extern const uint32_t g_sla_bitstream_zerobit_runlength_table[0x100];
     uint32_t __nbits;                                                   \
                                                                         \
     /* 引数チェック */                                                  \
-    SLA_Assert(stream != NULL);                                         \
+    SLA_Assert((void *)(stream) != NULL);                               \
                                                                         \
     /* 読み込みモードでは実行不可能 */                                  \
     SLA_Assert(!((stream)->flags & SLABITSTREAM_FLAGS_MODE_READ));      \
@@ -223,8 +223,8 @@ extern const uint32_t g_sla_bitstream_zerobit_runlength_table[0x100];
     uint64_t __tmp = 0;                                                 \
                                                                         \
     /* 引数チェック */                                                  \
-    SLA_Assert((stream) != NULL);                                       \
-    SLA_Assert((val) != NULL);                                          \
+    SLA_Assert((void *)(stream) != NULL);                               \
+    SLA_Assert((void *)(val) != NULL);                                  \
                                                                         \
     /* 読み込みモードでない場合はアサート */                            \
     SLA_Assert((stream)->flags & SLABITSTREAM_FLAGS_MODE_READ);         \
@@ -275,8 +275,8 @@ extern const uint32_t g_sla_bitstream_zerobit_runlength_table[0x100];
     uint32_t __run;                                                     \
                                                                         \
     /* 引数チェック */                                                  \
-    SLA_Assert((stream) != NULL);                                       \
-    SLA_Assert((runlength) != NULL);                                    \
+    SLA_Assert((void *)(stream) != NULL);                               \
+    SLA_Assert((void *)(runlength) != NULL);                            \
                                                                         \
     /* 上位ビットからの連続する0をNLZで計測 */                          \
     /* (1 << (31 - (stream)->bit_count)) はラン長が                     \
@@ -329,7 +329,7 @@ extern const uint32_t g_sla_bitstream_zerobit_runlength_table[0x100];
 #define SLABitStream_Flush(stream)                                      \
   do {                                                                  \
     /* 引数チェック */                                                  \
-    SLA_Assert((stream) != NULL);                                       \
+    SLA_Assert((void *)(stream) != NULL);                               \
                                                                         \
     /* 既に先頭にあるときは何もしない */                                \
     if ((stream)->bit_count < 8) {                                      \
