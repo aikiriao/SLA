@@ -281,7 +281,7 @@ extern const uint32_t g_sla_bitstream_zerobit_runlength_table[0x100];
     /* 上位ビットからの連続する0をNLZで計測 */                          \
     /* (1 << (31 - (stream)->bit_count)) はラン長が                     \
      * 伸びすぎないようにするためのビット */                            \
-    __run = SLAUtility_NLZ(                                             \
+    __run = SLAUTILITY_NLZ(                                             \
         (uint32_t)(                                                     \
           ((stream)->bit_buffer << (32 - (stream)->bit_count))          \
             | (1UL << (31 - (stream)->bit_count)))                      \

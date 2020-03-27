@@ -24,7 +24,7 @@
   ((((num_samples) + ((delta_num_samples) - 1)) / (delta_num_samples)) + 1)
 
 /* sign(x) * log2ceil(|x| + 1) の計算 TODO:負荷が高い */
-#define SLALMS_SIGNED_LOG2CEIL(x) (SLAUTILITY_SIGN(x) * (int32_t)SLAUtility_Log2Ceil((uint32_t)SLAUTILITY_ABS(x) + 1))
+#define SLALMS_SIGNED_LOG2CEIL(x) (SLAUTILITY_SIGN(x) * (int32_t)SLAUTILITY_LOG2CEIL((uint32_t)SLAUTILITY_ABS(x) + 1))
 
 /* 内部エラー型 */
 typedef enum SLAPredictorErrorTag {
@@ -1052,7 +1052,7 @@ struct SLALMSFilter* SLALMSFilter_Create(uint32_t max_num_coef)
 
   nlms = malloc(sizeof(struct SLALMSFilter));
   nlms->max_num_coef            = max_num_coef;
-  nlms->signal_sign_buffer_size = SLAUtility_RoundUp2Powered(max_num_coef);
+  nlms->signal_sign_buffer_size = SLAUTILITY_ROUNDUP2POWERED(max_num_coef);
 
   nlms->fir_coef                = malloc(sizeof(int32_t) * max_num_coef);
   nlms->iir_coef                = malloc(sizeof(int32_t) * max_num_coef);

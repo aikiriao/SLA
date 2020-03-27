@@ -36,6 +36,29 @@
 /* 32bit整数演算のための右シフト量を計算 */
 #define SLAUTILITY_CALC_RSHIFT_FOR_SINT32(bitwidth) (((bitwidth) > 16) ? ((bitwidth) - 16) : 0)
 
+/* NLZ（最上位ビットから1に当たるまでのビット数）の計算 */
+#if defined(__GNUC__)
+/* ビルトイン関数を使用 */
+#define SLAUTILITY_NLZ(x) (((x) > 0) ? (uint32_t)__builtin_clz(x) : 32U)
+#else
+/* ソフトウェア実装を使用 */
+#define SLAUTILITY_NLZ(x) SLAUtility_NLZSoft(x)
+#endif
+
+/* ceil(log2(val))の計算 */
+#define SLAUTILITY_LOG2CEIL(x) (32U - SLAUTILITY_NLZ((uint32_t)((x) - 1U)))
+/* floor(log2(val))の計算 */
+#define SLAUTILITY_LOG2FLOOR(x) (31U - SLAUTILITY_NLZ(x))
+
+/* 2の冪乗数(1,2,4,8,16,...)への切り上げ */
+#if defined(__GNUC__)
+/* ビルトイン関数を使用 */
+#define SLAUTILITY_ROUNDUP2POWERED(x) (1U << SLAUTILITY_LOG2CEIL(x))
+#else 
+/* ソフトウェア実装を使用 */
+#define SLAUTILITY_ROUNDUP2POWERED(x) SLAUtility_RoundUp2PoweredSoft(x)
+#endif
+
 /* データパケットキューのAPI結果 */
 typedef enum SLADataPacketQueueApiResultTag {
   SLA_DATAPACKETQUEUE_APIRESULT_OK = 0,
@@ -76,16 +99,10 @@ void SLAUtility_FFT(double* data, uint32_t n, int32_t sign);
 uint16_t SLAUtility_CalculateCRC16(const uint8_t* data, uint64_t data_size);
 
 /* NLZ（最上位ビットから1に当たるまでのビット数）の計算 */
-uint32_t SLAUtility_NLZ(uint32_t val);
-
-/* ceil(log2(val))の計算 */
-uint32_t SLAUtility_Log2Ceil(uint32_t val);
-
-/* floor(log2(val))の計算 */
-uint32_t SLAUtility_Log2Floor(uint32_t val);
+uint32_t SLAUtility_NLZSoft(uint32_t val);
 
 /* 2の冪乗に切り上げる */
-uint32_t SLAUtility_RoundUp2Powered(uint32_t val);
+uint32_t SLAUtility_RoundUp2PoweredSoft(uint32_t val);
 
 /* LR -> MS（double） */
 void SLAUtility_LRtoMSDouble(double **data, uint32_t num_channels, uint32_t num_samples);

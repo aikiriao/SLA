@@ -277,24 +277,6 @@ static void testSLACoder_SLARecursiveRiceTest(void *obj)
 
 }
 
-static void testSLACoder_CalculateLog2CeilTest(void* obj)
-{
-  TEST_UNUSED_PARAMETER(obj);
-
-  /* 2の冪乗数に対するテスト */
-  {
-    uint32_t get, val, lshift, ref;
-
-    for (lshift = 0; lshift < 32; lshift++) {
-      val = (1UL << lshift);
-      get = SLACoder_Log2CeilFor2PoweredValue(val);
-      ref = SLAUtility_Log2Ceil(val);
-      Test_AssertEqual(ref, lshift);
-      Test_AssertEqual(get, lshift);
-    }
-  }
-}
-
 void testSLACoder_Setup(void)
 {
   struct TestSuite *suite
@@ -302,5 +284,4 @@ void testSLACoder_Setup(void)
         NULL, testSLACoder_Initialize, testSLACoder_Finalize);
 
   Test_AddTest(suite, testSLACoder_SLARecursiveRiceTest);
-  Test_AddTest(suite, testSLACoder_CalculateLog2CeilTest);
 }
