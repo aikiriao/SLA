@@ -23,9 +23,8 @@ struct SLAEncoder {
   uint32_t                      max_parcor_order;
   uint32_t                      max_longterm_order;
   uint32_t                      max_lms_order_per_filter;
-  struct SLABitStream*          strm;
+  struct SLABitStream           strm;
   struct SLACoder*              coder;
-  void*                         strm_work;
   struct SLALPCCalculator*        lpcc;   
   struct SLALongTermCalculator*   ltc;
   struct SLALPCSynthesizer**      lpcs;
@@ -78,7 +77,6 @@ struct SLAEncoder* SLAEncoder_Create(const struct SLAEncoderConfig* config)
   encoder->verpose_flag             = config->verpose_flag;
 
   /* 各種領域割当て */
-  encoder->strm_work              = malloc((size_t)SLABitStream_CalculateWorkSize());
   encoder->input_double           = (double **)malloc(sizeof(double *) * max_num_channels);
   encoder->input_int32            = (int32_t **)malloc(sizeof(int32_t *) * max_num_channels);
   encoder->residual               = (int32_t **)malloc(sizeof(int32_t *) * max_num_channels);
@@ -170,8 +168,6 @@ void SLAEncoder_Destroy(struct SLAEncoder* encoder)
     NULLCHECK_AND_FREE(encoder->ltms);
     NULLCHECK_AND_FREE(encoder->nlmsc);
     NULLCHECK_AND_FREE(encoder->emp);
-    /* Closeを呼ぶと意図せずFlushされるのでメモリ領域だけ開放する */
-    NULLCHECK_AND_FREE(encoder->strm_work);
     free(encoder);
   }
 }
@@ -683,21 +679,20 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
   /* 符号化 */
 
   /* ビットストリーム作成 */
-  encoder->strm = SLABitStream_OpenMemory(data,
-      data_size, "w", encoder->strm_work, SLABitStream_CalculateWorkSize());
-  (void)SLABitStream_Seek(encoder->strm, 0, SLABITSTREAM_SEEK_SET);
+  SLABitWriter_Open(&encoder->strm, data, data_size);
+  SLABitStream_Seek(&encoder->strm, 0, SLABITSTREAM_SEEK_SET);
 
   /* ブロックヘッダ書き出し */
   /* 同期コード */
-  (void)SLABitStream_PutBits(encoder->strm, 16, SLA_BLOCK_SYNC_CODE);
-  /* ブロックサイズ:一旦飛ばす */
-  (void)SLABitStream_PutBits(encoder->strm, 32, 0);
-  /* CRC16:一旦飛ばす */
-  (void)SLABitStream_PutBits(encoder->strm, 16, 0);
+  SLABitWriter_PutBits(&encoder->strm, SLA_BLOCK_SYNC_CODE, 16);
+  /* ブロックサイズ:一旦飛ばす（後で計算するため、領域だけ確保） */
+  SLABitWriter_PutBits(&encoder->strm, 0, 32);
+  /* CRC16:一旦飛ばす（後で計算するため、領域だけ確保） */
+  SLABitWriter_PutBits(&encoder->strm, 0, 16);
   /* ブロックのサンプル数 */
-  (void)SLABitStream_PutBits(encoder->strm, 16, num_samples);
+  SLABitWriter_PutBits(&encoder->strm, num_samples, 16);
   /* ブロックデータタイプ */
-  (void)SLABitStream_PutBits(encoder->strm,  2, encoder->block_data_type);
+  SLABitWriter_PutBits(&encoder->strm, encoder->block_data_type, 2);
 
   /* ch毎に係数情報を符号化 */
   for (ch = 0; ch < num_channels; ch++) {
@@ -709,37 +704,37 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
     /* PARCOR係数 */
     /* 右シフト量を記録 */
     SLA_Assert(encoder->parcor_rshift[ch] < (1UL << 4));
-    (void)SLABitStream_PutBits(encoder->strm, 4, encoder->parcor_rshift[ch]);
+    SLABitWriter_PutBits(&encoder->strm, encoder->parcor_rshift[ch], 4);
     /* 0次は0.0だから符号化せず飛ばす */
     for (ord = 1; ord < parcor_order + 1; ord++) {
       /* 符号なしで符号化 */
-      (void)SLABitStream_PutBits(encoder->strm, 
-          (uint32_t)SLA_GET_PARCOR_QUANTIZE_BIT_WIDTH(ord), 
-          SLAUTILITY_SINT32_TO_UINT32(encoder->parcor_coef_code[ch][ord]));
+      SLABitWriter_PutBits(&encoder->strm, 
+          SLAUTILITY_SINT32_TO_UINT32(encoder->parcor_coef_code[ch][ord]),
+          (uint32_t)SLA_GET_PARCOR_QUANTIZE_BIT_WIDTH(ord));
     }
 
     /* ピッチ周期/ロングターム係数 */
     if (encoder->pitch_period[ch] >= SLALONGTERM_MIN_PITCH_THRESHOULD) {
-      (void)SLABitStream_PutBit(encoder->strm, 1);
-      (void)SLABitStream_PutBits(encoder->strm, 10, encoder->pitch_period[ch]);
+      SLABitWriter_PutBits(&encoder->strm, 1, 1);
+      SLABitWriter_PutBits(&encoder->strm, encoder->pitch_period[ch], 10);
       for (ord = 0; ord < longterm_order; ord++) {
-        (void)SLABitStream_PutBits(encoder->strm, 16, 
+        SLABitWriter_PutBits(&encoder->strm,
             SLAUTILITY_SINT32_TO_UINT32(
-              SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(encoder->longterm_coef_int32[ch][ord], 16)));
+              SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(encoder->longterm_coef_int32[ch][ord], 16)), 16);
       }
     } else {
       /* ロングターム未使用であることをマーク */
-      (void)SLABitStream_PutBit(encoder->strm, 0);
+      SLABitWriter_PutBits(&encoder->strm, 0, 1);
     }
 
     /* 再帰的ライス符号パラメータを符号化 */
     SLACoder_PutInitialRecursiveRiceParameter(encoder->coder,
-        encoder->strm, SLACODER_NUM_RECURSIVERICE_PARAMETER,
+        &encoder->strm, SLACODER_NUM_RECURSIVERICE_PARAMETER,
         encoder->wave_format.bit_per_sample, ch);
   }
 
   /* ここまでがブロックヘッダ. バイト境界に揃える */
-  (void)SLABitStream_Flush(encoder->strm);
+  SLABitStream_Flush(&encoder->strm);
 
   /* データ符号化 */
   switch (encoder->block_data_type) {
@@ -761,15 +756,15 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
         /* チャンネルインターリーブしつつ符号化 */
         for (smpl = 0; smpl < num_samples; smpl++) {
           for (ch = 0; ch < num_channels; ch++) {
-            (void)SLABitStream_PutBits(encoder->strm, output_bits[ch],
-                SLAUTILITY_SINT32_TO_UINT32(encoder->input_int32[ch][smpl]));
+            SLABitWriter_PutBits(&encoder->strm,
+                SLAUTILITY_SINT32_TO_UINT32(encoder->input_int32[ch][smpl]), output_bits[ch]);
           }
         }
       }
       break;
     case SLA_BLOCK_DATA_TYPE_COMPRESSDATA:
       /* 残差符号化 */
-      SLACoder_PutDataArray(encoder->coder, encoder->strm, 
+      SLACoder_PutDataArray(encoder->coder, &encoder->strm, 
           SLACODER_NUM_RECURSIVERICE_PARAMETER,
           (const int32_t **)encoder->residual, num_channels, num_samples);
       break;
@@ -783,10 +778,10 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
   }
 
   /* バイト境界に揃える */
-  (void)SLABitStream_Flush(encoder->strm);
+  SLABitStream_Flush(&encoder->strm);
 
   /* 出力サイズの取得 */
-  (void)SLABitStream_Tell(encoder->strm, (int32_t *)output_size);
+  SLABitStream_Tell(&encoder->strm, (int32_t *)output_size);
 
   /* ブロックCRC16計算 */
   crc16 = SLAUtility_CalculateCRC16(
@@ -794,13 +789,13 @@ SLAApiResult SLAEncoder_EncodeBlock(struct SLAEncoder* encoder,
       (*output_size) - SLA_BLOCK_CRC16_CALC_START_OFFSET);
 
   /* オフセット / CRC16値の書き込み */
-  (void)SLABitStream_Seek(encoder->strm, 
-      SLABITSTREAM_SEEK_SET, SLA_BLOCK_CRC16_CALC_START_OFFSET - 2 - 4);  /* オフセットの書き込み位置に移動 */
-  (void)SLABitStream_PutBits(encoder->strm, 32, (*output_size) - 2 - 4);        /* 同期コード(2byte)とオフセット自体(4byte)を除く */
-  (void)SLABitStream_PutBits(encoder->strm, 16, crc16);
+  SLABitStream_Seek(&encoder->strm, 
+      SLA_BLOCK_CRC16_CALC_START_OFFSET - 2 - 4, SLABITSTREAM_SEEK_SET);  /* オフセットの書き込み位置に移動 */
+  SLABitWriter_PutBits(&encoder->strm, (*output_size) - 2 - 4, 32);       /* 同期コード(2byte)とオフセット自体(4byte)を除く */
+  SLABitWriter_PutBits(&encoder->strm, crc16, 16);
 
   /* ビットストリーム破棄 */
-  (void)SLABitStream_Close(encoder->strm);
+  SLABitStream_Close(&encoder->strm);
 
   return SLA_APIRESULT_OK;
 }

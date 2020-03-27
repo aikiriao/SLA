@@ -4,74 +4,385 @@
 #include "SLAStdint.h"
 #include <stdio.h>
 
+/* マクロ展開して処理を行うか？ */
+#define SLABITSTREAM_PROCESS_BY_MACRO
+
 /* SLABitStream_Seek関数の探索コード */
 #define SLABITSTREAM_SEEK_SET  (int32_t)SEEK_SET
 #define SLABITSTREAM_SEEK_CUR  (int32_t)SEEK_CUR
 #define SLABITSTREAM_SEEK_END  (int32_t)SEEK_END
 
-/* ビットストリーム構造体 */
-struct SLABitStream;
+/* 読みモードか？（0で書きモード） */
+#define SLABITSTREAM_FLAGS_MODE_READ  (1 << 0)
+/* 終端に達しているか？（1で達している） */
+#define SLABITSTREAM_FLAGS_EOS        (1 << 1)
 
-/* API結果型 */
-typedef enum SLABitStreamApiResultTag {
-  SLABITSTREAM_APIRESULT_OK = 0,           /* 成功                       */
-  SLABITSTREAM_APIRESULT_NG,               /* 分類不能なエラー           */
-  SLABITSTREAM_APIRESULT_INVALID_ARGUMENT, /* 不正な引数                 */
-  SLABITSTREAM_APIRESULT_INVALID_MODE,     /* 不正なモード               */
-  SLABITSTREAM_APIRESULT_IOERROR,          /* 分類不能なI/Oエラー        */
-  SLABITSTREAM_APIRESULT_EOS               /* ストリーム終端に達している */
-} SLABitStreamApiResult;
+/* valの下位nbitsを取得 */
+#define SLABITSTREAM_GETLOWERBITS(val, nbits) ((val) & g_sla_bitstream_lower_bits_mask[(nbits)])
+
+/* ビットストリーム構造体 */
+struct SLABitStream {
+  uint32_t        bit_buffer;
+  uint32_t        bit_count;
+  const uint8_t*  memory_image;
+  size_t          memory_size;
+  uint8_t*        memory_p;
+  uint8_t         flags;
+};
+
+#if defined(SLABITSTREAM_PROCESS_BY_MACRO) 
+
+/* マクロ処理を行う場合の実装をヘッダに展開 */
+
+/* 下位ビットを取り出すためのマスク */
+extern const uint32_t g_sla_bitstream_lower_bits_mask[33];
+
+/* ラン長のパターンテーブル */
+extern const uint32_t g_sla_bitstream_zerobit_runlength_table[0x100];
+
+/* ビットリーダのオープン */
+#define SLABitReader_Open(stream, memory, size)                         \
+  do {                                                                  \
+    /* 引数チェック */                                                  \
+    SLA_Assert((stream) != NULL);                                       \
+    SLA_Assert((memory) != NULL);                                       \
+                                                                        \
+    /* 内部状態リセット */                                              \
+    (stream)->flags = 0;                                                \
+                                                                        \
+    /* バッファ初期化 */                                                \
+    (stream)->bit_count   = 0;                                          \
+    (stream)->bit_buffer  = 0;                                          \
+                                                                        \
+    /* メモリセット */                                                  \
+    (stream)->memory_image = (memory);                                  \
+    (stream)->memory_size  = (size);                                    \
+                                                                        \
+    /* 読み出し位置は先頭に */                                          \
+    (stream)->memory_p = (memory);                                      \
+                                                                        \
+    /* 読みモードとしてセット */                                        \
+    (stream)->flags |= (uint8_t)SLABITSTREAM_FLAGS_MODE_READ;           \
+  } while (0)
+
+/* ビットライタのオープン */
+#define SLABitWriter_Open(stream, memory, size)                         \
+  do {                                                                  \
+    /* 引数チェック */                                                  \
+    SLA_Assert((stream) != NULL);                                       \
+    SLA_Assert((memory) != NULL);                                       \
+                                                                        \
+    /* 内部状態リセット */                                              \
+    (stream)->flags = 0;                                                \
+                                                                        \
+    /* バッファ初期化 */                                                \
+    (stream)->bit_count   = 8;                                          \
+    (stream)->bit_buffer  = 0;                                          \
+                                                                        \
+    /* メモリセット */                                                  \
+    (stream)->memory_image = (memory);                                  \
+    (stream)->memory_size  = (size);                                    \
+                                                                        \
+    /* 読み出し位置は先頭に */                                          \
+    (stream)->memory_p = (memory);                                      \
+                                                                        \
+    /* 書きモードとしてセット */                                        \
+    (stream)->flags &= (uint8_t)(~SLABITSTREAM_FLAGS_MODE_READ);        \
+  } while (0)
+
+/* ビットストリームのクローズ */
+#define SLABitStream_Close(stream)                                      \
+  do {                                                                  \
+    /* 引数チェック */                                                  \
+    SLA_Assert((stream) != NULL);                                       \
+                                                                        \
+    /* 残ったデータをフラッシュ */                                      \
+    SLABitStream_Flush(stream);                                         \
+                                                                        \
+    /* バッファのクリア */                                              \
+    (stream)->bit_buffer = 0;                                           \
+                                                                        \
+    /* メモリ情報のクリア */                                            \
+    (stream)->memory_image = NULL;                                      \
+    (stream)->memory_size  = 0;                                         \
+                                                                        \
+    /* 内部状態のクリア */                                              \
+    (stream)->memory_p     = NULL;                                      \
+    (stream)->flags        = 0;                                         \
+  } while (0)
+
+/* シーク(fseek準拠) */
+#define SLABitStream_Seek(stream, offset, origin)                       \
+  do {                                                                  \
+    uint8_t* __pos = NULL;                                              \
+                                                                        \
+    /* 引数チェック */                                                  \
+    SLA_Assert((stream) != NULL);                                       \
+                                                                        \
+    /* 内部バッファをクリア（副作用が起こる） */                        \
+    SLABitStream_Flush(stream);                                         \
+                                                                        \
+    /* 起点をまず定める */                                              \
+    switch (origin) {                                                   \
+      case SLABITSTREAM_SEEK_CUR:                                       \
+        __pos = (stream)->memory_p;                                     \
+        break;                                                          \
+      case SLABITSTREAM_SEEK_SET:                                       \
+        __pos = (uint8_t *)(stream)->memory_image;                      \
+        break;                                                          \
+      case SLABITSTREAM_SEEK_END:                                       \
+        __pos = (uint8_t *)((stream)->memory_image                      \
+            + ((stream)->memory_size - 1));                             \
+        break;                                                          \
+      default:                                                          \
+        SLA_Assert(0);                                                  \
+    }                                                                   \
+                                                                        \
+    /* オフセット分動かす */                                            \
+    __pos += (offset);                                                  \
+                                                                        \
+    /* 範囲チェック */                                                  \
+    SLA_Assert(__pos                                                    \
+        < ((stream)->memory_image + (stream)->memory_size));            \
+    SLA_Assert(__pos >= (stream)->memory_image);                        \
+                                                                        \
+    /* 結果の保存 */                                                    \
+    (stream)->memory_p = __pos;                                         \
+  } while (0)
+
+/* 現在位置(ftell)準拠 */
+#define SLABitStream_Tell(stream, result)                               \
+  do {                                                                  \
+    /* 引数チェック */                                                  \
+    SLA_Assert((stream) != NULL);                                       \
+    SLA_Assert((result) != NULL);                                       \
+                                                                        \
+    /* アクセスオフセットを返す */                                      \
+    (*result) = (int32_t)                                               \
+      ((stream)->memory_p - (stream)->memory_image);                    \
+  } while (0)
+
+/* valの右側（下位）nbits 出力（最大64bit出力可能） */
+#define SLABitWriter_PutBits(stream, val, nbits)                        \
+  do {                                                                  \
+    uint32_t __nbits;                                                   \
+                                                                        \
+    /* 引数チェック */                                                  \
+    SLA_Assert(stream != NULL);                                         \
+                                                                        \
+    /* 読み込みモードでは実行不可能 */                                  \
+    SLA_Assert(!((stream)->flags & SLABITSTREAM_FLAGS_MODE_READ));      \
+                                                                        \
+    /* 出力可能な最大ビット数を越えている */                            \
+    SLA_Assert((nbits) <= (sizeof(uint64_t) * 8));                      \
+                                                                        \
+    /* 0ビット出力は冗長なのでアサートで落とす */                       \
+    SLA_Assert((nbits) > 0);                                            \
+                                                                        \
+    /* valの上位ビットから順次出力                                      \
+     * 初回ループでは端数（出力に必要なビット数）分を埋め出力           \
+     * 2回目以降は8bit単位で出力 */                                     \
+    __nbits = (nbits);                                                  \
+    while (__nbits >= (stream)->bit_count) {                            \
+      __nbits -= (stream)->bit_count;                                   \
+      (stream)->bit_buffer                                              \
+        |= (uint32_t)SLABITSTREAM_GETLOWERBITS(                         \
+              (val) >> __nbits, (stream)->bit_count);                   \
+                                                                        \
+      /* 終端に達している */                                            \
+      /* TODO:もしかしたら不要かも */                                   \
+      if ((stream)->memory_p                                            \
+          >= ((stream)->memory_image + (stream)->memory_size)) {        \
+        (stream)->flags |= SLABITSTREAM_FLAGS_EOS;                      \
+        break;                                                          \
+      }                                                                 \
+                                                                        \
+      /* メモリに書き出し */                                            \
+      (*(stream)->memory_p) = ((stream)->bit_buffer & 0xFF);            \
+      (stream)->memory_p++;                                             \
+                                                                        \
+      /* バッファをリセット */                                          \
+      (stream)->bit_buffer  = 0;                                        \
+      (stream)->bit_count   = 8;                                        \
+    }                                                                   \
+                                                                        \
+    /* 端数ビットの処理:                                                \
+     * 残った分をバッファの上位ビットにセット */                        \
+    SLA_Assert(__nbits <= 8);                                           \
+    (stream)->bit_count  -= __nbits;                                    \
+    (stream)->bit_buffer                                                \
+      |= (uint32_t)SLABITSTREAM_GETLOWERBITS(                           \
+            (val), __nbits) << (stream)->bit_count;                     \
+  } while (0)
+
+/* nbits 取得（最大64bit）し、その値を右詰めして出力 */
+#define SLABitReader_GetBits(stream, val, nbits)                        \
+  do {                                                                  \
+    uint8_t  __ch;                                                      \
+    uint32_t __nbits;                                                   \
+    uint64_t __tmp = 0;                                                 \
+                                                                        \
+    /* 引数チェック */                                                  \
+    SLA_Assert((stream) != NULL);                                       \
+    SLA_Assert((val) != NULL);                                          \
+                                                                        \
+    /* 読み込みモードでない場合はアサート */                            \
+    SLA_Assert((stream)->flags & SLABITSTREAM_FLAGS_MODE_READ);         \
+                                                                        \
+    /* 入力可能な最大ビット数を越えている */                            \
+    SLA_Assert((nbits) <= (sizeof(uint64_t) * 8));                      \
+                                                                        \
+    /* 最上位ビットからデータを埋めていく                               \
+     * 初回ループではtmpの上位ビットにセット                            \
+     * 2回目以降は8bit単位で入力しtmpにセット */                        \
+    __nbits = (nbits);                                                  \
+    while (__nbits > (stream)->bit_count) {                             \
+      __nbits -= (stream)->bit_count;                                   \
+      __tmp                                                             \
+        |= SLABITSTREAM_GETLOWERBITS(                                   \
+          (stream)->bit_buffer, (stream)->bit_count) << __nbits;        \
+                                                                        \
+      /* 終端に達している */                                            \
+      /* TODO:もしかしたら不要かも */                                   \
+      if ((stream)->memory_p                                            \
+          >= ((stream)->memory_p + (stream)->memory_size)) {            \
+        (stream)->flags |= (uint8_t)SLABITSTREAM_FLAGS_EOS;             \
+        break;                                                          \
+      }                                                                 \
+                                                                        \
+      /* メモリから読み出し */                                          \
+      __ch = (*(stream)->memory_p);                                     \
+      (stream)->memory_p++;                                             \
+                                                                        \
+      (stream)->bit_buffer  = __ch;                                     \
+      (stream)->bit_count   = 8;                                        \
+    }                                                                   \
+                                                                        \
+    /* 端数ビットの処理                                                 \
+     * 残ったビット分をtmpの最上位ビットにセット */                     \
+    (stream)->bit_count -= __nbits;                                     \
+    __tmp                                                               \
+      |= (uint64_t)SLABITSTREAM_GETLOWERBITS(                           \
+            (stream)->bit_buffer >> (stream)->bit_count, __nbits);      \
+                                                                        \
+    /* 正常終了 */                                                      \
+    (*val) = __tmp;                                                     \
+  } while (0)
+
+/* つぎの1にぶつかるまで読み込み、その間に読み込んだ0のランレングスを取得 */
+#define SLABitReader_GetZeroRunLength(stream, runlength)                \
+  do {                                                                  \
+    uint32_t __run;                                                     \
+                                                                        \
+    /* 引数チェック */                                                  \
+    SLA_Assert((stream) != NULL);                                       \
+    SLA_Assert((runlength) != NULL);                                    \
+                                                                        \
+    /* 上位ビットからの連続する0をNLZで計測 */                          \
+    /* (1 << (31 - (stream)->bit_count)) はラン長が                     \
+     * 伸びすぎないようにするためのビット */                            \
+    __run = SLAUtility_NLZ(                                             \
+        (uint32_t)(                                                     \
+          ((stream)->bit_buffer << (32 - (stream)->bit_count))          \
+            | (1UL << (31 - (stream)->bit_count)))                      \
+          );                                                            \
+                                                                        \
+    /* 読み込んだ分カウントを減らす */                                  \
+    (stream)->bit_count -= __run;                                       \
+                                                                        \
+    /* バッファが空の時 */                                              \
+    while ((stream)->bit_count == 0) {                                  \
+      /* 1バイト読み込みとエラー処理 */                                 \
+      uint8_t   __ch;                                                   \
+      uint32_t  __tmp_run;                                              \
+                                                                        \
+      /* 終端に達している */                                            \
+      /* TODO:もしかしたら不要かも */                                   \
+      if ((stream)->memory_p                                            \
+          >= ((stream)->memory_p + (stream)->memory_size)) {            \
+        (stream)->flags |= (uint8_t)SLABITSTREAM_FLAGS_EOS;             \
+        break;                                                          \
+      }                                                                 \
+                                                                        \
+      /* メモリから読み出し */                                          \
+      __ch = (*(stream)->memory_p);                                     \
+      (stream)->memory_p++;                                             \
+                                                                        \
+      /* ビットバッファにセットし直して再度ランを計測 */                \
+      (stream)->bit_buffer  = __ch;                                     \
+      /* テーブルによりラン長を取得 */                                  \
+      __tmp_run                                                         \
+        = g_sla_bitstream_zerobit_runlength_table[(stream)->bit_buffer];\
+      (stream)->bit_count   = 8 - __tmp_run;                            \
+      /* ランを加算 */                                                  \
+      __run                 += __tmp_run;                               \
+    }                                                                   \
+                                                                        \
+    /* 続く1を空読み */                                                 \
+    (stream)->bit_count -= 1;                                           \
+                                                                        \
+    /* 正常終了 */                                                      \
+    (*(runlength)) = __run;                                             \
+  } while (0)
+
+/* バッファにたまったビットをクリア */
+#define SLABitStream_Flush(stream)                                      \
+  do {                                                                  \
+    /* 引数チェック */                                                  \
+    SLA_Assert((stream) != NULL);                                       \
+                                                                        \
+    /* 既に先頭にあるときは何もしない */                                \
+    if ((stream)->bit_count < 8) {                                      \
+      /* 読み込み位置を次のバイト先頭に */                              \
+      if ((stream)->flags & SLABITSTREAM_FLAGS_MODE_READ) {             \
+        /* 残りビット分を空読み */                                      \
+        uint64_t dummy;                                                 \
+        SLABitReader_GetBits((stream), &dummy, (stream)->bit_count);    \
+      } else {                                                          \
+        /* バッファに余ったビットを強制出力 */                          \
+        SLABitWriter_PutBits((stream), 0, (stream)->bit_count);         \
+      }                                                                 \
+    }                                                                   \
+  } while (0)
+
+#else /* SLABITSTREAM_PROCESS_BY_MACRO */
 
 #ifdef __cplusplus
 extern "C" {
 #endif 
 
-/* ビットストリーム構造体生成に必要なワークサイズ計算 */
-int32_t SLABitStream_CalculateWorkSize(void);
+/* ビットライタのオープン */
+void SLABitWriter_Open(struct SLABitStream* stream, uint8_t* memory_image, size_t memory_size);
 
-/* ビットストリームのオープン */
-struct SLABitStream* SLABitStream_Open(const char* filepath, 
-    const char *mode, void *work, int32_t work_size);
-
-/* メモリビットストリームのオープン */
-struct SLABitStream* SLABitStream_OpenMemory(
-    uint8_t* memory_image, uint64_t memory_size,
-    const char* mode, void *work, int32_t work_size);
+/* ビットリーダのオープン */
+void SLABitReader_Open(struct SLABitStream* stream, uint8_t* memory_image, size_t memory_size);
 
 /* ビットストリームのクローズ */
 void SLABitStream_Close(struct SLABitStream* stream);
 
 /* シーク(fseek準拠)
  * 注意）バッファをクリアするので副作用がある */
-SLABitStreamApiResult SLABitStream_Seek(struct SLABitStream* stream, int32_t offset, int32_t wherefrom);
+void SLABitStream_Seek(struct SLABitStream* stream, int32_t offset, int32_t origin);
 
 /* 現在位置(ftell)準拠 */
-SLABitStreamApiResult SLABitStream_Tell(struct SLABitStream* stream, int32_t* result);
+void SLABitStream_Tell(struct SLABitStream* stream, int32_t* result);
 
-/* 1bit出力 */
-SLABitStreamApiResult SLABitStream_PutBit(struct SLABitStream* stream, uint8_t bit);
-
-/*
- * valの右側（下位）n_bits 出力（最大64bit出力可能）
- * SLABitStream_PutBits(stream, 3, 6);は次と同じ:
- * SLABitStream_PutBit(stream, 1); SLABitStream_PutBit(stream, 1); SLABitStream_PutBit(stream, 0); 
- */
-SLABitStreamApiResult SLABitStream_PutBits(struct SLABitStream* stream, uint32_t n_bits, uint64_t val);
-
-/* 1bit取得 */
-SLABitStreamApiResult SLABitStream_GetBit(struct SLABitStream* stream, uint8_t* bit);
+/* valの右側（下位）n_bits 出力（最大64bit出力可能） */
+void SLABitWriter_PutBits(struct SLABitStream* stream, uint64_t val, uint32_t nbits);
 
 /* n_bits 取得（最大64bit）し、その値を右詰めして出力 */
-SLABitStreamApiResult SLABitStream_GetBits(struct SLABitStream* stream, uint32_t n_bits, uint64_t *val);
+void SLABitReader_GetBits(struct SLABitStream* stream, uint64_t* val, uint32_t nbits);
 
 /* つぎの1にぶつかるまで読み込み、その間に読み込んだ0のランレングスを取得 */
-SLABitStreamApiResult SLABitStream_GetZeroRunLength(struct SLABitStream* stream, uint32_t* runlength);
+void SLABitReader_GetZeroRunLength(struct SLABitStream* stream, uint32_t* runlength);
 
 /* バッファにたまったビットをクリア */
-SLABitStreamApiResult SLABitStream_Flush(struct SLABitStream* stream);
+void SLABitStream_Flush(struct SLABitStream* stream);
 
 #ifdef __cplusplus
 }
 #endif 
+
+#endif /* SLABITSTREAM_PROCESS_BY_MACRO */
 
 #endif /* SLABITSTREAM_H_INCLUDED */

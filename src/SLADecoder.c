@@ -30,9 +30,8 @@ struct SLADecoder {
   uint32_t                      max_longterm_order;
   uint32_t                      max_lms_order_per_filter;
   uint8_t                       enable_crc_check;
-  struct SLABitStream*          strm;
+  struct SLABitStream           strm;
   struct SLACoder*              coder;
-  void*                         strm_work;
 
   struct SLALPCSynthesizer**        lpcs;
   struct SLALongTermSynthesizer**   ltms;
@@ -91,7 +90,6 @@ struct SLADecoder* SLADecoder_Create(const struct SLADecoderConfig* config)
   decoder->verpose_flag             = config->verpose_flag;
 
   /* 各種領域割り当て */
-  decoder->strm_work     = malloc((size_t)SLABitStream_CalculateWorkSize());
   decoder->parcor_coef   = (int32_t **)malloc(sizeof(int32_t*) * max_num_channels);
   decoder->longterm_coef = (int32_t **)malloc(sizeof(int32_t*) * max_num_channels);
   decoder->pitch_period  = (uint32_t *)malloc(sizeof(uint32_t) * max_num_channels);
@@ -150,7 +148,6 @@ void SLADecoder_Destroy(struct SLADecoder* decoder)
     NULLCHECK_AND_FREE(decoder->ltms);
     NULLCHECK_AND_FREE(decoder->nlmsc);
     NULLCHECK_AND_FREE(decoder->emp);
-    NULLCHECK_AND_FREE(decoder->strm_work);
     SLACoder_Destroy(decoder->coder);
     free(decoder);
   }
@@ -313,7 +310,6 @@ static SLAApiResult SLADecoder_DecodeBlockHeader(struct SLADecoder* decoder,
     const uint8_t* data, uint32_t data_size, 
     struct SLABlockHeaderInfo* block_header_info, uint32_t* block_header_size)
 {
-  uint8_t  bit;
   uint64_t bitsbuf;
   uint16_t crc16;
   uint32_t ch, ord;
@@ -335,16 +331,16 @@ static SLAApiResult SLADecoder_DecodeBlockHeader(struct SLADecoder* decoder,
   }
 
   /* 同期コード */
-  (void)SLABitStream_GetBits(decoder->strm, 16, &bitsbuf);
+  SLABitReader_GetBits(&decoder->strm, &bitsbuf, 16);
   if (bitsbuf != SLA_BLOCK_SYNC_CODE) {
     return SLA_APIRESULT_FAILED_TO_FIND_SYNC_CODE;
   }
   /* 次のブロックまでのオフセット */
-  (void)SLABitStream_GetBits(decoder->strm, 32, &bitsbuf);
+  SLABitReader_GetBits(&decoder->strm, &bitsbuf, 32);
   /* ブロックサイズに変換 */
   block_header_info->block_size = (uint32_t)bitsbuf + 2 + 4;  /* 同期コード, オフセットを抜いた分足す */
   /* これ以降のフィールドのCRC16値 */
-  (void)SLABitStream_GetBits(decoder->strm, 16, &bitsbuf);
+  SLABitReader_GetBits(&decoder->strm, &bitsbuf, 16);
   crc16 = (uint16_t)bitsbuf;
   /* CRC16チェック: データ長がブロックサイズ分ないときはチェックできない */
   if ((decoder->enable_crc_check == 1) && (data_size >= block_header_info->block_size)) {
@@ -358,11 +354,11 @@ static SLAApiResult SLADecoder_DecodeBlockHeader(struct SLADecoder* decoder,
     }
   }
   /* ブロックサンプル数 */
-  (void)SLABitStream_GetBits(decoder->strm, 16, &bitsbuf);
+  SLABitReader_GetBits(&decoder->strm, &bitsbuf, 16);
   block_header_info->block_num_samples = (uint32_t)bitsbuf;
   /* printf("next:%d crc16:%04X nsmpl:%d \n", next_block_offset, crc16, block_samples); */
   /* ブロックタイプ */
-  (void)SLABitStream_GetBits(decoder->strm, 2, &bitsbuf);
+  SLABitReader_GetBits(&decoder->strm, &bitsbuf, 2);
   decoder->block_data_type = (SLABlockDataType)bitsbuf;
 
   /* 各チャンネルの係数取得 */
@@ -376,7 +372,7 @@ static SLAApiResult SLADecoder_DecodeBlockHeader(struct SLADecoder* decoder,
 
     /* PARCOR係数読み取り */
     /* 右シフト量 */
-    (void)SLABitStream_GetBits(decoder->strm, 4, &bitsbuf);
+    SLABitReader_GetBits(&decoder->strm, &bitsbuf, 4);
     rshift = (uint32_t)bitsbuf;
     /* 0次は0で確定 */
     decoder->parcor_coef[ch][0] = 0;
@@ -384,7 +380,7 @@ static SLAApiResult SLADecoder_DecodeBlockHeader(struct SLADecoder* decoder,
       /* 量子化ビット数 */
       uint32_t qbits = (uint32_t)SLA_GET_PARCOR_QUANTIZE_BIT_WIDTH(ord);
       /* PARCOR係数 */
-      (void)SLABitStream_GetBits(decoder->strm, qbits, &bitsbuf);
+      SLABitReader_GetBits(&decoder->strm, &bitsbuf, qbits);
       decoder->parcor_coef[ch][ord] = SLAUTILITY_UINT32_TO_SINT32(bitsbuf);
       /* 16bitをベースにシフト */
       decoder->parcor_coef[ch][ord] <<= (16U - qbits);
@@ -394,31 +390,31 @@ static SLAApiResult SLADecoder_DecodeBlockHeader(struct SLADecoder* decoder,
     }
 
     /* ロングターム係数読み取り */
-    (void)SLABitStream_GetBit(decoder->strm, &bit);
-    if (bit == 0) {
+    SLABitReader_GetBits(&decoder->strm, &bitsbuf, 1);
+    if (bitsbuf == 0) {
       /* ピッチ周期無効値の0でマーク */
       decoder->pitch_period[ch] = 0;
     } else {
-      (void)SLABitStream_GetBits(decoder->strm, SLALONGTERM_PERIOD_NUM_BITS, &bitsbuf);
+      SLABitReader_GetBits(&decoder->strm, &bitsbuf, SLALONGTERM_PERIOD_NUM_BITS);
       decoder->pitch_period[ch] = (uint32_t)bitsbuf;
       for (ord = 0; ord < decoder->encode_param.longterm_order; ord++) {
-        (void)SLABitStream_GetBits(decoder->strm, 16, &bitsbuf);
+        SLABitReader_GetBits(&decoder->strm, &bitsbuf, 16);
         decoder->longterm_coef[ch][ord] = SLAUTILITY_UINT32_TO_SINT32(bitsbuf);
         decoder->longterm_coef[ch][ord] <<= 16;
       }
     }
 
     /* 再帰的ライスパラメータ復号 */
-    SLACoder_GetInitialRecursiveRiceParameter(decoder->coder, decoder->strm,
+    SLACoder_GetInitialRecursiveRiceParameter(decoder->coder, &decoder->strm,
         SLACODER_NUM_RECURSIVERICE_PARAMETER, 
         decoder->wave_format.bit_per_sample, ch);
   }
 
   /* バイト境界に揃える */
-  (void)SLABitStream_Flush(decoder->strm);
+  SLABitStream_Flush(&decoder->strm);
 
   /* ブロックヘッダサイズの取得 */
-  (void)SLABitStream_Tell(decoder->strm, (int32_t *)block_header_size);
+  SLABitStream_Tell(&decoder->strm, (int32_t *)block_header_size);
 
   return SLA_APIRESULT_OK;
 }
@@ -446,7 +442,7 @@ static SLAApiResult SLADecoder_DecodeWaveData(struct SLADecoder* decoder,
   }
 
   /* 開始オフセットの記録 */
-  (void)SLABitStream_Tell(decoder->strm, &start_data_offset);
+  SLABitStream_Tell(&decoder->strm, &start_data_offset);
 
   /* 頻繁に参照する変数をオート変数に受ける */
   num_channels = decoder->wave_format.num_channels;
@@ -476,7 +472,7 @@ static SLAApiResult SLADecoder_DecodeWaveData(struct SLADecoder* decoder,
         /* チャンネルインターリーブしつつ復号 */
         for (smpl = 0; smpl < num_decode_saples; smpl++) {
           for (ch = 0; ch < num_channels; ch++) {
-            (void)SLABitStream_GetBits(decoder->strm, input_bits[ch], &bitsbuf);
+            SLABitReader_GetBits(&decoder->strm, &bitsbuf, input_bits[ch]);
             decoder->output[ch][smpl] = SLAUTILITY_UINT32_TO_SINT32((uint32_t)bitsbuf);
           }
         }
@@ -484,7 +480,7 @@ static SLAApiResult SLADecoder_DecodeWaveData(struct SLADecoder* decoder,
       break;
     case SLA_BLOCK_DATA_TYPE_COMPRESSDATA:
       /* 残差復号 */
-      SLACoder_GetDataArray(decoder->coder, decoder->strm, 
+      SLACoder_GetDataArray(decoder->coder, &decoder->strm, 
           SLACODER_NUM_RECURSIVERICE_PARAMETER,
           decoder->residual, num_channels, num_decode_saples);
       break;
@@ -560,7 +556,7 @@ static SLAApiResult SLADecoder_DecodeWaveData(struct SLADecoder* decoder,
   }
 
   /* 終了オフセットの記録 */
-  (void)SLABitStream_Tell(decoder->strm, &end_data_offset);
+  SLABitStream_Tell(&decoder->strm, &end_data_offset);
 
   /* 消費データサイズの計算 */
   SLA_Assert(end_data_offset >= start_data_offset);
@@ -619,9 +615,8 @@ static SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
   }
 
   /* ビットストリーム作成 */
-  decoder->strm = SLABitStream_OpenMemory((uint8_t *)data,
-      data_size, "r", decoder->strm_work, SLABitStream_CalculateWorkSize());
-  (void)SLABitStream_Seek(decoder->strm, 0, SLABITSTREAM_SEEK_SET);
+  SLABitReader_Open(&decoder->strm, (uint8_t *)data, data_size);
+  SLABitStream_Seek(&decoder->strm, 0, SLABITSTREAM_SEEK_SET);
 
   /* ブロックヘッダを復号 */
   if ((ret = SLADecoder_DecodeBlockHeader(decoder,
@@ -650,15 +645,13 @@ static SLAApiResult SLADecoder_DecodeBlock(struct SLADecoder* decoder,
   }
 
   /* 出力サンプル数の取得 */
-  *output_num_samples = block_header.block_num_samples;
+  (*output_num_samples) = block_header.block_num_samples;
 
   /* 出力サイズの取得 */
-  if (SLABitStream_Tell(decoder->strm, (int32_t *)output_block_size) != SLABITSTREAM_APIRESULT_OK) {
-    return SLA_APIRESULT_NG;
-  }
+  SLABitStream_Tell(&decoder->strm, (int32_t *)output_block_size);
 
   /* ビットストリームクローズ */
-  SLABitStream_Close(decoder->strm);
+  SLABitStream_Close(&decoder->strm);
 
   return SLA_APIRESULT_OK;
 }
@@ -951,9 +944,7 @@ SLAApiResult SLAStreamingDecoder_GetRemainDataSize(struct SLAStreamingDecoder* d
   if (decoder->current_block_sample_offset > 0) {
     int32_t decoded_size;
     /* デコード済みサイズで減じる */
-    if (SLABitStream_Tell(decoder->decoder_core->strm, &decoded_size) != SLABITSTREAM_APIRESULT_OK) {
-      return SLA_APIRESULT_NG;
-    }
+    SLABitStream_Tell(&decoder->decoder_core->strm, &decoded_size);
     SLA_Assert(decoder->data_buffer_provided_size >= (uint32_t)decoded_size);
     data_buffer_remain -= (uint32_t)decoded_size;
   }
@@ -1040,9 +1031,8 @@ static SLAApiResult SLAStreamingDecoder_DecodeCore(struct SLAStreamingDecoder* d
     if (decoder->current_block_sample_offset == 0) {
       uint32_t block_header_size;
       /* ストリームを開く */
-      decoder->decoder_core->strm = SLABitStream_OpenMemory(
-          decoder->data_buffer, decoder->data_buffer_size, "r", 
-          decoder->decoder_core->strm_work, SLABitStream_CalculateWorkSize());
+      SLABitReader_Open(&decoder->decoder_core->strm,
+          decoder->data_buffer, decoder->data_buffer_size);
       /* ブロックヘッダ読み取り */
       if ((ret = SLADecoder_DecodeBlockHeader(decoder->decoder_core, 
               decoder->data_buffer, decoder->data_buffer_provided_size,
@@ -1093,7 +1083,7 @@ static SLAApiResult SLAStreamingDecoder_DecodeCore(struct SLAStreamingDecoder* d
           decoder->data_buffer_provided_size - decoder->current_block_header.block_size);
       decoder->data_buffer_provided_size -= decoder->current_block_header.block_size;
       /* ストリームを閉じる */
-      SLABitStream_Close(decoder->decoder_core->strm);
+      SLABitStream_Close(&decoder->decoder_core->strm);
       /* ブロック内のオフセットを0に戻す */
       decoder->current_block_sample_offset = 0;
     }
