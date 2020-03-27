@@ -35,7 +35,7 @@ struct SLADataPacketQueue {
 };
 
 /* CRC16(IBM:多項式0x8005を反転した0xa001によるもの) の計算用テーブル */
-static const uint16_t CRC16_IBM_BYTE_TABLE[0x100] = { 
+static const uint16_t st_crc16_ibm_byte_table[0x100] = { 
   0x0000, 0xc0c1, 0xc181, 0x0140, 0xc301, 0x03c0, 0x0280, 0xc241,
   0xc601, 0x06c0, 0x0780, 0xc741, 0x0500, 0xc5c1, 0xc481, 0x0440,
   0xcc01, 0x0cc0, 0x0d80, 0xcd41, 0x0f00, 0xcfc1, 0xce81, 0x0e40,
@@ -318,7 +318,7 @@ uint16_t SLAUtility_CalculateCRC16(const uint8_t* data, uint64_t data_size)
   /* modulo2計算 */
   while (data_size--) {
     /* 補足）多項式は反転済みなので、この計算により入出力反転済みとできる */
-    crc16 = (crc16 >> 8) ^ CRC16_IBM_BYTE_TABLE[(crc16 ^ (*data++)) & 0xFF];
+    crc16 = (crc16 >> 8) ^ st_crc16_ibm_byte_table[(crc16 ^ (*data++)) & 0xFF];
   }
 
   return crc16;
