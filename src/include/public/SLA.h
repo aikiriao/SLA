@@ -4,7 +4,7 @@
 #include "SLAStdint.h"
 
 /* バージョン文字列 */
-#define SLA_VERSION_STRING          "0.0.7(beta)"
+#define SLA_VERSION_STRING          "0.0.8(beta)"
 /* フォーマットバージョン */
 #define SLA_FORMAT_VERSION			    1
 /* ヘッダのサイズ */
