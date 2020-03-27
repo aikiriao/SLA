@@ -531,27 +531,38 @@ void SLACoder_PutDataArray(
     const int32_t** data, uint32_t num_channels, uint32_t num_samples)
 {
   uint32_t smpl, ch;
+  uint64_t param_ch_avg;
 
   SLA_Assert((strm != NULL) && (data != NULL) && (coder != NULL));
   SLA_Assert((num_parameters != 0) && (num_parameters <= coder->max_num_parameters));
   SLA_Assert(num_samples != 0);
   SLA_Assert(num_channels != 0);
 
+  /* 全チャンネルでのパラメータ平均を算出 */
+  param_ch_avg = 0;
+  for (ch = 0; ch < num_channels; ch++) {
+    param_ch_avg += SLACODER_PARAMETER_GET(coder->init_rice_parameter[ch], 0);
+  }
+  param_ch_avg /= num_channels;
+
   /* チャンネルインターリーブしつつ符号化 */
-  for (smpl = 0; smpl < num_samples; smpl++) {
-    for (ch = 0; ch < num_channels; ch++) {
-      /* パラメータが小さい場合はパラメータ固定で符号化 */
-      if (SLACODER_PARAMETER_GET(coder->init_rice_parameter[ch], 0) <= SLACODER_LOW_THRESHOULD_PARAMETER) {
-        SLAGolomb_PutCode(strm,
-            SLACODER_PARAMETER_GET(coder->init_rice_parameter[ch], 0), SLAUTILITY_SINT32_TO_UINT32(data[ch][smpl]));
-      } else {
-        /* パラメータを適応的に変更しつつ符号化 */
+  if (param_ch_avg > SLACODER_LOW_THRESHOULD_PARAMETER) {
+    /* パラメータを適応的に変更しつつ符号化 */
+    for (smpl = 0; smpl < num_samples; smpl++) {
+      for (ch = 0; ch < num_channels; ch++) {
         SLARecursiveRice_PutCode(strm,
             coder->rice_parameter[ch], num_parameters, SLAUTILITY_SINT32_TO_UINT32(data[ch][smpl]));
       }
     }
+  } else {
+    /* パラメータが小さい場合はパラメータ固定で符号化 */
+    for (smpl = 0; smpl < num_samples; smpl++) {
+      for (ch = 0; ch < num_channels; ch++) {
+        SLAGolomb_PutCode(strm,
+            SLACODER_PARAMETER_GET(coder->init_rice_parameter[ch], 0), SLAUTILITY_SINT32_TO_UINT32(data[ch][smpl]));
+      }
+    }
   }
-
 }
 
 /* 符号付き整数配列の復号 */
@@ -560,23 +571,35 @@ void SLACoder_GetDataArray(
     uint32_t num_parameters,
     int32_t** data, uint32_t num_channels, uint32_t num_samples)
 {
-  uint32_t  ch, smpl, abs;
+  uint32_t ch, smpl, abs;
+  uint64_t param_ch_avg;
 
   SLA_Assert((strm != NULL) && (data != NULL) && (coder != NULL));
   SLA_Assert((num_parameters != 0) && (num_samples != 0));
 
+  /* 全チャンネルでのパラメータ平均を算出 */
+  param_ch_avg = 0;
+  for (ch = 0; ch < num_channels; ch++) {
+    param_ch_avg += SLACODER_PARAMETER_GET(coder->init_rice_parameter[ch], 0);
+  }
+  param_ch_avg /= num_channels;
+
   /* チャンネルインターリーブで復号 */
-  for (smpl = 0; smpl < num_samples; smpl++) {
-    for (ch = 0; ch < num_channels; ch++) {
-      if (SLACODER_PARAMETER_GET(coder->init_rice_parameter[ch], 0) <= SLACODER_LOW_THRESHOULD_PARAMETER) {
-        /* パラメータが小さい場合はパラメータ固定で復号 */
-        abs = SLAGolomb_GetCode(strm, SLACODER_PARAMETER_GET(coder->init_rice_parameter[ch], 0));
-      } else {
-        /* パラメータを適応的に変更しつつ復号 */
+  if (param_ch_avg > SLACODER_LOW_THRESHOULD_PARAMETER) {
+    /* パラメータを適応的に変更しつつ符号化 */
+    for (smpl = 0; smpl < num_samples; smpl++) {
+      for (ch = 0; ch < num_channels; ch++) {
         abs = SLARecursiveRice_GetCode(strm, coder->rice_parameter[ch], num_parameters);
+        data[ch][smpl] = SLAUTILITY_UINT32_TO_SINT32(abs);
       }
-      data[ch][smpl] = SLAUTILITY_UINT32_TO_SINT32(abs);
+    }
+  } else {
+    /* パラメータが小さい場合はパラメータ固定で符号化 */
+    for (smpl = 0; smpl < num_samples; smpl++) {
+      for (ch = 0; ch < num_channels; ch++) {
+        abs = SLAGolomb_GetCode(strm, SLACODER_PARAMETER_GET(coder->init_rice_parameter[ch], 0));
+        data[ch][smpl] = SLAUTILITY_UINT32_TO_SINT32(abs);
+      }
     }
   }
-
 }
