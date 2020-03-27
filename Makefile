@@ -7,11 +7,11 @@ LDLIBS		= -lm
 ARFLAGS		= r
 
 SRCDIR	  = ./src
-OBJDIR	  = ./build
 TARGETDIR = ./build
+OBJDIR	  = $(TARGETDIR)
 INCLUDE		= -I./src/include/private/ -I./src/include/public/
 
-TARGET    = $(TARGETDIR)/sla $(TARGETDIR)/libsla.a
+TARGETS   = $(TARGETDIR) $(TARGETDIR)/sla $(TARGETDIR)/libsla.a
 LIBSRCS		= SLABitStream.c SLACoder.c SLADecoder.c SLAEncoder.c SLAPredictor.c SLAUtility.c
 CUISRCS		= $(LIBSRCS) main.c wav.c command_line_parser.c
 
@@ -20,14 +20,17 @@ CUISRCS		:= $(addprefix $(SRCDIR)/, $(CUISRCS))
 LIBOBJS		= $(addprefix $(OBJDIR)/, $(notdir $(LIBSRCS:%.c=%.o)))
 CUIOBJS		= $(addprefix $(OBJDIR)/, $(notdir $(CUISRCS:%.c=%.o)))
 
-all: $(TARGET) 
+all: $(TARGETS) 
 
 rebuild:
 	make clean
 	make all
 
 clean:
-	rm -f $(LIBOBJS) $(CUIOBJS) $(TARGET)
+	rm -rf $(LIBOBJS) $(CUIOBJS) $(TARGETS)
+
+$(TARGETDIR) : 
+	mkdir -p $(TARGETDIR)
 
 $(TARGETDIR)/sla : $(CUIOBJS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
