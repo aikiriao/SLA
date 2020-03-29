@@ -42,7 +42,7 @@
 #define SLATestUtility_SetValidEncodeParameter(p_param) { \
     (p_param)->parcor_order             = 10;        \
     (p_param)->longterm_order           = 1;         \
-    (p_param)->lms_order_per_filter     = 10;        \
+    (p_param)->lms_order_per_filter     = 8;         \
     (p_param)->ch_process_method                     \
       = SLA_CHPROCESSMETHOD_NONE;                    \
     (p_param)->window_function_type                  \

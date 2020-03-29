@@ -1124,6 +1124,7 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
   uint32_t        buffer_pos;
   int32_t         predict;
   const int32_t*  delta_table_p;
+  const uint32_t  buffer_pos_mask = (num_coef - 1);
 
   /* 引数チェック */
   if ((nlms == NULL) || (input == NULL) || (output == NULL)) {
@@ -1134,6 +1135,10 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
   if (num_coef > nlms->max_num_coef) {
     return SLAPREDICTOR_APIRESULT_EXCEED_MAX_ORDER;
   }
+
+  /* 次数は4以上の2の冪数に制限（最適化の都合） */
+  SLA_Assert(num_coef >= 4);
+  SLA_Assert(SLAUTILITY_IS_POWERED_OF_2(num_coef));
 
   /* 一旦全部コピー */
   /* （残差のときは予測分で引くだけ、合成のときは足すだけで良くなる） */
@@ -1171,12 +1176,13 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
     /* 予測 */
     predict = (int32_t)(1 << 9);  /* 丸め誤差回避 */
     for (i = 0; i < num_coef; i++) {
+      /* FIRフィルタ予測 */
       predict += nlms->fir_coef[i] * nlms->fir_buffer[buffer_pos + i];
       /* オーバーフローチェック */
       SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC((int64_t)nlms->fir_coef[i] * nlms->fir_buffer[buffer_pos + i], 10) <= (int64_t)INT32_MAX);
       SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC((int64_t)nlms->fir_coef[i] * nlms->fir_buffer[buffer_pos + i], 10) >= (int64_t)INT32_MIN);
+      /* IIRフィルタ予測 */
       predict += nlms->iir_coef[i] * nlms->iir_buffer[buffer_pos + i];
-      /* printf("%8d %8d %8d \n", nlms->fir_coef[i], nlms->iir_coef[i], predict >> 10); */
       /* オーバーフローチェック */
       SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC((int64_t)nlms->iir_coef[i] * nlms->iir_buffer[buffer_pos + i], 10) <= (int64_t)INT32_MAX);
       SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC((int64_t)nlms->iir_coef[i] * nlms->iir_buffer[buffer_pos + i], 10) >= (int64_t)INT32_MIN);
@@ -1195,18 +1201,30 @@ static SLAPredictorApiResult SLALMSFilter_ProcessCore(
     /* printf("%8d, %8d \n", output[smpl], predict); */
 
     /* 係数更新 */
-    for (i = 0; i < num_coef; i++) {
-      int32_t table_index;
-      table_index = nlms->fir_sign_buffer[buffer_pos + i];
-      nlms->fir_coef[i] += delta_table_p[table_index];
-      table_index = nlms->iir_sign_buffer[buffer_pos + i];
-      nlms->iir_coef[i] += delta_table_p[table_index];
+    for (i = 0; i < num_coef; i += 4) {
+      int32_t delta[4];
+      delta[0] = delta_table_p[nlms->fir_sign_buffer[buffer_pos + i + 0]];
+      delta[1] = delta_table_p[nlms->fir_sign_buffer[buffer_pos + i + 1]];
+      delta[2] = delta_table_p[nlms->fir_sign_buffer[buffer_pos + i + 2]];
+      delta[3] = delta_table_p[nlms->fir_sign_buffer[buffer_pos + i + 3]];
+      nlms->fir_coef[i + 0] += delta[0];
+      nlms->fir_coef[i + 1] += delta[1];
+      nlms->fir_coef[i + 2] += delta[2];
+      nlms->fir_coef[i + 3] += delta[3];
+      delta[0] = delta_table_p[nlms->iir_sign_buffer[buffer_pos + i + 0]];
+      delta[1] = delta_table_p[nlms->iir_sign_buffer[buffer_pos + i + 1]];
+      delta[2] = delta_table_p[nlms->iir_sign_buffer[buffer_pos + i + 2]];
+      delta[3] = delta_table_p[nlms->iir_sign_buffer[buffer_pos + i + 3]];
+      nlms->iir_coef[i + 0] += delta[0];
+      nlms->iir_coef[i + 1] += delta[1];
+      nlms->iir_coef[i + 2] += delta[2];
+      nlms->iir_coef[i + 3] += delta[3];
     }
 
     /* バッファ更新 */
 
     /* バッファ参照位置更新 */
-    buffer_pos = (buffer_pos == 0) ? (num_coef - 1) : (buffer_pos - 1);
+    buffer_pos = (buffer_pos - 1) & buffer_pos_mask;
 
     /* バッファに記録 */
     /* 補足）バッファアクセスの高速化のため係数分離れた場所にも記録 */
