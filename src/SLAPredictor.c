@@ -1114,10 +1114,11 @@ SLAPredictorApiResult SLALMSFilter_Reset(struct SLALMSFilter* nlms)
   return SLAPREDICTOR_APIRESULT_OK;
 }
 
-/* LMS予測 */
-SLAPredictorApiResult SLALMSFilter_PredictInt32(
+/* LMS処理のコア処理 */
+static SLAPredictorApiResult SLALMSFilter_ProcessCore(
     struct SLALMSFilter* nlms, uint32_t num_coef,
-    const int32_t* data, uint32_t num_samples, int32_t* residual)
+    const int32_t* input, int32_t* output,
+    uint32_t num_samples, uint8_t is_predict)
 {
   uint32_t        smpl, i;
   uint32_t        buffer_pos;
@@ -1125,7 +1126,7 @@ SLAPredictorApiResult SLALMSFilter_PredictInt32(
   const int32_t*  delta_table_p;
 
   /* 引数チェック */
-  if ((nlms == NULL) || (data == NULL) || (residual == NULL)) {
+  if ((nlms == NULL) || (input == NULL) || (output == NULL)) {
     return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
   }
 
@@ -1136,7 +1137,7 @@ SLAPredictorApiResult SLALMSFilter_PredictInt32(
 
   /* 一旦全部コピー */
   /* （残差のときは予測分で引くだけ、合成のときは足すだけで良くなる） */
-  memcpy(residual, data, sizeof(int32_t) * num_samples);
+  memcpy(output, input, sizeof(int32_t) * num_samples);
 
   /* 頻繁に参照する変数をオート変数に受ける */
   buffer_pos = nlms->buffer_pos;
@@ -1152,13 +1153,13 @@ SLAPredictorApiResult SLALMSFilter_PredictInt32(
         = nlms->fir_sign_buffer[buffer_offset + smpl + num_coef]
         = nlms->iir_sign_buffer[buffer_offset + smpl]
         = nlms->iir_sign_buffer[buffer_offset + smpl + num_coef]
-        = SLAUTILITY_SIGN(data[num_buffering_samples - smpl - 1]) + 1;
+        = SLAUTILITY_SIGN(input[num_buffering_samples - smpl - 1]) + 1;
       /* 遅延信号 */
       nlms->iir_buffer[buffer_offset + smpl]
         = nlms->iir_buffer[buffer_offset + smpl + num_coef]
         = nlms->fir_buffer[buffer_offset + smpl]
         = nlms->fir_buffer[buffer_offset + smpl + num_coef]
-        = data[num_buffering_samples - smpl - 1];
+        = input[num_buffering_samples - smpl - 1];
     }
     buffer_pos += num_buffering_samples;
   } else {
@@ -1175,6 +1176,7 @@ SLAPredictorApiResult SLALMSFilter_PredictInt32(
       SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC((int64_t)nlms->fir_coef[i] * nlms->fir_buffer[buffer_pos + i], 10) <= (int64_t)INT32_MAX);
       SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC((int64_t)nlms->fir_coef[i] * nlms->fir_buffer[buffer_pos + i], 10) >= (int64_t)INT32_MIN);
       predict += nlms->iir_coef[i] * nlms->iir_buffer[buffer_pos + i];
+      /* printf("%8d %8d %8d \n", nlms->fir_coef[i], nlms->iir_coef[i], predict >> 10); */
       /* オーバーフローチェック */
       SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC((int64_t)nlms->iir_coef[i] * nlms->iir_buffer[buffer_pos + i], 10) <= (int64_t)INT32_MAX);
       SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC((int64_t)nlms->iir_coef[i] * nlms->iir_buffer[buffer_pos + i], 10) >= (int64_t)INT32_MIN);
@@ -1183,8 +1185,14 @@ SLAPredictorApiResult SLALMSFilter_PredictInt32(
 
     /* 出力計算 / 残差テーブルの参照をセット */
     /* 補足）32を加算して [-32, 31] を [0, 63] の範囲にマップする */
-    residual[smpl]  -= predict;
-    delta_table_p   = logsignlms_delta_table[SLALMS_SIGNED_LOG2CEIL(residual[smpl]) + 32]; 
+    if (is_predict == 1) {
+      output[smpl]  -= predict;
+      delta_table_p = logsignlms_delta_table[SLALMS_SIGNED_LOG2CEIL(output[smpl]) + 32]; 
+    } else {
+      delta_table_p = logsignlms_delta_table[SLALMS_SIGNED_LOG2CEIL(output[smpl]) + 32]; 
+      output[smpl]  += predict;
+    }
+    /* printf("%8d, %8d \n", output[smpl], predict); */
 
     /* 係数更新 */
     for (i = 0; i < num_coef; i++) {
@@ -1204,7 +1212,7 @@ SLAPredictorApiResult SLALMSFilter_PredictInt32(
     /* 補足）バッファアクセスの高速化のため係数分離れた場所にも記録 */
     nlms->fir_buffer[buffer_pos]
       = nlms->fir_buffer[buffer_pos + num_coef]
-      = data[smpl];
+      = (is_predict == 1) ? input[smpl] : output[smpl];
     nlms->iir_buffer[buffer_pos]
       = nlms->iir_buffer[buffer_pos + num_coef]
       = (int32_t)predict;
@@ -1215,7 +1223,8 @@ SLAPredictorApiResult SLALMSFilter_PredictInt32(
       = SLAUTILITY_SIGN(nlms->iir_buffer[buffer_pos]) + 1;
     nlms->fir_sign_buffer[buffer_pos]
       = nlms->fir_sign_buffer[buffer_pos + num_coef]
-      = SLAUTILITY_SIGN(data[smpl]) + 1;
+      = (is_predict == 1)
+      ? (SLAUTILITY_SIGN(input[smpl]) + 1) : (SLAUTILITY_SIGN(output[smpl]) + 1);
   }
 
   /* バッファ参照位置の記録 */
@@ -1226,118 +1235,21 @@ SLAPredictorApiResult SLALMSFilter_PredictInt32(
 
   return SLAPREDICTOR_APIRESULT_OK;
 }
+
+/* LMS予測 */
+SLAPredictorApiResult SLALMSFilter_PredictInt32(
+    struct SLALMSFilter* nlms, uint32_t num_coef,
+    const int32_t* data, uint32_t num_samples, int32_t* residual)
+{
+  return SLALMSFilter_ProcessCore(nlms, num_coef, data, residual, num_samples, 1);
+}
     
 /* LMS合成 */
 SLAPredictorApiResult SLALMSFilter_SynthesizeInt32(
     struct SLALMSFilter* nlms, uint32_t num_coef,
     const int32_t* residual, uint32_t num_samples, int32_t* output)
 {
-  uint32_t        smpl, i;
-  uint32_t        buffer_pos;
-  int32_t         predict;
-  const int32_t*  delta_table_p;
-
-  /* 引数チェック */
-  if ((nlms == NULL) || (residual == NULL) || (output == NULL)) {
-    return SLAPREDICTOR_APIRESULT_INVALID_ARGUMENT;
-  }
-
-  /* 次数チェック */
-  if (num_coef > nlms->max_num_coef) {
-    return SLAPREDICTOR_APIRESULT_EXCEED_MAX_ORDER;
-  }
-
-  /* 一旦全部コピー */
-  /* （残差のときは予測分で引くだけ、合成のときは足すだけで良くなる） */
-  memcpy(output, residual, sizeof(int32_t) * num_samples);
-
-  /* 頻繁に参照する変数をオート変数に受ける */
-  buffer_pos = nlms->buffer_pos;
-
-  /* 予測/合成が始まるまでのバッファリング */
-  if (nlms->num_input_samples < num_coef) {
-    uint32_t num_buffering_samples = SLAUTILITY_MIN(num_coef - nlms->num_input_samples, num_samples);
-    uint32_t buffer_offset          = (num_coef > (num_samples + nlms->num_input_samples)) 
-                                    ? (num_coef - (num_samples + nlms->num_input_samples)) : 0;
-    for (smpl = 0; smpl < num_buffering_samples; smpl++) {
-      /* 符号情報 */
-      nlms->fir_sign_buffer[buffer_offset + smpl]
-        = nlms->fir_sign_buffer[buffer_offset + smpl + num_coef]
-        = nlms->iir_sign_buffer[buffer_offset + smpl]
-        = nlms->iir_sign_buffer[buffer_offset + smpl + num_coef]
-        = SLAUTILITY_SIGN(residual[num_buffering_samples - smpl - 1]) + 1;
-      /* 遅延信号 */
-      nlms->iir_buffer[buffer_offset + smpl]
-        = nlms->iir_buffer[buffer_offset + smpl + num_coef]
-        = nlms->fir_buffer[buffer_offset + smpl]
-        = nlms->fir_buffer[buffer_offset + smpl + num_coef]
-        = residual[num_buffering_samples - smpl - 1];
-    }
-    buffer_pos += num_buffering_samples;
-  } else {
-    smpl = 0;
-  }
-
-  /* フィルタ処理実行 */
-  for (; smpl < num_samples; smpl++) {
-    /* 予測 */
-    predict = (int32_t)(1 << 9);  /* 丸め誤差回避 */
-    for (i = 0; i < num_coef; i++) {
-      predict += nlms->fir_coef[i] * nlms->fir_buffer[buffer_pos + i];
-      /* オーバーフローチェック */
-      SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC((int64_t)nlms->fir_coef[i] * nlms->fir_buffer[buffer_pos + i], 10) <= (int64_t)INT32_MAX);
-      SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC((int64_t)nlms->fir_coef[i] * nlms->fir_buffer[buffer_pos + i], 10) >= (int64_t)INT32_MIN);
-      predict += nlms->iir_coef[i] * nlms->iir_buffer[buffer_pos + i];
-      /* オーバーフローチェック */
-      SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC((int64_t)nlms->iir_coef[i] * nlms->iir_buffer[buffer_pos + i], 10) <= (int64_t)INT32_MAX);
-      SLA_Assert(SLAUTILITY_SHIFT_RIGHT_ARITHMETIC((int64_t)nlms->iir_coef[i] * nlms->iir_buffer[buffer_pos + i], 10) >= (int64_t)INT32_MIN);
-    }
-    predict = SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(predict, 10);
-
-    /* 出力計算 / 残差テーブルの参照をセット */
-    /* 補足）32を加算して [-32, 31] を [0, 63] の範囲にマップする */
-    delta_table_p = logsignlms_delta_table[SLALMS_SIGNED_LOG2CEIL(output[smpl]) + 32]; 
-    output[smpl]  += predict;
-
-    /* 係数更新 */
-    for (i = 0; i < num_coef; i++) {
-      int32_t table_index;
-      table_index = nlms->fir_sign_buffer[buffer_pos + i];
-      nlms->fir_coef[i] += delta_table_p[table_index];
-      table_index = nlms->iir_sign_buffer[buffer_pos + i];
-      nlms->iir_coef[i] += delta_table_p[table_index];
-    }
-
-    /* バッファ更新 */
-
-    /* バッファ参照位置更新 */
-    buffer_pos = (buffer_pos == 0) ? (num_coef - 1) : (buffer_pos - 1);
-
-    /* バッファに記録 */
-    /* 補足）バッファアクセスの高速化のため係数分離れた場所にも記録 */
-    nlms->fir_buffer[buffer_pos]
-      = nlms->fir_buffer[buffer_pos + num_coef]
-      = output[smpl];
-    nlms->iir_buffer[buffer_pos]
-      = nlms->iir_buffer[buffer_pos + num_coef]
-      = (int32_t)predict;
-
-    /* 更新量テーブルのインデックスを計算 */
-    nlms->iir_sign_buffer[buffer_pos]
-      = nlms->iir_sign_buffer[buffer_pos + num_coef]
-      = SLAUTILITY_SIGN(nlms->iir_buffer[buffer_pos]) + 1;
-    nlms->fir_sign_buffer[buffer_pos]
-      = nlms->fir_sign_buffer[buffer_pos + num_coef]
-      = SLAUTILITY_SIGN(output[smpl]) + 1;
-  }
-
-  /* バッファ参照位置の記録 */
-  nlms->buffer_pos = buffer_pos;
-
-  /* 入力サンプル数増加 */
-  nlms->num_input_samples += num_samples;
-
-  return SLAPREDICTOR_APIRESULT_OK;
+  return SLALMSFilter_ProcessCore(nlms, num_coef, residual, output, num_samples, 0);
 }
 
 /* 最大分割数計算 */
