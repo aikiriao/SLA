@@ -3,6 +3,12 @@
 
 #include "SLAStdint.h"
 
+#if defined(__SSE4_1__)
+/* SSE命令を使用した最適化コードを使用する */
+#define USE_SSE
+#include <x86intrin.h>
+#endif
+
 /* 円周率 */
 #define SLA_PI              3.1415926535897932384626433832795029
 

@@ -613,9 +613,7 @@ SLAPredictorApiResult SLALPCSynthesizer_SynthesizeByParcorCoefInt32(
     const int32_t* parcor_coef, uint32_t order, int32_t* output)
 {
   uint32_t      ord, samp;
-  int32_t       forward_residual;   /* 合成時は記憶領域を持つ必要なし */
   int32_t*      backward_residual;
-  int32_t       mul_temp;
   const int32_t half = (1UL << 14); /* 丸め誤差軽減のための加算定数 = 0.5 */
 
   /* 引数チェック */
@@ -633,24 +631,110 @@ SLAPredictorApiResult SLALPCSynthesizer_SynthesizeByParcorCoefInt32(
   backward_residual = lpc->backward_residual;
 
   /* 格子型フィルタによる音声合成 */
+#if defined(USE_SSE)
+  /* 注意）実行できるかのチェックは行っていない... */
+  SLA_Assert(order % 4 == 0);
   for (samp = 0; samp < num_samples; samp++) {
+    __attribute__((aligned(16))) int32_t ftmp[4]; 
+    __m128i vforw;
+    __m128i vhalf     = _mm_set_epi32(half, half, half, half);
+    __m128i vmask0FFF = _mm_set_epi32( 0, ~0, ~0, ~0);
+    __m128i vmask00FF = _mm_set_epi32( 0,  0, ~0, ~0);
+    __m128i vmask000F = _mm_set_epi32( 0,  0,  0, ~0);
+
+    /* 入力取得 */
+    vforw = _mm_set_epi32(residual[samp], residual[samp], residual[samp], residual[samp]);
+
+    /* 4次ずつ計算 */
+    for (ord = order; ord > 0; ord -= 4) {
+      __m128i vback, vmul, vcoef;
+
+      /* 
+      multmp[0] = coef[0] * backward_residual[ord - 1];
+      multmp[1] = coef[1] * backward_residual[ord - 2];
+      multmp[2] = coef[2] * backward_residual[ord - 3];
+      multmp[3] = coef[3] * backward_residual[ord - 4];
+      multmp[0] += half;
+      multmp[1] += half;
+      multmp[2] += half;
+      multmp[3] += half;
+      multmp[0] = (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(multmp[0], 15);
+      multmp[1] = (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(multmp[1], 15);
+      multmp[2] = (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(multmp[2], 15);
+      multmp[3] = (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(multmp[3], 15);
+      */
+      vcoef = _mm_loadu_si128((__m128i *)&parcor_coef[ord - 3]);
+      vback = _mm_loadu_si128((__m128i *)&backward_residual[ord - 4]);
+      vmul = _mm_mullo_epi32(vcoef, vback);
+      vmul = _mm_add_epi32(vmul, vhalf);
+      vmul = _mm_srai_epi32(vmul, 15);
+
+      /*
+      ftmp[1] = ftmp[2] = ftmp[3] = ftmp[0];
+      ftmp[3] += multmp[3];
+      ftmp[2] += multmp[3] + multmp[2];
+      ftmp[1] += multmp[3] + multmp[2] + multmp[1];
+      ftmp[0] += multmp[3] + multmp[2] + multmp[1] + multmp[0];
+      */
+      vforw = _mm_shuffle_epi32(vforw, _MM_SHUFFLE(0, 0, 0, 0));
+      vforw = _mm_add_epi32(vforw,               _mm_shuffle_epi32(vmul, _MM_SHUFFLE(3, 3, 3, 3)            ));
+      vforw = _mm_add_epi32(vforw, _mm_and_si128(_mm_shuffle_epi32(vmul, _MM_SHUFFLE(2, 2, 2, 2)), vmask0FFF));
+      vforw = _mm_add_epi32(vforw, _mm_and_si128(_mm_shuffle_epi32(vmul, _MM_SHUFFLE(1, 1, 1, 1)), vmask00FF));
+      vforw = _mm_add_epi32(vforw, _mm_and_si128(_mm_shuffle_epi32(vmul, _MM_SHUFFLE(0, 0, 0, 0)), vmask000F));
+
+      /*
+      multmp[0] = coef[0] * ftmp[0];
+      multmp[1] = coef[1] * ftmp[1];
+      multmp[2] = coef[2] * ftmp[2];
+      multmp[3] = coef[3] * ftmp[3];
+      multmp[0] += half;
+      multmp[1] += half;
+      multmp[2] += half;
+      multmp[3] += half;
+      multmp[0] = (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(multmp[0], 15);
+      multmp[1] = (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(multmp[1], 15);
+      multmp[2] = (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(multmp[2], 15);
+      multmp[3] = (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(multmp[3], 15);
+      */
+      vmul = _mm_mullo_epi32(vcoef, vforw);
+      vmul = _mm_add_epi32(vmul, vhalf);
+      vmul = _mm_srai_epi32(vmul, 15);
+
+      /*
+      backward_residual[ord - 0] = backward_residual[ord - 1] - multmp[0];
+      backward_residual[ord - 1] = backward_residual[ord - 2] - multmp[1];
+      backward_residual[ord - 2] = backward_residual[ord - 3] - multmp[2];
+      backward_residual[ord - 3] = backward_residual[ord - 4] - multmp[3];
+      */
+      vback = _mm_sub_epi32(vback, vmul);
+      _mm_storeu_si128((__m128i *)&backward_residual[ord - 3], vback);
+    }
+
+    /* 結果取得 */
+    _mm_stream_si128((__m128i *)ftmp, vforw);
+    /* 後ろ向き誤差入力 */
+    backward_residual[0] = ftmp[0];
+    /* 出力 */
+    output[samp] = ftmp[0];
+  }
+#else
+  /* リファレンス実装 */
+  for (samp = 0; samp < num_samples; samp++) {
+    int32_t forward_residual;
     /* 誤差入力 */
     forward_residual = residual[samp];
     for (ord = order; ord >= 1; ord--) {
       /* 前向き誤差計算 */
-      forward_residual
-        += (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(parcor_coef[ord] * backward_residual[ord - 1] + half, 15);
+      forward_residual += (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(parcor_coef[ord] * backward_residual[ord - 1] + half, 15);
       /* 後ろ向き誤差計算 */
-      mul_temp
-        = (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(parcor_coef[ord] * forward_residual + half, 15);
-      backward_residual[ord] = backward_residual[ord - 1] - mul_temp;
+      backward_residual[ord] = backward_residual[ord - 1] - (int32_t)SLAUTILITY_SHIFT_RIGHT_ARITHMETIC(parcor_coef[ord] * forward_residual + half, 15);
     }
     /* 合成信号 */
     output[samp] = forward_residual;
     /* 後ろ向き誤差計算部にデータ入力 */
     backward_residual[0] = forward_residual;
-    /* printf("out: %08x(%8d) \n", output[samp], output[samp]); */
   }
+#endif
 
   return SLAPREDICTOR_APIRESULT_OK;
 }
