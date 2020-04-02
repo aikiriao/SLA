@@ -1,3 +1,5 @@
+![C/C++ CI](https://github.com/MrAiki/SLA/workflows/C/C++%20CI/badge.svg?branch=master)
+
 # SLA - Solitary Lossless Audio Compressor
 
 A Lossless Audio Compressor.
