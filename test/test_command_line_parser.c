@@ -39,7 +39,7 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
     char* test_argv3[] = { "progname", "-pi", INPUT_FILE_NAME };
 
     /* パースしてみる */
-    get_specs[0] = specs[0]; get_specs[1] = specs[1];
+    memcpy(get_specs, specs, sizeof(get_specs));
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
           get_specs,
@@ -56,7 +56,7 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
     Test_AssertEqual(get_specs[1].acquired, COMMAND_LINE_PARSER_TRUE);
 
     /* 引数順番を変えたものをパースしてみる */
-    get_specs[0] = specs[0]; get_specs[1] = specs[1];
+    memcpy(get_specs, specs, sizeof(get_specs));
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
           get_specs,
@@ -73,7 +73,7 @@ static void testCommandLineParser_GetShortOptionTest(void *obj)
     Test_AssertEqual(get_specs[1].acquired, COMMAND_LINE_PARSER_TRUE);
 
     /* ショートオプションの連なりを含むものをパースしてみる */
-    get_specs[0] = specs[0]; get_specs[1] = specs[1];
+    memcpy(get_specs, specs, sizeof(get_specs));
     Test_AssertEqual(
         CommandLineParser_ParseArguments(
           get_specs,
