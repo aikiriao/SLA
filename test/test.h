@@ -1,6 +1,11 @@
 #ifndef _TEST_H_INCLUDED_
 #define _TEST_H_INCLUDED_
 
+/* C89標準では __func__ が定義されていない */
+#if !defined(__STDC_VERSION__) && !defined(__func__)
+#define __func__ "<cannot get function name>"
+#endif
+
 #include <stdint.h>
 
 /* 未使用引数警告回避マクロ */

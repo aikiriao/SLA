@@ -235,14 +235,14 @@ int Test_PrintAllFailures(void)
             fail->fail_u.condition.expression);
         break;
       case TEST_FAILURE_TYPE_EQAL_EXPECT:
-        Test_LogOutput("Expression %s(=%lld) is not equal to %s(=%lld). \n",
-            fail->fail_u.expect_value.expected_exp, fail->fail_u.expect_value.expected_value,
-            fail->fail_u.expect_value.actual_exp, fail->fail_u.expect_value.actual_value);
+        Test_LogOutput("Expression %s(=%ld) is not equal to %s(=%ld). \n",
+            fail->fail_u.expect_value.expected_exp, (long)fail->fail_u.expect_value.expected_value,
+            fail->fail_u.expect_value.actual_exp, (long)fail->fail_u.expect_value.actual_value);
         break;
       case TEST_FAILURE_TYPE_NOT_EQAL_EXPECT:
-        Test_LogOutput("Expression %s(=%lld) is equal to %s(=%lld). \n",
-            fail->fail_u.expect_value.expected_exp, fail->fail_u.expect_value.expected_value,
-            fail->fail_u.expect_value.actual_exp, fail->fail_u.expect_value.actual_value);
+        Test_LogOutput("Expression %s(=%ld) is equal to %s(=%ld). \n",
+            fail->fail_u.expect_value.expected_exp, (long)fail->fail_u.expect_value.expected_value,
+            fail->fail_u.expect_value.actual_exp, (long)fail->fail_u.expect_value.actual_value);
         break;
       case TEST_FAILURE_TYPE_FLOAT32_EPSION_EQUAL:
         Test_LogOutput("Expression %s(=%f) is not equal to %s(=%f) (in epsilon %f). \n",
